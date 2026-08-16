@@ -1,0 +1,268 @@
+/* [project]/app/globals.css [app-client] (css) */
+*, :before, :after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #0d0f18;
+  --surface: #161926;
+  --card: #1d2133;
+  --border: #2a3050;
+  --primary: #4f7eff;
+  --text: #dde2f0;
+  --muted: #6a7590;
+  --red: #f25c7a;
+  --orange: #f5a623;
+  --green: #26c486;
+  --rs: #f25c7a21;
+  --os: #f5a62321;
+  --gs: #26c48621;
+  --sidebar: 220px;
+}
+
+html, body {
+  background: var(--bg);
+  height: 100%;
+  color: var(--text);
+  font-family: Inter, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+}
+
+.side {
+  width: var(--sidebar);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  z-index: 200;
+  flex-direction: column;
+  flex-shrink: 0;
+  padding: 0;
+  transition: transform .25s;
+  display: flex;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.side-logo {
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px;
+  display: flex;
+}
+
+.logo-icon {
+  background: var(--primary);
+  border-radius: 8px;
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  width: 32px;
+  height: 32px;
+  display: flex;
+}
+
+.logo-text {
+  color: var(--text);
+  font-size: .95rem;
+  font-weight: 700;
+}
+
+.logo-sub {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: .62rem;
+}
+
+.nav {
+  flex-direction: column;
+  flex: 1;
+  gap: 2px;
+  padding: 12px 8px;
+  display: flex;
+  overflow-y: auto;
+}
+
+.nav a {
+  color: var(--muted);
+  white-space: nowrap;
+  border-radius: 8px;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  font-size: .88rem;
+  font-weight: 500;
+  transition: all .15s;
+  display: flex;
+}
+
+.nav a:hover {
+  color: var(--text);
+  background: #ffffff0d;
+}
+
+.nav a.on {
+  color: var(--primary);
+  background: #4f7eff1a;
+}
+
+.nav a svg {
+  opacity: .8;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.nav a.on svg {
+  opacity: 1;
+}
+
+.nav .soon {
+  background: var(--border);
+  color: var(--muted);
+  border-radius: 4px;
+  margin-left: auto;
+  padding: 2px 6px;
+  font-size: .6rem;
+  font-weight: 600;
+}
+
+.nav-section {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 14px 12px 4px;
+  font-size: .65rem;
+  font-weight: 700;
+}
+
+.main {
+  margin-left: var(--sidebar);
+  flex-direction: column;
+  flex: 1;
+  min-height: 100vh;
+  display: flex;
+}
+
+.scroll {
+  flex: 1;
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+.top {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  z-index: 100;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  display: flex;
+  position: sticky;
+  top: 0;
+}
+
+.top-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.top-right {
+  align-items: center;
+  gap: 10px;
+  display: flex;
+}
+
+.btn {
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  font-family: inherit;
+  font-size: .85rem;
+  font-weight: 600;
+  transition: all .15s;
+  display: inline-flex;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #3d6cff;
+}
+
+.btn-ghost {
+  color: var(--muted);
+  border: 1px solid var(--border);
+  background: none;
+}
+
+.btn-ghost:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.hamburger {
+  color: var(--text);
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 8px;
+  display: none;
+}
+
+.hamburger:hover {
+  background: var(--border);
+}
+
+.overlay-side {
+  z-index: 199;
+  background: #0009;
+  display: none;
+  position: fixed;
+  inset: 0;
+}
+
+@media (max-width: 768px) {
+  .side {
+    transform: translateX(-220px);
+  }
+
+  .side.open {
+    transform: translateX(0);
+  }
+
+  .main {
+    margin-left: 0;
+  }
+
+  .hamburger {
+    display: flex;
+  }
+
+  .overlay-side.show {
+    display: block;
+  }
+}
+
+/*# sourceMappingURL=app_globals_css_1igg3k2._.single.css.map*/

@@ -48,8 +48,9 @@ async function start() {
   const app = bot.app;
 
   // Let Next.js handle all other routes (like /, /dashboard, /hr)
-  app.use((req, res) => {
-    return handle(req, res);
+  app.use((req, res, next) => {
+    console.log('Next.js intercepting:', req.url);
+    handle(req, res).catch(next);
   });
 
   app.listen(3000, () => {
