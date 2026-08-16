@@ -97,12 +97,12 @@ export class OpenClaw {
     this.config = config; this.tools = config.tools || [];
     this.app = express();
     this.app.use(express.json());
-    this.app.get('/', (req, res) => res.redirect('/dashboard.html'));
+    this.app.get('/', (req, res) => res.redirect('/dashboard'));
     this.app.use(express.static(path.join(__dirname, '../public')));
   }
   setSystemPrompt(p: string) { this.systemPrompt = p; }
 
-  async start(port: number) {
+  async start(port: number, listen = true) {
     initDB();
 
     // ── MEMBERS ──────────────────────────────────────────────
@@ -201,6 +201,7 @@ export class OpenClaw {
     });
 
     return new Promise<void>(resolve => {
+      if (!listen) return resolve();
       this.app.listen(port, () => {
         console.log('='.repeat(60));
         console.log('ALLIEDONE ERP SYSTEM READY');
