@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>AlliedOne — Accounts</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0d0f18;--surface:#161926;--card:#1d2133;--border:#2a3050;--primary:#4f7eff;--text:#dde2f0;--muted:#6a7590;--red:#f25c7a;--orange:#f5a623;--green:#26c486;--rs:rgba(242,92,122,.13);--os:rgba(245,166,35,.13);--gs:rgba(38,196,134,.13);--sidebar:220px}
+html,body{height:100%;font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+a{text-decoration:none;color:inherit}
+.app{display:flex;min-height:100vh}
+.side{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0;position:fixed;top:0;left:0;bottom:0;z-index:200;transition:transform .25s}
+.side-logo{display:flex;align-items:center;gap:10px;padding:18px 16px;border-bottom:1px solid var(--border)}
+.logo-icon{width:32px;height:32px;background:var(--primary);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-text{font-size:.95rem;font-weight:700;color:var(--text)}.logo-sub{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.nav{padding:12px 8px;flex:1;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:8px;font-size:.88rem;font-weight:500;color:var(--muted);transition:all .15s;white-space:nowrap;text-decoration:none}
+.nav a:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.nav a.on{color:var(--primary);background:rgba(79,126,255,.1)}
+.nav a svg{flex-shrink:0;width:18px;height:18px;opacity:.8}.nav a.on svg{opacity:1}
+.nav .soon{margin-left:auto;font-size:.6rem;background:var(--border);color:var(--muted);padding:2px 6px;border-radius:4px;font-weight:600}
+.nav-section{font-size:.65rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:14px 12px 4px}
+.main{margin-left:220px;flex:1;display:flex;flex-direction:column;overflow:hidden}
+.hamburger{display:none;background:none;border:none;color:var(--text);cursor:pointer;padding:8px;border-radius:8px}
+.hamburger:hover{background:var(--border)}
+.overlay-side{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:199}
+@media(max-width:768px){.side{transform:translateX(-220px)}.side.open{transform:translateX(0)}.main{margin-left:0}.hamburger{display:flex}.overlay-side.show{display:block}.stats{grid-template-columns:repeat(2,1fr)!important}.grid2{grid-template-columns:1fr!important}}
+.top{padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0}
+.top-title{font-size:1rem;font-weight:600}
+.top-right{display:flex;align-items:center;gap:10px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);font-size:.82rem;font-weight:500;border:none;cursor:pointer;transition:all .15s;font-family:inherit}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:#3d6cff}
+.btn-ghost{background:none;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{color:var(--text)}
+.btn-sm{padding:5px 12px;font-size:.76rem}
+.scroll{flex:1;overflow-y:auto;padding:20px 24px}
+
+/* MONTH SELECTOR */
+.month-bar{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+.month-bar label{font-size:.78rem;color:var(--muted);font-weight:500}
+.month-bar input{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-size:.82rem;font-family:inherit;outline:none;transition:border-color .15s}
+.month-bar input:focus{border-color:var(--primary)}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.s-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.s-lbl{font-size:.7rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.s-val{font-size:1.6rem;font-weight:700;margin-top:4px}
+
+/* GRID */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card-head{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-head h3{font-size:.88rem;font-weight:600}
+
+/* CATEGORY LIST */
+.cat-list{padding:10px 14px;display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto}
+.cat-row{display:flex;align-items:center;gap:10px;padding:6px 6px;border-radius:8px;transition:background .15s}
+.cat-row:hover{background:rgba(255,255,255,.03)}
+.cat-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.cat-name{flex:1;font-size:.83rem;font-weight:500}
+.cat-info{text-align:right}
+.cat-amt{font-size:.85rem;font-weight:600}
+.cat-budget{font-size:.68rem;color:var(--muted);margin-top:1px}
+.cat-bar-wrap{height:4px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden}
+.cat-bar{height:100%;border-radius:2px;transition:width .4s}
+
+/* EXPENSE TABLE */
+table{width:100%;border-collapse:collapse}
+th{padding:9px 16px;text-align:left;font-size:.68rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);background:rgba(0,0,0,.12)}
+td{padding:11px 16px;font-size:.83rem;border-bottom:1px solid var(--border)}
+tr:last-child td{border:none}tr:hover td{background:rgba(255,255,255,.015)}
+.badge{font-size:.64rem;font-weight:600;padding:2px 8px;border-radius:5px;text-transform:uppercase;letter-spacing:.03em}
+.empty-r td{text-align:center;padding:36px;color:var(--muted);font-size:.82rem}
+
+/* MODAL */
+.veil{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .2s}
+.veil.on{opacity:1;pointer-events:all}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:440px;padding:24px;transform:translateY(16px);transition:transform .2s}
+.veil.on .modal{transform:translateY(0)}
+.mhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.mhead h3{font-size:.95rem;font-weight:600}
+.xbtn{background:none;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center;transition:all .15s}
+.xbtn:hover{background:var(--border);color:var(--text)}
+.fg{margin-bottom:13px}
+.fg label{display:block;font-size:.74rem;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.03em}
+.fg input,.fg select,.fg textarea{width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:.84rem;font-family:inherit;outline:none;transition:border-color .15s}
+.fg input:focus,.fg select:focus{border-color:var(--primary)}
+.mfooter{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(30px);background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:.8rem;z-index:999;transition:transform .25s,opacity .25s;opacity:0;pointer-events:none}
+.toast.on{transform:translateX(-50%) translateY(0);opacity:1}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="overlay-side" id="side-overlay" onclick="closeSide()"></div>
+<div class="app">
+<aside class="side" id="sidebar">
+  <div class="side-logo">
+    <div class="logo-icon"><svg width="16" height="16" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+    <div><div class="logo-text">AlliedOne</div><div class="logo-sub">ERP System</div></div>
+  </div>
+  <nav class="nav">
+    <div class="nav-section">Workspace</div>
+    <a href="/dashboard.html">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Daily Tasks
+    </a>
+    <a href="/hr.html">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      HR & Attendance
+    </a>
+    <a href="/accounts.html" class="on">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      Accounts
+    </a>
+    <div class="nav-section">Coming Soon</div>
+    <a href="#"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>IT Assets</a>
+    <a href="#"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Tenders</a>
+    <a href="#"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.99 12 19.79 19.79 0 0 1 1.95 3.26 2 2 0 0 1 3.91 1h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Calls</a>
+    <a href="#"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Roadmap</a>
+  </nav>
+</aside>
+<div class="main">
+  <div class="top">
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="hamburger" onclick="openSide()">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="top-title">Accounts & Expenses</span>
+    </div>
+    <div class="top-right">
+      <button class="btn btn-primary" onclick="openModal()">+ Log Expense</button>
+    </div>
+  </div>
+  <div class="scroll">
+    <!-- MONTH SELECTOR -->
+    <div class="month-bar">
+      <label>Month</label>
+      <input type="month" id="month-pick" onchange="loadAll()"/>
+    </div>
+
+    <!-- STATS -->
+    <div class="stats">
+      <div class="s-card"><div class="s-lbl">Total Spent</div><div class="s-val" style="color:var(--red)" id="s-total">0 ৳</div></div>
+      <div class="s-card"><div class="s-lbl">This Month Budget</div><div class="s-val" style="color:var(--primary)" id="s-budget">0 ৳</div></div>
+      <div class="s-card"><div class="s-lbl">Entries</div><div class="s-val" style="color:var(--green)" id="s-entries">0</div></div>
+    </div>
+
+    <!-- GRID: Category Breakdown + Recent Expenses -->
+    <div class="grid2">
+      <!-- CATEGORY BREAKDOWN -->
+      <div class="card">
+        <div class="card-head"><h3>By Category</h3></div>
+        <div class="cat-list" id="cat-list"><p style="color:var(--muted);padding:16px;font-size:.82rem">Loading...</p></div>
+      </div>
+      <!-- QUICK ADD (compact) -->
+      <div class="card">
+        <div class="card-head"><h3>Quick Entry</h3></div>
+        <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+          <div class="fg" style="margin:0"><label>Amount (৳)</label><input type="number" id="q-amt" placeholder="0.00" min="0"/></div>
+          <div class="fg" style="margin:0"><label>Category</label><select id="q-cat"><option value="">Select...</option></select></div>
+          <div class="fg" style="margin:0"><label>Description</label><input id="q-desc" placeholder="What was this for?"/></div>
+          <div class="fg" style="margin:0"><label>Date</label><input type="date" id="q-date"/></div>
+          <button class="btn btn-primary" onclick="quickAdd()"><i data-lucide="save" width="14" height="14"></i> Save Expense</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXPENSE LOG -->
+    <div class="card">
+      <div class="card-head"><h3>Expense Log</h3><span style="font-size:.74rem;color:var(--muted)" id="month-lbl"></span></div>
+      <table>
+        <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th></th></tr></thead>
+        <tbody id="expense-body"><tr class="empty-r"><td colspan="5">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ADD EXPENSE MODAL (full form) -->
+<div class="veil" id="exp-veil" onclick="if(event.target===this)closeV()">
+<div class="modal">
+  <div class="mhead"><h3>Log Expense</h3><button class="xbtn" onclick="closeV()">&times;</button></div>
+  <div class="fg"><label>Amount (৳)</label><input type="number" id="m-amt" placeholder="0.00" min="0"/></div>
+  <div class="fg"><label>Category</label><select id="m-cat"><option value="">Select...</option></select></div>
+  <div class="fg"><label>Description</label><input id="m-desc" placeholder="What was this expense for?"/></div>
+  <div class="fg"><label>Date</label><input type="date" id="m-date"/></div>
+  <div class="fg"><label>Logged By (optional)</label><select id="m-by"><option value="">Select...</option></select></div>
+  <div class="mfooter">
+    <button class="btn btn-ghost" onclick="closeV()">Cancel</button>
+    <button class="btn btn-primary" onclick="addExpense()">Save</button>
+  </div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script>
+let cats=[], expenses=[], members=[];
+const now=new Date();
+let curMonth=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+
+function openSide(){document.getElementById('sidebar').classList.add('open');document.getElementById('side-overlay').classList.add('show');}
+function closeSide(){document.getElementById('sidebar').classList.remove('open');document.getElementById('side-overlay').classList.remove('show');}
+
+// Init
+document.getElementById('month-pick').value=curMonth;
+document.getElementById('q-date').value=now.toISOString().split('T')[0];
+document.getElementById('m-date').value=new Date().toISOString().split('T')[0];
+
+async function loadAll(){
+  curMonth=document.getElementById('month-pick').value||curMonth;
+  document.getElementById('month-lbl').textContent=new Date(curMonth+'-01').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  await Promise.all([loadCats(),loadExpenses(),loadMembers()]);
+}
+
+async function loadCats(){
+  const r=await fetch('/api/expense-categories');cats=await r.json();
+  const sel1=document.getElementById('q-cat'),sel2=document.getElementById('m-cat');
+  const opts='<option value="">Select...</option>'+cats.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  sel1.innerHTML=opts;sel2.innerHTML=opts;
+  loadSummary();
+}
+
+async function loadSummary(){
+  const r=await fetch('/api/expenses/summary?month='+curMonth);const summary=await r.json();
+  const total=summary.reduce((s,c)=>s+c.total,0);
+  const budget=cats.reduce((s,c)=>s+c.budget_limit,0);
+  document.getElementById('s-total').textContent=fmt(total)+' ৳';
+  document.getElementById('s-budget').textContent=fmt(budget)+' ৳';
+  const cl=document.getElementById('cat-list');
+  if(!summary.length){cl.innerHTML='<p style="color:var(--muted);padding:8px;font-size:.8rem">No expenses this month.</p>';return;}
+  cl.innerHTML=summary.map(c=>{
+    const pct=c.budget_limit>0?Math.min(100,Math.round(c.total/c.budget_limit*100)):0;
+    const over=c.budget_limit>0&&c.total>c.budget_limit;
+    return `<div class="cat-row">
+      <div class="cat-dot" style="background:${c.color}"></div>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="cat-name">${c.name}</span>
+          <span class="cat-amt" style="color:${over?'var(--red)':'var(--text)'}">${fmt(c.total)} ৳</span>
+        </div>
+        ${c.budget_limit>0?`<div class="cat-bar-wrap"><div class="cat-bar" style="width:${pct}%;background:${over?'var(--red)':c.color}"></div></div><div class="cat-budget">${pct}% of ${fmt(c.budget_limit)} ৳ budget${over?' · OVER BUDGET':''}</div>`:''}
+      </div>
+    </div>`;}).join('');
+}
+
+async function loadExpenses(){
+  const r=await fetch('/api/expenses?month='+curMonth);expenses=await r.json();
+  document.getElementById('s-entries').textContent=expenses.length;
+  const tbody=document.getElementById('expense-body');
+  if(!expenses.length){tbody.innerHTML='<tr class="empty-r"><td colspan="5">No expenses recorded this month. Click "Log Expense" to add one.</td></tr>';return;}
+  tbody.innerHTML=expenses.map(e=>`<tr>
+    <td style="color:var(--muted);font-size:.78rem">${new Date(e.expense_date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</td>
+    <td><span class="badge" style="background:${hexA(e.category_color)};color:${e.category_color||'var(--primary)'}">${e.category_name||'Misc'}</span></td>
+    <td>${e.description||'—'}</td>
+    <td style="font-weight:600;color:var(--red)">${fmt(e.amount)} ৳</td>
+    <td><button class="btn btn-ghost btn-sm" onclick="delExp(${e.id})" title="Delete" style="border:none">&#128465;</button></td>
+  </tr>`).join('');
+}
+
+async function loadMembers(){const r=await fetch('/api/members');members=await r.json();const sel=document.getElementById('m-by');sel.innerHTML='<option value="">Select...</option>'+members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');}
+
+async function quickAdd(){
+  const amt=parseFloat(document.getElementById('q-amt').value);
+  const cat=document.getElementById('q-cat').value;
+  const desc=document.getElementById('q-desc').value;
+  const date=document.getElementById('q-date').value;
+  if(!amt||!cat){toast('Amount and category are required.');return;}
+  await fetch('/api/expenses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category_id:cat,amount:amt,description:desc,expense_date:date})});
+  document.getElementById('q-amt').value='';document.getElementById('q-desc').value='';
+  toast('Expense saved!');loadAll();
+}
+
+function openModal(){document.getElementById('exp-veil').classList.add('on');document.getElementById('m-amt').value='';document.getElementById('m-desc').value='';}
+function closeV(){document.getElementById('exp-veil').classList.remove('on');}
+async function addExpense(){
+  const amt=parseFloat(document.getElementById('m-amt').value);
+  const cat=document.getElementById('m-cat').value;
+  const desc=document.getElementById('m-desc').value;
+  const date=document.getElementById('m-date').value;
+  const by=document.getElementById('m-by').value;
+  if(!amt||!cat){toast('Amount and category are required.');return;}
+  await fetch('/api/expenses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category_id:cat,amount:amt,description:desc,expense_date:date,entered_by:by||null})});
+  closeV();toast('Expense logged!');loadAll();
+}
+async function delExp(id){if(!confirm('Delete this expense?'))return;await fetch('/api/expenses/'+id,{method:'DELETE'});toast('Deleted.');loadAll();}
+
+const fmt=n=>Math.round(n).toLocaleString('en-BD');
+const hexA=c=>c?(c+'22'):'rgba(79,126,255,.12)';
+let tt;function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),2500);}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeV();});
+loadAll();setInterval(loadAll,60000);
+</script>
+</body>
+</html>

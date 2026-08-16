@@ -1,0 +1,7 @@
+node_modules/
+.env
+openclaw.db
+openclaw.db-journal
+.WWebJS/
+session/
+.DS_Store
