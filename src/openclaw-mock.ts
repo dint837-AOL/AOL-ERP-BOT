@@ -79,6 +79,28 @@ function initDB() {
         }
       });
     });
+    db.run('DROP TABLE IF EXISTS it_assets');
+    db.run('DROP TABLE IF EXISTS password_reminders');
+    db.run(`CREATE TABLE IF NOT EXISTS credentials (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      cred_type TEXT DEFAULT 'OTHER',
+      url TEXT DEFAULT '',
+      username TEXT DEFAULT '',
+      cost REAL DEFAULT 0,
+      expiry_date TEXT,
+      last_changed_date TEXT,
+      reminder_days_before TEXT DEFAULT '5,2,1',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS meetings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      contact_name TEXT DEFAULT '',
+      scheduled_at DATETIME NOT NULL,
+      reminder_minutes_before TEXT DEFAULT '30,15',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
   });
   console.log('Database initialized.');
 }
@@ -185,6 +207,32 @@ export class OpenClaw {
     });
     this.app.delete('/api/expenses/:id', async (req, res) => { await dbRun('DELETE FROM expenses WHERE id=?', [req.params.id]); res.json({ ok: true }); });
 
+    // ── CREDENTIALS ──────────────────────────────────────────
+    this.app.get('/api/credentials', async (_, res) => res.json(await dbAll('SELECT * FROM credentials ORDER BY created_at DESC')));
+    this.app.post('/api/credentials', async (req, res) => {
+      const { name, cred_type, url, username, cost, expiry_date, last_changed_date, reminder_days_before } = req.body;
+      if (!name) return res.status(400).json({ error: 'Name is required' });
+      const { lastID } = await dbRun(
+        `INSERT INTO credentials(name,cred_type,url,username,cost,expiry_date,last_changed_date,reminder_days_before) VALUES(?,?,?,?,?,?,?,?)`, 
+        [name, cred_type||'OTHER', url||'', username||'', cost||0, expiry_date||null, last_changed_date||null, reminder_days_before||'5,2,1']
+      );
+      res.status(201).json(await dbGet('SELECT * FROM credentials WHERE id=?', [lastID]));
+    });
+    this.app.delete('/api/credentials/:id', async (req, res) => { await dbRun('DELETE FROM credentials WHERE id=?', [req.params.id]); res.json({ ok: true }); });
+
+    // ── MEETINGS ─────────────────────────────────────────────
+    this.app.get('/api/meetings', async (_, res) => res.json(await dbAll('SELECT * FROM meetings ORDER BY scheduled_at ASC')));
+    this.app.post('/api/meetings', async (req, res) => {
+      const { title, contact_name, scheduled_at, reminder_minutes_before } = req.body;
+      if (!title || !scheduled_at) return res.status(400).json({ error: 'Title and scheduled_at required' });
+      const { lastID } = await dbRun(
+        `INSERT INTO meetings(title,contact_name,scheduled_at,reminder_minutes_before) VALUES(?,?,?,?)`, 
+        [title, contact_name||'', scheduled_at, reminder_minutes_before||'30,15']
+      );
+      res.status(201).json(await dbGet('SELECT * FROM meetings WHERE id=?', [lastID]));
+    });
+    this.app.delete('/api/meetings/:id', async (req, res) => { await dbRun('DELETE FROM meetings WHERE id=?', [req.params.id]); res.json({ ok: true }); });
+
     // ── CHAT (Attendance Simulator) ──────────────────────────
     this.app.post('/api/chat', async (req, res) => {
       const msg = req.body.message.toLowerCase();
@@ -199,6 +247,52 @@ export class OpenClaw {
       }
       res.json({ reply });
     });
+
+    // ── CRON: Automated Reminder Engine (Every 1 Minute) ───────
+    const runCron = async () => {
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const today = new Date(todayStr);
+
+      // 1. Check Credentials (run once a day logically, but checked here)
+      // To prevent spamming every minute, we'll only print credential alerts if the time is exactly 09:00, 
+      // but for this mock, we'll just check them (in reality you'd track 'last_alerted' in DB).
+      // Since it's a mock, we will just evaluate the logic and let the user see it.
+      const creds = await dbAll('SELECT * FROM credentials');
+      for (const c of creds) {
+        if (!c.reminder_days_before) continue;
+        const daysToAlert = c.reminder_days_before.split(',').map((d: string) => parseInt(d.trim()));
+        
+        // Expiry alerts
+        if (c.expiry_date) {
+          const exp = new Date(c.expiry_date);
+          const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          if (daysToAlert.includes(diffDays)) {
+            // We'll log it if the current minute is 00 (top of the hour) to avoid spamming the console
+            if (now.getMinutes() === 0) console.log(`[ALERT] Credential '${c.name}' expires in ${diffDays} day(s)!`);
+          }
+        }
+      }
+
+      // 2. Check Meetings (minute-level precision)
+      const meetings = await dbAll('SELECT * FROM meetings');
+      for (const m of meetings) {
+        if (!m.reminder_minutes_before) continue;
+        const minutesToAlert = m.reminder_minutes_before.split(',').map((m: string) => parseInt(m.trim()));
+        
+        const scheduledTime = new Date(m.scheduled_at);
+        const diffMinutes = Math.floor((scheduledTime.getTime() - now.getTime()) / (1000 * 60));
+        
+        if (minutesToAlert.includes(diffMinutes)) {
+          // Exact minute match!
+          console.log(`[ALERT] Meeting '${m.title}' with ${m.contact_name} is in exactly ${diffMinutes} minutes!`);
+        }
+      }
+    };
+    
+    // Run on startup then every 1 minute
+    runCron();
+    setInterval(runCron, 60 * 1000);
 
     return new Promise<void>(resolve => {
       if (!listen) return resolve();
