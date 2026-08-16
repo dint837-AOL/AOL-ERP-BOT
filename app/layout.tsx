@@ -21,10 +21,7 @@ export default function RootLayout({
         <div className="app">
           <Sidebar />
           <div className="main">
-            <Topbar />
-            <div className="scroll">
-              {children}
-            </div>
+            {children}
           </div>
         </div>
       </body>
