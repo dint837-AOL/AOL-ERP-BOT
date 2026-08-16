@@ -40,8 +40,10 @@ export default function Sidebar() {
           Meetings
         </Link>
         
-        <div className="nav-section">Coming Soon</div>
-        <a href="#"><FileText size={18} /> Tenders <span className="soon">Soon</span></a>
+        <Link href="/tenders" className={pathname === '/tenders' ? 'on' : ''}>
+          <FileText size={18} />
+          Tenders
+        </Link>
         <a href="#"><Map size={18} /> Roadmap <span className="soon">Soon</span></a>
         
         <div className="nav-section">Bot</div>

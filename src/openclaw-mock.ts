@@ -101,6 +101,20 @@ function initDB() {
       reminder_minutes_before TEXT DEFAULT '30,15',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
+    db.run(`CREATE TABLE IF NOT EXISTS tenders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      organization TEXT DEFAULT '',
+      tender_type TEXT CHECK(tender_type IN ('GOVT','PRIVATE')) DEFAULT 'PRIVATE',
+      published_date TEXT,
+      submission_deadline TEXT NOT NULL,
+      estimated_value REAL DEFAULT 0,
+      status TEXT CHECK(status IN ('UPCOMING','IN_PROGRESS','SUBMITTED','WON','LOST')) DEFAULT 'UPCOMING',
+      documents_url TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      assigned_to INTEGER REFERENCES members(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
   });
   console.log('Database initialized.');
 }
@@ -233,6 +247,24 @@ export class OpenClaw {
     });
     this.app.delete('/api/meetings/:id', async (req, res) => { await dbRun('DELETE FROM meetings WHERE id=?', [req.params.id]); res.json({ ok: true }); });
 
+    // ── TENDERS ──────────────────────────────────────────────
+    this.app.get('/api/tenders', async (_, res) => res.json(await dbAll('SELECT * FROM tenders ORDER BY submission_deadline ASC')));
+    this.app.post('/api/tenders', async (req, res) => {
+      const { title, organization, tender_type, published_date, submission_deadline, estimated_value, status, documents_url, notes, assigned_to } = req.body;
+      if (!title || !submission_deadline) return res.status(400).json({ error: 'Title and deadline required' });
+      const { lastID } = await dbRun(
+        `INSERT INTO tenders(title, organization, tender_type, published_date, submission_deadline, estimated_value, status, documents_url, notes, assigned_to) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+        [title, organization||'', tender_type||'PRIVATE', published_date||null, submission_deadline, estimated_value||0, status||'UPCOMING', documents_url||'', notes||'', assigned_to||null]
+      );
+      res.status(201).json(await dbGet('SELECT * FROM tenders WHERE id=?', [lastID]));
+    });
+    this.app.patch('/api/tenders/:id/status', async (req, res) => {
+      const { status } = req.body;
+      await dbRun('UPDATE tenders SET status=? WHERE id=?', [status, req.params.id]);
+      res.json(await dbGet('SELECT * FROM tenders WHERE id=?', [req.params.id]));
+    });
+    this.app.delete('/api/tenders/:id', async (req, res) => { await dbRun('DELETE FROM tenders WHERE id=?', [req.params.id]); res.json({ ok: true }); });
+
     // ── CHAT (Attendance Simulator) ──────────────────────────
     this.app.post('/api/chat', async (req, res) => {
       const msg = req.body.message.toLowerCase();
@@ -286,6 +318,17 @@ export class OpenClaw {
         if (minutesToAlert.includes(diffMinutes)) {
           // Exact minute match!
           console.log(`[ALERT] Meeting '${m.title}' with ${m.contact_name} is in exactly ${diffMinutes} minutes!`);
+        }
+      }
+
+      // 3. Check Tenders (daily precision for 7, 3, 1 days)
+      const tenders = await dbAll('SELECT * FROM tenders');
+      for (const t of tenders) {
+        if (!t.submission_deadline || ['SUBMITTED','WON','LOST'].includes(t.status)) continue;
+        const deadline = new Date(t.submission_deadline);
+        const diffDays = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if ([7, 3, 1].includes(diffDays)) {
+          if (now.getMinutes() === 0) console.log(`[ALERT] Tender '${t.title}' submission is due in ${diffDays} day(s)!`);
         }
       }
     };

@@ -1,12 +1,18 @@
 'use client';
 import { Menu } from 'lucide-react';
 import { usePathname } from 'next/navigation';
+import React from 'react';
 
-export default function Topbar() {
+export default function Topbar({ title, children }: { title?: string, children?: React.ReactNode }) {
   const pathname = usePathname();
-  let title = 'Dashboard';
-  if (pathname === '/hr') title = 'HR & Attendance';
-  if (pathname === '/accounts') title = 'Accounts & Expenses';
+  let defaultTitle = 'Dashboard';
+  if (pathname === '/hr') defaultTitle = 'HR & Attendance';
+  if (pathname === '/accounts') defaultTitle = 'Accounts & Expenses';
+  if (pathname === '/credentials') defaultTitle = 'Credentials & Keys';
+  if (pathname === '/meetings') defaultTitle = 'Meetings & Contacts';
+  if (pathname === '/tenders') defaultTitle = 'Tender Management';
+
+  const displayTitle = title || defaultTitle;
 
   const openSide = () => {
     document.getElementById('sidebar')?.classList.add('open');
@@ -26,10 +32,9 @@ export default function Topbar() {
           <button className="hamburger" onClick={openSide}>
             <Menu size={20} />
           </button>
-          <span className="top-title">{title}</span>
+          <span className="top-title">{displayTitle}</span>
         </div>
-        {/* We can inject page-specific top right buttons using React Portals or Context later, 
-            or keep it simple and just show the title for now */}
+        {children}
       </div>
     </>
   );
