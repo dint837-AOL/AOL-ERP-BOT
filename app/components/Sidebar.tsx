@@ -39,7 +39,7 @@ export default function Sidebar() {
         <a href="#"><Map size={18} /> Roadmap <span className="soon">Soon</span></a>
         
         <div className="nav-section">Bot</div>
-        <a href="/index.html"><MessageCircle size={18} /> ERP Chat</a>
+        <a href="/chat.html"><MessageCircle size={18} /> ERP Chat</a>
       </nav>
     </aside>
   );
