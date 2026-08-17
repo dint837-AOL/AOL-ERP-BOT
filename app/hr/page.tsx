@@ -28,6 +28,10 @@ export default function HRPage() {
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveData, setLeaveData] = useState({ member_id: '', leave_type: 'SICK', start_date: '', end_date: '', reason: '' });
 
+  // Member Modal State
+  const [showMemberModal, setShowMemberModal] = useState(false);
+  const [memberData, setMemberData] = useState({ name: '', email: '', role: 'Employee' });
+
   const [toastMsg, setToastMsg] = useState('');
 
   const todayStr = (() => {
@@ -90,6 +94,26 @@ export default function HRPage() {
         body: JSON.stringify({ member_id: selectedMember, action_type: type })
       });
       showToast(name + ' — ' + type + ' recorded!');
+      loadAll();
+    } catch (e) {
+      showToast('Cannot reach server.');
+    }
+  };
+
+  const submitMember = async () => {
+    if (!memberData.name || !memberData.role) {
+      showToast('Name and Role are required.');
+      return;
+    }
+    try {
+      await fetch('/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(memberData)
+      });
+      setShowMemberModal(false);
+      setMemberData({ name: '', email: '', role: 'Employee' });
+      showToast('Team member added!');
       loadAll();
     } catch (e) {
       showToast('Cannot reach server.');
@@ -255,12 +279,17 @@ export default function HRPage() {
 
         {activeTab === 'team' && (
           <div className="card">
-            <div className="card-head"><h3>Team Members</h3></div>
+            <div className="card-head">
+              <h3>Team Members</h3>
+              <button className="btn btn-primary btn-sm" onClick={() => setShowMemberModal(true)}>
+                <Plus size={13} /> New Member
+              </button>
+            </div>
             <div className="table-scroll"><table>
               <thead><tr><th>Name</th><th>Role</th><th>Added</th></tr></thead>
               <tbody>
                 {members.length === 0 ? (
-                  <tr className="empty-r"><td colSpan={3}>No members yet. Add from Team Members in dashboard.</td></tr>
+                  <tr className="empty-r"><td colSpan={3}>No members yet.</td></tr>
                 ) : (
                   members.map(m => (
                     <tr key={m.id}>
@@ -285,6 +314,33 @@ export default function HRPage() {
           </div>
         )}
       </div>
+
+      {showMemberModal && (
+        <div className="veil on" onClick={(e) => { if (e.target === e.currentTarget) setShowMemberModal(false); }}>
+          <div className="modal">
+            <div className="mhead">
+              <h3>New Team Member</h3>
+              <button className="xbtn" onClick={() => setShowMemberModal(false)}><X size={16} /></button>
+            </div>
+            <div className="fg">
+              <label>Name</label>
+              <input type="text" placeholder="John Doe" value={memberData.name} onChange={e => setMemberData({ ...memberData, name: e.target.value })} />
+            </div>
+            <div className="fg">
+              <label>Role</label>
+              <input type="text" placeholder="Employee, Manager, etc." value={memberData.role} onChange={e => setMemberData({ ...memberData, role: e.target.value })} />
+            </div>
+            <div className="fg">
+              <label>Email</label>
+              <input type="email" placeholder="john@example.com" value={memberData.email} onChange={e => setMemberData({ ...memberData, email: e.target.value })} />
+            </div>
+            <div className="mfooter">
+              <button className="btn btn-ghost" onClick={() => setShowMemberModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={submitMember}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showLeaveModal && (
         <div className="veil on" onClick={(e) => { if (e.target === e.currentTarget) setShowLeaveModal(false); }}>
