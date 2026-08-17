@@ -7,7 +7,7 @@
     "dev": "npx tsx server.ts",
     "build": "next build",
     "start": "NODE_ENV=production npx tsx server.ts",
-    "postinstall": "npm rebuild sqlite3 --build-from-source",
+    "postinstall": "npm rebuild sqlite3 --build-from-source && npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
