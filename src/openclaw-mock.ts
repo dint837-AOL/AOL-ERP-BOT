@@ -1,3 +1,15 @@
+/**
+ * openclaw-mock.ts
+ * 
+ * Central API router and Database controller for AlliedOne ERP.
+ * Exposes REST APIs for Mobile Apps and Web Clients.
+ * Contains:
+ *  - SQLite database schemas and queries
+ *  - Express route handlers for all modules (HR, Accounts, Tenders, Meetings, etc.)
+ *  - 1-minute precision cron jobs for reminders and alerts
+ * 
+ * NOTE: Fully maintainable and designed to be scalable for future Mobile App transitions.
+ */
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -283,7 +295,7 @@ export class OpenClaw {
     // ── CRON: Automated Reminder Engine (Every 1 Minute) ───────
     const runCron = async () => {
       const now = new Date();
-      const todayStr = now.toISOString().split('T')[0];
+      const todayStr = now.toISOString().split('T')[0]!;
       const today = new Date(todayStr);
 
       // 1. Check Credentials (run once a day logically, but checked here)

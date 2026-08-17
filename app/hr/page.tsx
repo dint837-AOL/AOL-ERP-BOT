@@ -1,3 +1,10 @@
+/**
+ * HR & Attendance Management Module
+ * 
+ * Manages employee check-ins, check-outs, and leave requests.
+ * Connects to the /api/hr endpoints to fetch and submit records.
+ * Built with a responsive layout featuring tabs and live statistics.
+ */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -175,7 +182,7 @@ export default function HRPage() {
               <h3>Check-In / Check-Out Log</h3>
               <span style={{ fontSize: '.74rem', color: 'var(--muted)' }}>{fmtDate(curDate)}</span>
             </div>
-            <table>
+            <div className="table-scroll"><table>
               <thead><tr><th>Member</th><th>Action</th><th>Time</th></tr></thead>
               <tbody>
                 {att.length === 0 ? (
@@ -199,7 +206,7 @@ export default function HRPage() {
                   ))
                 )}
               </tbody>
-            </table>
+            </table></div>
           </div>
         )}
 
@@ -209,7 +216,7 @@ export default function HRPage() {
               <h3>Leave Requests</h3>
               <button className="btn btn-primary btn-sm" onClick={() => setShowLeaveModal(true)}><Plus size={13} /> New</button>
             </div>
-            <table>
+            <div className="table-scroll"><table>
               <thead><tr><th>Employee</th><th>Type</th><th>Period</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>
                 {leaves.length === 0 ? (
@@ -242,14 +249,14 @@ export default function HRPage() {
                   ))
                 )}
               </tbody>
-            </table>
+            </table></div>
           </div>
         )}
 
         {activeTab === 'team' && (
           <div className="card">
             <div className="card-head"><h3>Team Members</h3></div>
-            <table>
+            <div className="table-scroll"><table>
               <thead><tr><th>Name</th><th>Role</th><th>Added</th></tr></thead>
               <tbody>
                 {members.length === 0 ? (
@@ -274,7 +281,7 @@ export default function HRPage() {
                   ))
                 )}
               </tbody>
-            </table>
+            </table></div>
           </div>
         )}
       </div>

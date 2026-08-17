@@ -1,7 +1,14 @@
+/**
+ * Accounts & Expenses Module
+ * 
+ * Handles logging and displaying financial expenses.
+ * Includes a summary of total expenses for the selected month.
+ * Interfaces with the /api/accounts REST endpoints.
+ */
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { Plus, Save, Trash2, X } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
 export default function AccountsPage() {
@@ -202,7 +209,7 @@ export default function AccountsPage() {
             <h3>Expense Log</h3>
             <span style={{ fontSize: '.74rem', color: 'var(--muted)' }}>{monthLbl}</span>
           </div>
-          <table>
+          <div className="table-scroll"><table>
             <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th></th></tr></thead>
             <tbody>
               {expenses.length === 0 ? (
@@ -229,7 +236,7 @@ export default function AccountsPage() {
                 ))
               )}
             </tbody>
-          </table>
+          </table></div>
         </div>
       </div>
 

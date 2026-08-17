@@ -1,3 +1,10 @@
+/**
+ * Root Layout Component
+ * 
+ * Provides the global HTML structure, font (Inter), and layout wrapper.
+ * Includes the Sidebar navigation and sets up the main content area.
+ * Designed for responsive viewports (Web & Mobile).
+ */
 import './globals.css';
 import { Inter } from 'next/font/google';
 import Sidebar from './components/Sidebar';

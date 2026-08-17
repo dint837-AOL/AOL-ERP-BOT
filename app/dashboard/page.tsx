@@ -1,3 +1,10 @@
+/**
+ * Dashboard / Daily Tasks Module
+ * 
+ * Displays the daily to-do list, date navigation, and overall progress.
+ * Fetches data from the /api/tasks REST endpoints.
+ * Integrates dynamic priority indicators and progress calculations.
+ */
 'use client';
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Check } from 'lucide-react';
@@ -17,7 +24,7 @@ type Task = {
 
 export default function DashboardPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [currentDate, setCurrentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [currentDate, setCurrentDate] = useState(new Date().toISOString().split('T')[0]!);
   const [view, setView] = useState<'list' | 'board'>('list');
   const [loading, setLoading] = useState(true);
 
@@ -47,7 +54,7 @@ export default function DashboardPage() {
   const shiftDate = (days: number) => {
     const d = new Date(currentDate);
     d.setDate(d.getDate() + days);
-    setCurrentDate(d.toISOString().split('T')[0]);
+    setCurrentDate(d.toISOString().split('T')[0]!);
   };
 
   const toggleStatus = async (task: Task) => {

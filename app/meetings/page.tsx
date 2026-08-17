@@ -1,3 +1,10 @@
+/**
+ * Meetings & Contacts Module
+ * 
+ * Schedules client meetings and manages contact information.
+ * Contains advanced alert configurations allowing minute-precise notifications.
+ * Uses /api/meetings to read/write from the SQLite database.
+ */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -96,7 +103,7 @@ export default function MeetingsPage() {
           <div className="card-head">
             <h3>Upcoming Meetings</h3>
           </div>
-          <table>
+          <div className="table-scroll"><table>
             <thead>
               <tr>
                 <th>Title</th>
@@ -145,7 +152,7 @@ export default function MeetingsPage() {
                 ))
               )}
             </tbody>
-          </table>
+          </table></div>
         </div>
       </div>
 

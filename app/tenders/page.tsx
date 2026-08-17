@@ -1,3 +1,10 @@
+/**
+ * Tender Management Module
+ * 
+ * Tracks Govt/Private tenders, their submission pipelines, and valuations.
+ * Features a dynamic countdown timer for approaching deadlines.
+ * Uses /api/tenders for backend data manipulation.
+ */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -143,7 +150,7 @@ export default function TendersPage() {
           <div className="card-head">
             <h3>Tender Registry</h3>
           </div>
-          <table>
+          <div className="table-scroll"><table>
             <thead>
               <tr>
                 <th>Tender Details</th>
@@ -224,7 +231,7 @@ export default function TendersPage() {
                 })
               )}
             </tbody>
-          </table>
+          </table></div>
         </div>
       </div>
 

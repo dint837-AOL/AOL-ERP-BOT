@@ -1,3 +1,10 @@
+/**
+ * Topbar Component
+ * 
+ * Renders the top header for mobile and desktop views.
+ * Displays the dynamic page title based on the active route and supports
+ * passing child elements (e.g. Action Buttons) into the header area.
+ */
 'use client';
 import { Menu } from 'lucide-react';
 import { usePathname } from 'next/navigation';

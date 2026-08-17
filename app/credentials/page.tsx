@@ -1,3 +1,10 @@
+/**
+ * Credentials Vault Module
+ * 
+ * Securely manages API keys, logins, and environment variables.
+ * Allows setting expiry dates to trigger automated warnings.
+ * Uses /api/credentials for backend storage operations.
+ */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -93,7 +100,7 @@ export default function CredentialsPage() {
           <div className="card-head">
             <h3>Credential Vault</h3>
           </div>
-          <table>
+          <div className="table-scroll"><table>
             <thead>
               <tr>
                 <th>Name / Type</th>
@@ -147,7 +154,7 @@ export default function CredentialsPage() {
                 })
               )}
             </tbody>
-          </table>
+          </table></div>
         </div>
       </div>
 

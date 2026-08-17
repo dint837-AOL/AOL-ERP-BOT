@@ -1,3 +1,9 @@
+/**
+ * Sidebar Navigation Component
+ * 
+ * Renders the side navigation menu for the ERP system.
+ * Handles active route highlighting and mobile responsive toggling.
+ */
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';

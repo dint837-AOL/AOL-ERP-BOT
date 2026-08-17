@@ -1,3 +1,14 @@
+/**
+ * server.ts
+ * 
+ * Core hybrid server for AlliedOne ERP.
+ * This server runs Express for the backend (API & AI integration) and
+ * Next.js for the frontend. This architecture is designed to be highly 
+ * scalable and acts as a headless CMS/API for the upcoming Mobile App.
+ *
+ * It initializes the OpenClaw (Mock AI engine for now), Database connection, 
+ * and handles WhatsApp gateway configurations.
+ */
 import express from 'express';
 import next from 'next';
 import { fileURLToPath } from 'url';

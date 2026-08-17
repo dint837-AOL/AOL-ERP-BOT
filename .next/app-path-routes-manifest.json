@@ -1,0 +1,11 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/accounts/page": "/accounts",
+  "/credentials/page": "/credentials",
+  "/dashboard/page": "/dashboard",
+  "/hr/page": "/hr",
+  "/meetings/page": "/meetings",
+  "/page": "/",
+  "/tenders/page": "/tenders"
+}
