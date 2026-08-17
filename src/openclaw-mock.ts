@@ -13,128 +13,127 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import sqlite3 from 'sqlite3';
+import Database from 'better-sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
-const db = new sqlite3.Database('./openclaw.db');
+const db = new Database('./openclaw.db');
 
 function initDB() {
-  db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS members (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT DEFAULT '',
-      role TEXT DEFAULT 'Employee',
-      avatar_color TEXT DEFAULT '#4f7eff',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    // Migrate: add email if missing (for existing DBs)
-    db.run(`ALTER TABLE members ADD COLUMN email TEXT DEFAULT ''`, () => {});
-    db.run(`CREATE TABLE IF NOT EXISTS attendance (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      member_id INTEGER REFERENCES members(id),
-      phone_number TEXT,
-      action_type TEXT CHECK(action_type IN ('IN','OUT')) NOT NULL,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    db.run(`CREATE TABLE IF NOT EXISTS tasks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      description TEXT DEFAULT '',
-      deadline TEXT,
-      task_date TEXT NOT NULL,
-      priority TEXT CHECK(priority IN ('RED','ORANGE','GREEN')) DEFAULT 'GREEN',
-      status TEXT CHECK(status IN ('PENDING','DONE','DUE')) DEFAULT 'PENDING',
-      assigned_to INTEGER REFERENCES members(id),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    db.run(`CREATE TABLE IF NOT EXISTS leave_requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      member_id INTEGER NOT NULL REFERENCES members(id),
-      leave_type TEXT CHECK(leave_type IN ('SICK','CASUAL','ANNUAL')) NOT NULL,
-      start_date TEXT NOT NULL,
-      end_date TEXT NOT NULL,
-      reason TEXT DEFAULT '',
-      status TEXT CHECK(status IN ('PENDING','APPROVED','REJECTED')) DEFAULT 'PENDING',
-      reviewed_at DATETIME,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    db.run(`CREATE TABLE IF NOT EXISTS expense_categories (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE,
-      budget_limit REAL DEFAULT 0,
-      color TEXT DEFAULT '#4f7eff'
-    )`);
-    db.run(`CREATE TABLE IF NOT EXISTS expenses (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      category_id INTEGER REFERENCES expense_categories(id),
-      amount REAL NOT NULL,
-      description TEXT DEFAULT '',
-      entered_by INTEGER REFERENCES members(id),
-      expense_date TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`, () => {
-      // Seed default categories if empty
-      db.get('SELECT COUNT(*) as c FROM expense_categories', [], (_, row: any) => {
-        if (row?.c === 0) {
-          const cats = [
-            ['IT & Software', 50000, '#4f7eff'],
-            ['Office Supplies', 20000, '#2dd4a0'],
-            ['Travel', 30000, '#ff9f40'],
-            ['Marketing', 40000, '#a78bfa'],
-            ['Utilities', 15000, '#f472b6'],
-            ['Miscellaneous', 10000, '#8890a8'],
-          ];
-          cats.forEach(([n, b, c]) => db.run('INSERT OR IGNORE INTO expense_categories (name,budget_limit,color) VALUES(?,?,?)', [n, b, c]));
-        }
-      });
-    });
-    db.run('DROP TABLE IF EXISTS it_assets');
-    db.run('DROP TABLE IF EXISTS password_reminders');
-    db.run(`CREATE TABLE IF NOT EXISTS credentials (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      cred_type TEXT DEFAULT 'OTHER',
-      url TEXT DEFAULT '',
-      username TEXT DEFAULT '',
-      cost REAL DEFAULT 0,
-      expiry_date TEXT,
-      last_changed_date TEXT,
-      reminder_days_before TEXT DEFAULT '5,2,1',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    db.run(`CREATE TABLE IF NOT EXISTS meetings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      contact_name TEXT DEFAULT '',
-      scheduled_at DATETIME NOT NULL,
-      reminder_minutes_before TEXT DEFAULT '30,15',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    db.run(`CREATE TABLE IF NOT EXISTS tenders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      organization TEXT DEFAULT '',
-      tender_type TEXT CHECK(tender_type IN ('GOVT','PRIVATE')) DEFAULT 'PRIVATE',
-      published_date TEXT,
-      submission_deadline TEXT NOT NULL,
-      estimated_value REAL DEFAULT 0,
-      status TEXT CHECK(status IN ('UPCOMING','IN_PROGRESS','SUBMITTED','WON','LOST')) DEFAULT 'UPCOMING',
-      documents_url TEXT DEFAULT '',
-      notes TEXT DEFAULT '',
-      assigned_to INTEGER REFERENCES members(id),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-  });
+  db.exec(`CREATE TABLE IF NOT EXISTS members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT DEFAULT '',
+    role TEXT DEFAULT 'Employee',
+    avatar_color TEXT DEFAULT '#4f7eff',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  
+  try { db.exec(`ALTER TABLE members ADD COLUMN email TEXT DEFAULT ''`); } catch (e) {}
+  
+  db.exec(`CREATE TABLE IF NOT EXISTS attendance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    member_id INTEGER REFERENCES members(id),
+    phone_number TEXT,
+    action_type TEXT CHECK(action_type IN ('IN','OUT')) NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    deadline TEXT,
+    task_date TEXT NOT NULL,
+    priority TEXT CHECK(priority IN ('RED','ORANGE','GREEN')) DEFAULT 'GREEN',
+    status TEXT CHECK(status IN ('PENDING','DONE','DUE')) DEFAULT 'PENDING',
+    assigned_to INTEGER REFERENCES members(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS leave_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    member_id INTEGER NOT NULL REFERENCES members(id),
+    leave_type TEXT CHECK(leave_type IN ('SICK','CASUAL','ANNUAL')) NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    reason TEXT DEFAULT '',
+    status TEXT CHECK(status IN ('PENDING','APPROVED','REJECTED')) DEFAULT 'PENDING',
+    reviewed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS expense_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    budget_limit REAL DEFAULT 0,
+    color TEXT DEFAULT '#4f7eff'
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER REFERENCES expense_categories(id),
+    amount REAL NOT NULL,
+    description TEXT DEFAULT '',
+    entered_by INTEGER REFERENCES members(id),
+    expense_date TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const row = db.prepare('SELECT COUNT(*) as c FROM expense_categories').get() as any;
+  if (row?.c === 0) {
+    const cats = [
+      ['IT & Software', 50000, '#4f7eff'],
+      ['Office Supplies', 20000, '#2dd4a0'],
+      ['Travel', 30000, '#ff9f40'],
+      ['Marketing', 40000, '#a78bfa'],
+      ['Utilities', 15000, '#f472b6'],
+      ['Miscellaneous', 10000, '#8890a8'],
+    ];
+    const stmt = db.prepare('INSERT OR IGNORE INTO expense_categories (name,budget_limit,color) VALUES(?,?,?)');
+    cats.forEach(([n, b, c]) => stmt.run(n, b, c));
+  }
+
+  db.exec('DROP TABLE IF EXISTS it_assets');
+  db.exec('DROP TABLE IF EXISTS password_reminders');
+  db.exec(`CREATE TABLE IF NOT EXISTS credentials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    cred_type TEXT DEFAULT 'OTHER',
+    url TEXT DEFAULT '',
+    username TEXT DEFAULT '',
+    cost REAL DEFAULT 0,
+    expiry_date TEXT,
+    last_changed_date TEXT,
+    reminder_days_before TEXT DEFAULT '5,2,1',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS meetings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    contact_name TEXT DEFAULT '',
+    scheduled_at DATETIME NOT NULL,
+    reminder_minutes_before TEXT DEFAULT '30,15',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS tenders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    organization TEXT DEFAULT '',
+    tender_type TEXT CHECK(tender_type IN ('GOVT','PRIVATE')) DEFAULT 'PRIVATE',
+    published_date TEXT,
+    submission_deadline TEXT NOT NULL,
+    estimated_value REAL DEFAULT 0,
+    status TEXT CHECK(status IN ('UPCOMING','IN_PROGRESS','SUBMITTED','WON','LOST')) DEFAULT 'UPCOMING',
+    documents_url TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    assigned_to INTEGER REFERENCES members(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
   console.log('Database initialized.');
 }
 
 // Promise helpers
-const dbAll = (sql: string, p: any[] = []) => new Promise<any[]>((res, rej) => db.all(sql, p, (e, r) => e ? rej(e) : res(r)));
-const dbGet = (sql: string, p: any[] = []) => new Promise<any>((res, rej) => db.get(sql, p, (e, r) => e ? rej(e) : res(r)));
-const dbRun = (sql: string, p: any[] = []) => new Promise<{ lastID: number }>((res, rej) => db.run(sql, p, function (e) { e ? rej(e) : res({ lastID: this.lastID }); }));
+const dbAll = async (sql: string, p: any[] = []) => db.prepare(sql).all(p);
+const dbGet = async (sql: string, p: any[] = []) => db.prepare(sql).get(p);
+const dbRun = async (sql: string, p: any[] = []) => { const info = db.prepare(sql).run(p); return { lastID: info.lastInsertRowid }; };
 
 export class WhatsAppGateway { config: any; constructor(c: any) { this.config = c; } }
 export class Tool { config: any; constructor(c: any) { this.config = c; } }

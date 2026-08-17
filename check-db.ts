@@ -1,24 +1,17 @@
-import sqlite3 from 'sqlite3';
+import Database from 'better-sqlite3';
 
-const db = new sqlite3.Database('./openclaw.db', (err) => {
-  if (err) {
-    console.error("Error opening database:", err.message);
-  }
-});
+const db = new Database('./openclaw.db');
 
-console.log("Checking Attendance Records in Database...\n");
+console.log("Connected to the mock SQLite database.");
 
-db.all("SELECT * FROM attendance", [], (err, rows) => {
-  if (err) {
-    console.error("Error querying attendance table:", err.message);
-    return;
-  }
-  
+try {
+  const rows = db.prepare("SELECT * FROM attendance ORDER BY timestamp DESC LIMIT 5").all();
+  console.log("\n=== Last 5 Attendance Records ===");
   if (rows.length === 0) {
-    console.log("No attendance records found yet. Go to http://localhost:3000 and type 'I just arrived at the office' !");
+    console.log("No records found.");
   } else {
     console.table(rows);
   }
-  
-  db.close();
-});
+} catch (err: any) {
+  console.error("Error querying attendance table:", err.message);
+}
