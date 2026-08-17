@@ -15,11 +15,16 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import sqlite3 from 'sqlite3';
 import { open, Database } from 'sqlite';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
 let db: Database;
+
+// Add default secret if not provided
+const JWT_SECRET = process.env.JWT_SECRET || 'alliedone_super_secret_key_123!';
 
 async function initDB() {
   db = await open({
@@ -31,12 +36,25 @@ async function initDB() {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     email TEXT DEFAULT '',
+    password_hash TEXT DEFAULT '',
     role TEXT DEFAULT 'Employee',
     avatar_color TEXT DEFAULT '#4f7eff',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
   
   try { await db.exec(`ALTER TABLE members ADD COLUMN email TEXT DEFAULT ''`); } catch (e) {}
+  try { await db.exec(`ALTER TABLE members ADD COLUMN password_hash TEXT DEFAULT ''`); } catch (e) {}
+  
+  // Seed initial Admin if members table is empty
+  const memberCountRow = await db.get('SELECT COUNT(*) as count FROM members') as any;
+  if (memberCountRow && memberCountRow.count === 0) {
+    const defaultPasswordHash = await bcrypt.hash('password123', 10);
+    await db.run(`
+      INSERT INTO members (name, email, password_hash, role, avatar_color)
+      VALUES (?, ?, ?, ?, ?)
+    `, ['System Admin', 'admin@alliedone.com', defaultPasswordHash, 'Admin', '#ff4d4f']);
+    console.log('✅ Created default Admin user (admin@alliedone.com / password123)');
+  }
   
   await db.exec(`CREATE TABLE IF NOT EXISTS attendance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -190,26 +208,93 @@ export class OpenClaw {
   async start(port: number, listen = true) {
     await initDB();
 
+    // ── AUTH MIDDLEWARES ─────────────────────────────────────
+    const authenticateToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      const authHeader = req.headers['authorization'];
+      const token = authHeader && authHeader.split(' ')[1];
+      if (!token) return res.status(401).json({ error: 'Access denied. Token required.' });
+
+      jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+        if (err) return res.status(403).json({ error: 'Invalid or expired token.' });
+        (req as any).user = user;
+        next();
+      });
+    };
+
+    const requireRole = (role: string) => {
+      return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+        const user = (req as any).user;
+        if (!user || user.role !== role) {
+          return res.status(403).json({ error: `Access denied. ${role} role required.` });
+        }
+        next();
+      };
+    };
+
+    // ── AUTH ENDPOINTS ───────────────────────────────────────
+    this.app.post('/api/auth/login', async (req, res) => {
+      const { email, password } = req.body;
+      if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+
+      try {
+        const member = await dbGet('SELECT * FROM members WHERE email = ?', [email]) as any;
+        if (!member) return res.status(401).json({ error: 'Invalid credentials' });
+
+        const validPassword = await bcrypt.compare(password, member.password_hash || '');
+        if (!validPassword) return res.status(401).json({ error: 'Invalid credentials' });
+
+        const token = jwt.sign({ id: member.id, email: member.email, role: member.role, name: member.name }, JWT_SECRET, { expiresIn: '7d' });
+        
+        // Remove password hash from response
+        const { password_hash, ...memberData } = member;
+        res.json({ token, user: memberData });
+      } catch (err: any) {
+        res.status(500).json({ error: 'Login failed', details: err.message });
+      }
+    });
+
     // ── MEMBERS ──────────────────────────────────────────────
-    this.app.get('/api/members', async (_, res) => res.json(await dbAll('SELECT * FROM members ORDER BY name')));
-    this.app.post('/api/members', async (req, res) => {
-      const { name, email, role, avatar_color } = req.body;
+    // Protected by authenticateToken
+    this.app.use('/api', (req, res, next) => {
+      if (req.path.startsWith('/auth/login')) return next();
+      authenticateToken(req, res, next);
+    });
+
+    this.app.get('/api/members', async (_, res) => res.json(await dbAll('SELECT id, name, email, role, avatar_color, created_at FROM members ORDER BY name')));
+    
+    // Only Admin can add members
+    this.app.post('/api/members', requireRole('Admin'), async (req, res) => {
+      const { name, email, role, avatar_color, password } = req.body;
       if (!name) return res.status(400).json({ error: 'Name required' });
       const colors = ['#4f7eff','#2dd4a0','#ff4d6a','#ff9f40','#a78bfa','#f472b6'];
       const color = avatar_color || colors[Math.floor(Math.random() * colors.length)];
-      const { lastID } = await dbRun('INSERT INTO members(name,email,role,avatar_color) VALUES(?,?,?,?)', [name, email||'', role||'Employee', color]);
-      res.status(201).json(await dbGet('SELECT * FROM members WHERE id=?', [lastID]));
+      
+      const pwdHash = password ? await bcrypt.hash(password, 10) : await bcrypt.hash('password123', 10);
+      
+      const { lastID } = await dbRun('INSERT INTO members(name,email,role,avatar_color,password_hash) VALUES(?,?,?,?,?)', [name, email||'', role||'Employee', color, pwdHash]);
+      res.json({ id: lastID });
     });
-    this.app.put('/api/members/:id', async (req, res) => {
-      const { name, email, role } = req.body;
+    // Only Admin can edit members
+    this.app.put('/api/members/:id', requireRole('Admin'), async (req, res) => {
+      const { name, email, role, password } = req.body;
       if (!name) return res.status(400).json({ error: 'Name required' });
-      await dbRun('UPDATE members SET name=?, email=?, role=? WHERE id=?', [name, email||'', role||'Employee', req.params.id]);
-      res.json(await dbGet('SELECT * FROM members WHERE id=?', [req.params.id]));
+      
+      if (password) {
+        const pwdHash = await bcrypt.hash(password, 10);
+        await dbRun('UPDATE members SET name=?, email=?, role=?, password_hash=? WHERE id=?', [name, email || '', role || 'Employee', pwdHash, req.params.id]);
+      } else {
+        await dbRun('UPDATE members SET name=?, email=?, role=? WHERE id=?', [name, email || '', role || 'Employee', req.params.id]);
+      }
+      res.json({ success: true });
     });
-    this.app.delete('/api/members/:id', async (req, res) => { 
+    // Only Admin can delete members
+    this.app.delete('/api/members/:id', requireRole('Admin'), async (req, res) => {
+      // Unassign tasks assigned to this member
       await dbRun('UPDATE tasks SET assigned_to = NULL WHERE assigned_to = ?', [req.params.id]);
-      await dbRun('DELETE FROM members WHERE id=?', [req.params.id]); 
-      res.json({ ok: true }); 
+      
+      // We'll leave attendance/leave records alone or maybe they should cascade, but for now just delete the member
+      await dbRun('DELETE FROM members WHERE id=?', [req.params.id]);
+      res.json({ success: true });
     });
 
     // ── TASKS ────────────────────────────────────────────────

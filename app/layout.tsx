@@ -7,8 +7,8 @@
  */
 import './globals.css';
 import { Inter } from 'next/font/google';
-import Sidebar from './components/Sidebar';
-import Topbar from './components/Topbar';
+import { AuthProvider } from './context/AuthContext';
+import AuthGuard from './components/AuthGuard';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -25,12 +25,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <div className="app">
-          <Sidebar />
-          <div className="main">
+        <AuthProvider>
+          <AuthGuard>
             {children}
-          </div>
-        </div>
+          </AuthGuard>
+        </AuthProvider>
       </body>
     </html>
   );
