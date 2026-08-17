@@ -105,7 +105,7 @@ self.__SERVER_FILES_MANIFEST={
         "transform": "lodash/{{member}}"
       }
     },
-    "outputFileTracingRoot": "D:\\dev\\WORK\\company-erp-bot",
+    "outputFileTracingRoot": "D:\\AOL\\ERP_bot\\AOL-ERP-BOT",
     "enablePrerenderSourceMaps": true,
     "cacheComponents": false,
     "cacheLife": {
@@ -175,7 +175,7 @@ self.__SERVER_FILES_MANIFEST={
       "proxyPrefetch": "flexible",
       "optimisticClientCache": true,
       "manualClientBasePath": false,
-      "cpus": 11,
+      "cpus": 3,
       "memoryBasedWorkersCount": false,
       "imgOptConcurrency": null,
       "imgOptOperationCache": null,
@@ -321,13 +321,13 @@ self.__SERVER_FILES_MANIFEST={
     "htmlLimitedBots": "[\\w-]+-Google|Google-[\\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight",
     "bundlePagesRouterDependencies": false,
     "configFileName": "next.config.js",
-    "repoRoot": "D:\\dev\\WORK\\company-erp-bot",
+    "repoRoot": "D:\\AOL\\ERP_bot\\AOL-ERP-BOT",
     "turbopack": {
-      "root": "D:\\dev\\WORK\\company-erp-bot"
+      "root": "D:\\AOL\\ERP_bot\\AOL-ERP-BOT"
     },
     "distDirRoot": ".next"
   },
-  "appDir": "D:\\dev\\WORK\\company-erp-bot",
+  "appDir": "D:\\AOL\\ERP_bot\\AOL-ERP-BOT",
   "relativeAppDir": "",
   "files": [
     ".next\\package.json",

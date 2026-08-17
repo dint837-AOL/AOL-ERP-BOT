@@ -455,15 +455,6 @@ function HRPage() {
                                 fileName: "[project]/app/hr/page.tsx",
                                 lineNumber: 175,
                                 columnNumber: 11
-                            }, this),
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                className: 'tab ' + (activeTab === 'team' ? 'on' : ''),
-                                onClick: ()=>setActiveTab('team'),
-                                children: "Team"
-                            }, void 0, false, {
-                                fileName: "[project]/app/hr/page.tsx",
-                                lineNumber: 176,
-                                columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
@@ -481,7 +472,7 @@ function HRPage() {
                                         children: "Check-In / Check-Out Log"
                                     }, void 0, false, {
                                         fileName: "[project]/app/hr/page.tsx",
-                                        lineNumber: 182,
+                                        lineNumber: 181,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -492,13 +483,13 @@ function HRPage() {
                                         children: fmtDate(curDate)
                                     }, void 0, false, {
                                         fileName: "[project]/app/hr/page.tsx",
-                                        lineNumber: 183,
+                                        lineNumber: 182,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/hr/page.tsx",
-                                lineNumber: 181,
+                                lineNumber: 180,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -512,32 +503,32 @@ function HRPage() {
                                                         children: "Member"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/hr/page.tsx",
-                                                        lineNumber: 186,
+                                                        lineNumber: 185,
                                                         columnNumber: 26
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
                                                         children: "Action"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/hr/page.tsx",
-                                                        lineNumber: 186,
+                                                        lineNumber: 185,
                                                         columnNumber: 41
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
                                                         children: "Time"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/hr/page.tsx",
-                                                        lineNumber: 186,
+                                                        lineNumber: 185,
                                                         columnNumber: 56
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/hr/page.tsx",
-                                                lineNumber: 186,
+                                                lineNumber: 185,
                                                 columnNumber: 22
                                             }, this)
                                         }, void 0, false, {
                                             fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 186,
+                                            lineNumber: 185,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tbody", {
@@ -548,12 +539,12 @@ function HRPage() {
                                                     children: "No check-ins for this date."
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/hr/page.tsx",
-                                                    lineNumber: 189,
+                                                    lineNumber: 188,
                                                     columnNumber: 43
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/app/hr/page.tsx",
-                                                lineNumber: 189,
+                                                lineNumber: 188,
                                                 columnNumber: 19
                                             }, this) : att.map((a)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tr", {
                                                     children: [
@@ -569,25 +560,25 @@ function HRPage() {
                                                                         children: (a.member_name || '?')[0].toUpperCase()
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/hr/page.tsx",
-                                                                        lineNumber: 195,
+                                                                        lineNumber: 194,
                                                                         columnNumber: 27
                                                                     }, this),
                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                                                         children: a.member_name || 'Unknown'
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/hr/page.tsx",
-                                                                        lineNumber: 198,
+                                                                        lineNumber: 197,
                                                                         columnNumber: 27
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/app/hr/page.tsx",
-                                                                lineNumber: 194,
+                                                                lineNumber: 193,
                                                                 columnNumber: 25
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/hr/page.tsx",
-                                                            lineNumber: 193,
+                                                            lineNumber: 192,
                                                             columnNumber: 23
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -596,12 +587,12 @@ function HRPage() {
                                                                 children: a.action_type
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/hr/page.tsx",
-                                                                lineNumber: 201,
+                                                                lineNumber: 200,
                                                                 columnNumber: 27
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/hr/page.tsx",
-                                                            lineNumber: 201,
+                                                            lineNumber: 200,
                                                             columnNumber: 23
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -614,35 +605,35 @@ function HRPage() {
                                                             })
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/hr/page.tsx",
-                                                            lineNumber: 202,
+                                                            lineNumber: 201,
                                                             columnNumber: 23
                                                         }, this)
                                                     ]
                                                 }, a.id, true, {
                                                     fileName: "[project]/app/hr/page.tsx",
-                                                    lineNumber: 192,
+                                                    lineNumber: 191,
                                                     columnNumber: 21
                                                 }, this))
                                         }, void 0, false, {
                                             fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 187,
+                                            lineNumber: 186,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 185,
+                                    lineNumber: 184,
                                     columnNumber: 43
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/app/hr/page.tsx",
-                                lineNumber: 185,
+                                lineNumber: 184,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/hr/page.tsx",
-                        lineNumber: 180,
+                        lineNumber: 179,
                         columnNumber: 11
                     }, this),
                     activeTab === 'leave' && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -655,7 +646,7 @@ function HRPage() {
                                         children: "Leave Requests"
                                     }, void 0, false, {
                                         fileName: "[project]/app/hr/page.tsx",
-                                        lineNumber: 216,
+                                        lineNumber: 215,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -666,20 +657,20 @@ function HRPage() {
                                                 size: 13
                                             }, void 0, false, {
                                                 fileName: "[project]/app/hr/page.tsx",
-                                                lineNumber: 217,
+                                                lineNumber: 216,
                                                 columnNumber: 98
                                             }, this),
                                             " New"
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/hr/page.tsx",
-                                        lineNumber: 217,
+                                        lineNumber: 216,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/hr/page.tsx",
-                                lineNumber: 215,
+                                lineNumber: 214,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -693,46 +684,46 @@ function HRPage() {
                                                         children: "Employee"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/hr/page.tsx",
-                                                        lineNumber: 220,
+                                                        lineNumber: 219,
                                                         columnNumber: 26
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
                                                         children: "Type"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/hr/page.tsx",
-                                                        lineNumber: 220,
+                                                        lineNumber: 219,
                                                         columnNumber: 43
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
                                                         children: "Period"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/hr/page.tsx",
-                                                        lineNumber: 220,
+                                                        lineNumber: 219,
                                                         columnNumber: 56
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
                                                         children: "Status"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/hr/page.tsx",
-                                                        lineNumber: 220,
+                                                        lineNumber: 219,
                                                         columnNumber: 71
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
                                                         children: "Actions"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/hr/page.tsx",
-                                                        lineNumber: 220,
+                                                        lineNumber: 219,
                                                         columnNumber: 86
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/hr/page.tsx",
-                                                lineNumber: 220,
+                                                lineNumber: 219,
                                                 columnNumber: 22
                                             }, this)
                                         }, void 0, false, {
                                             fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 220,
+                                            lineNumber: 219,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tbody", {
@@ -743,12 +734,12 @@ function HRPage() {
                                                     children: "No leave requests yet."
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/hr/page.tsx",
-                                                    lineNumber: 223,
+                                                    lineNumber: 222,
                                                     columnNumber: 43
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/app/hr/page.tsx",
-                                                lineNumber: 223,
+                                                lineNumber: 222,
                                                 columnNumber: 19
                                             }, this) : leaves.map((l)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tr", {
                                                     children: [
@@ -764,19 +755,19 @@ function HRPage() {
                                                                         children: (l.member_name || '?')[0]
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/hr/page.tsx",
-                                                                        lineNumber: 229,
+                                                                        lineNumber: 228,
                                                                         columnNumber: 27
                                                                     }, this),
                                                                     l.member_name || '?'
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/app/hr/page.tsx",
-                                                                lineNumber: 228,
+                                                                lineNumber: 227,
                                                                 columnNumber: 25
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/hr/page.tsx",
-                                                            lineNumber: 227,
+                                                            lineNumber: 226,
                                                             columnNumber: 23
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -785,12 +776,12 @@ function HRPage() {
                                                                 children: l.leave_type
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/hr/page.tsx",
-                                                                lineNumber: 235,
+                                                                lineNumber: 234,
                                                                 columnNumber: 27
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/hr/page.tsx",
-                                                            lineNumber: 235,
+                                                            lineNumber: 234,
                                                             columnNumber: 23
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -805,7 +796,7 @@ function HRPage() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/hr/page.tsx",
-                                                            lineNumber: 236,
+                                                            lineNumber: 235,
                                                             columnNumber: 23
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -814,12 +805,12 @@ function HRPage() {
                                                                 children: l.status
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/hr/page.tsx",
-                                                                lineNumber: 237,
+                                                                lineNumber: 236,
                                                                 columnNumber: 27
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/hr/page.tsx",
-                                                            lineNumber: 237,
+                                                            lineNumber: 236,
                                                             columnNumber: 23
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -834,7 +825,7 @@ function HRPage() {
                                                                         children: "Approve"
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/hr/page.tsx",
-                                                                        lineNumber: 241,
+                                                                        lineNumber: 240,
                                                                         columnNumber: 29
                                                                     }, this),
                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -843,13 +834,13 @@ function HRPage() {
                                                                         children: "Reject"
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/hr/page.tsx",
-                                                                        lineNumber: 242,
+                                                                        lineNumber: 241,
                                                                         columnNumber: 29
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/app/hr/page.tsx",
-                                                                lineNumber: 240,
+                                                                lineNumber: 239,
                                                                 columnNumber: 27
                                                             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                                 style: {
@@ -859,218 +850,40 @@ function HRPage() {
                                                                 children: "Reviewed"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/hr/page.tsx",
-                                                                lineNumber: 245,
+                                                                lineNumber: 244,
                                                                 columnNumber: 27
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/hr/page.tsx",
-                                                            lineNumber: 238,
+                                                            lineNumber: 237,
                                                             columnNumber: 23
                                                         }, this)
                                                     ]
                                                 }, l.id, true, {
                                                     fileName: "[project]/app/hr/page.tsx",
-                                                    lineNumber: 226,
+                                                    lineNumber: 225,
                                                     columnNumber: 21
                                                 }, this))
                                         }, void 0, false, {
                                             fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 221,
+                                            lineNumber: 220,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 219,
+                                    lineNumber: 218,
                                     columnNumber: 43
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/app/hr/page.tsx",
-                                lineNumber: 219,
+                                lineNumber: 218,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/hr/page.tsx",
-                        lineNumber: 214,
-                        columnNumber: 11
-                    }, this),
-                    activeTab === 'team' && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                        className: "card",
-                        children: [
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                className: "card-head",
-                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
-                                    children: "Team Members"
-                                }, void 0, false, {
-                                    fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 258,
-                                    columnNumber: 40
-                                }, this)
-                            }, void 0, false, {
-                                fileName: "[project]/app/hr/page.tsx",
-                                lineNumber: 258,
-                                columnNumber: 13
-                            }, this),
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                className: "table-scroll",
-                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("table", {
-                                    children: [
-                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("thead", {
-                                            children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tr", {
-                                                children: [
-                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
-                                                        children: "Name"
-                                                    }, void 0, false, {
-                                                        fileName: "[project]/app/hr/page.tsx",
-                                                        lineNumber: 260,
-                                                        columnNumber: 26
-                                                    }, this),
-                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
-                                                        children: "Role"
-                                                    }, void 0, false, {
-                                                        fileName: "[project]/app/hr/page.tsx",
-                                                        lineNumber: 260,
-                                                        columnNumber: 39
-                                                    }, this),
-                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
-                                                        children: "Added"
-                                                    }, void 0, false, {
-                                                        fileName: "[project]/app/hr/page.tsx",
-                                                        lineNumber: 260,
-                                                        columnNumber: 52
-                                                    }, this)
-                                                ]
-                                            }, void 0, true, {
-                                                fileName: "[project]/app/hr/page.tsx",
-                                                lineNumber: 260,
-                                                columnNumber: 22
-                                            }, this)
-                                        }, void 0, false, {
-                                            fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 260,
-                                            columnNumber: 15
-                                        }, this),
-                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tbody", {
-                                            children: members.length === 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tr", {
-                                                className: "empty-r",
-                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
-                                                    colSpan: 3,
-                                                    children: "No members yet. Add from Team Members in dashboard."
-                                                }, void 0, false, {
-                                                    fileName: "[project]/app/hr/page.tsx",
-                                                    lineNumber: 263,
-                                                    columnNumber: 43
-                                                }, this)
-                                            }, void 0, false, {
-                                                fileName: "[project]/app/hr/page.tsx",
-                                                lineNumber: 263,
-                                                columnNumber: 19
-                                            }, this) : members.map((m)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tr", {
-                                                    children: [
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
-                                                            children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                className: "av-cell",
-                                                                children: [
-                                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                        className: "av",
-                                                                        style: {
-                                                                            background: m.avatar_color
-                                                                        },
-                                                                        children: m.name[0].toUpperCase()
-                                                                    }, void 0, false, {
-                                                                        fileName: "[project]/app/hr/page.tsx",
-                                                                        lineNumber: 269,
-                                                                        columnNumber: 27
-                                                                    }, this),
-                                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                        children: [
-                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                                children: m.name
-                                                                            }, void 0, false, {
-                                                                                fileName: "[project]/app/hr/page.tsx",
-                                                                                lineNumber: 271,
-                                                                                columnNumber: 29
-                                                                            }, this),
-                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                                style: {
-                                                                                    fontSize: '.72rem',
-                                                                                    color: 'var(--muted)'
-                                                                                },
-                                                                                children: m.email || ''
-                                                                            }, void 0, false, {
-                                                                                fileName: "[project]/app/hr/page.tsx",
-                                                                                lineNumber: 272,
-                                                                                columnNumber: 29
-                                                                            }, this)
-                                                                        ]
-                                                                    }, void 0, true, {
-                                                                        fileName: "[project]/app/hr/page.tsx",
-                                                                        lineNumber: 270,
-                                                                        columnNumber: 27
-                                                                    }, this)
-                                                                ]
-                                                            }, void 0, true, {
-                                                                fileName: "[project]/app/hr/page.tsx",
-                                                                lineNumber: 268,
-                                                                columnNumber: 25
-                                                            }, this)
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/hr/page.tsx",
-                                                            lineNumber: 267,
-                                                            columnNumber: 23
-                                                        }, this),
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
-                                                            style: {
-                                                                color: 'var(--muted)'
-                                                            },
-                                                            children: m.role
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/hr/page.tsx",
-                                                            lineNumber: 276,
-                                                            columnNumber: 23
-                                                        }, this),
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
-                                                            style: {
-                                                                color: 'var(--muted)',
-                                                                fontSize: '.76rem'
-                                                            },
-                                                            children: new Date(m.created_at).toLocaleDateString('en-GB', {
-                                                                day: 'numeric',
-                                                                month: 'short',
-                                                                year: 'numeric'
-                                                            })
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/hr/page.tsx",
-                                                            lineNumber: 277,
-                                                            columnNumber: 23
-                                                        }, this)
-                                                    ]
-                                                }, m.id, true, {
-                                                    fileName: "[project]/app/hr/page.tsx",
-                                                    lineNumber: 266,
-                                                    columnNumber: 21
-                                                }, this))
-                                        }, void 0, false, {
-                                            fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 261,
-                                            columnNumber: 15
-                                        }, this)
-                                    ]
-                                }, void 0, true, {
-                                    fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 259,
-                                    columnNumber: 43
-                                }, this)
-                            }, void 0, false, {
-                                fileName: "[project]/app/hr/page.tsx",
-                                lineNumber: 259,
-                                columnNumber: 13
-                            }, this)
-                        ]
-                    }, void 0, true, {
-                        fileName: "[project]/app/hr/page.tsx",
-                        lineNumber: 257,
+                        lineNumber: 213,
                         columnNumber: 11
                     }, this)
                 ]
@@ -1094,7 +907,7 @@ function HRPage() {
                                     children: "Leave Request"
                                 }, void 0, false, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 293,
+                                    lineNumber: 261,
                                     columnNumber: 15
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -1104,18 +917,18 @@ function HRPage() {
                                         size: 16
                                     }, void 0, false, {
                                         fileName: "[project]/app/hr/page.tsx",
-                                        lineNumber: 294,
+                                        lineNumber: 262,
                                         columnNumber: 81
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 294,
+                                    lineNumber: 262,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/hr/page.tsx",
-                            lineNumber: 292,
+                            lineNumber: 260,
                             columnNumber: 13
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1125,7 +938,7 @@ function HRPage() {
                                     children: "Employee"
                                 }, void 0, false, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 297,
+                                    lineNumber: 265,
                                     columnNumber: 15
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("select", {
@@ -1140,7 +953,7 @@ function HRPage() {
                                             children: "Select..."
                                         }, void 0, false, {
                                             fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 299,
+                                            lineNumber: 267,
                                             columnNumber: 17
                                         }, this),
                                         members.map((m)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("option", {
@@ -1153,19 +966,19 @@ function HRPage() {
                                                 ]
                                             }, m.id, true, {
                                                 fileName: "[project]/app/hr/page.tsx",
-                                                lineNumber: 301,
+                                                lineNumber: 269,
                                                 columnNumber: 19
                                             }, this))
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 298,
+                                    lineNumber: 266,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/hr/page.tsx",
-                            lineNumber: 296,
+                            lineNumber: 264,
                             columnNumber: 13
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1175,7 +988,7 @@ function HRPage() {
                                     children: "Leave Type"
                                 }, void 0, false, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 306,
+                                    lineNumber: 274,
                                     columnNumber: 15
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("select", {
@@ -1190,7 +1003,7 @@ function HRPage() {
                                             children: "Sick Leave"
                                         }, void 0, false, {
                                             fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 308,
+                                            lineNumber: 276,
                                             columnNumber: 17
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("option", {
@@ -1198,7 +1011,7 @@ function HRPage() {
                                             children: "Casual Leave"
                                         }, void 0, false, {
                                             fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 309,
+                                            lineNumber: 277,
                                             columnNumber: 17
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("option", {
@@ -1206,19 +1019,19 @@ function HRPage() {
                                             children: "Annual Leave"
                                         }, void 0, false, {
                                             fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 310,
+                                            lineNumber: 278,
                                             columnNumber: 17
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 307,
+                                    lineNumber: 275,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/hr/page.tsx",
-                            lineNumber: 305,
+                            lineNumber: 273,
                             columnNumber: 13
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1231,7 +1044,7 @@ function HRPage() {
                                             children: "From"
                                         }, void 0, false, {
                                             fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 314,
+                                            lineNumber: 282,
                                             columnNumber: 35
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -1243,13 +1056,13 @@ function HRPage() {
                                                 })
                                         }, void 0, false, {
                                             fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 314,
+                                            lineNumber: 282,
                                             columnNumber: 54
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 314,
+                                    lineNumber: 282,
                                     columnNumber: 15
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1259,7 +1072,7 @@ function HRPage() {
                                             children: "To"
                                         }, void 0, false, {
                                             fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 315,
+                                            lineNumber: 283,
                                             columnNumber: 35
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -1271,19 +1084,19 @@ function HRPage() {
                                                 })
                                         }, void 0, false, {
                                             fileName: "[project]/app/hr/page.tsx",
-                                            lineNumber: 315,
+                                            lineNumber: 283,
                                             columnNumber: 52
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 315,
+                                    lineNumber: 283,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/hr/page.tsx",
-                            lineNumber: 313,
+                            lineNumber: 281,
                             columnNumber: 13
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1293,7 +1106,7 @@ function HRPage() {
                                     children: "Reason"
                                 }, void 0, false, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 317,
+                                    lineNumber: 285,
                                     columnNumber: 33
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("textarea", {
@@ -1305,13 +1118,13 @@ function HRPage() {
                                         })
                                 }, void 0, false, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 317,
+                                    lineNumber: 285,
                                     columnNumber: 54
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/hr/page.tsx",
-                            lineNumber: 317,
+                            lineNumber: 285,
                             columnNumber: 13
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1323,7 +1136,7 @@ function HRPage() {
                                     children: "Cancel"
                                 }, void 0, false, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 319,
+                                    lineNumber: 287,
                                     columnNumber: 15
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -1332,24 +1145,24 @@ function HRPage() {
                                     children: "Submit"
                                 }, void 0, false, {
                                     fileName: "[project]/app/hr/page.tsx",
-                                    lineNumber: 320,
+                                    lineNumber: 288,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/hr/page.tsx",
-                            lineNumber: 318,
+                            lineNumber: 286,
                             columnNumber: 13
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/hr/page.tsx",
-                    lineNumber: 291,
+                    lineNumber: 259,
                     columnNumber: 11
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/app/hr/page.tsx",
-                lineNumber: 290,
+                lineNumber: 258,
                 columnNumber: 9
             }, this),
             toastMsg && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1357,7 +1170,7 @@ function HRPage() {
                 children: toastMsg
             }, void 0, false, {
                 fileName: "[project]/app/hr/page.tsx",
-                lineNumber: 326,
+                lineNumber: 294,
                 columnNumber: 20
             }, this)
         ]
@@ -1367,7 +1180,7 @@ function HRPage() {
         columnNumber: 5
     }, this);
 }
-_s(HRPage, "pDz11sCJqQkEDwTTl4vfX1k1sIk=");
+_s(HRPage, "cV09c+FcYZEMltwrabvIOVD/y70=");
 _c = HRPage;
 var _c;
 __turbopack_context__.k.register(_c, "HRPage");

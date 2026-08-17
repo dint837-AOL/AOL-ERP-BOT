@@ -5,7 +5,7 @@
       "routeType": "page",
       "response": "complete",
       "compute": "static",
-      "htmlSize": 12913,
+      "htmlSize": 13371,
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -62,7 +62,7 @@
       "routeType": "page",
       "response": "complete",
       "compute": "static",
-      "htmlSize": 12843,
+      "htmlSize": 13301,
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -90,7 +90,7 @@
       "routeType": "page",
       "response": "complete",
       "compute": "static",
-      "htmlSize": 14970,
+      "htmlSize": 15428,
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -114,11 +114,39 @@
         "x-next-revalidate-tag-token"
       ]
     },
+    "/admin": {
+      "routeType": "page",
+      "response": "complete",
+      "compute": "static",
+      "htmlSize": 13131,
+      "experimentalBypassFor": [
+        {
+          "type": "header",
+          "key": "next-action"
+        },
+        {
+          "type": "header",
+          "key": "content-type",
+          "value": "multipart/form-data;.*"
+        }
+      ],
+      "initialRevalidateSeconds": false,
+      "srcRoute": "/admin",
+      "dataRoute": "/admin.rsc",
+      "allowHeader": [
+        "host",
+        "x-matched-path",
+        "x-prerender-revalidate",
+        "x-prerender-revalidate-if-generated",
+        "x-next-revalidated-tags",
+        "x-next-revalidate-tag-token"
+      ]
+    },
     "/credentials": {
       "routeType": "page",
       "response": "complete",
       "compute": "static",
-      "htmlSize": 12900,
+      "htmlSize": 13358,
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -146,7 +174,7 @@
       "routeType": "page",
       "response": "complete",
       "compute": "static",
-      "htmlSize": 13705,
+      "htmlSize": 14163,
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -174,7 +202,7 @@
       "routeType": "page",
       "response": "complete",
       "compute": "static",
-      "htmlSize": 14922,
+      "htmlSize": 15352,
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -202,7 +230,7 @@
       "routeType": "page",
       "response": "complete",
       "compute": "static",
-      "htmlSize": 12879,
+      "htmlSize": 13337,
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -230,7 +258,7 @@
       "routeType": "page",
       "response": "complete",
       "compute": "static",
-      "htmlSize": 13336,
+      "htmlSize": 13794,
       "experimentalBypassFor": [
         {
           "type": "header",

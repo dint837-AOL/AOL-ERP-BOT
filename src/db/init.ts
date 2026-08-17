@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 
-const db = new Database('./openclaw.db');
+export const db: any = new Database('./openclaw.db');
 
 export function initDB() {
   try {
@@ -17,5 +17,3 @@ export function initDB() {
     console.error("Database initialization error:", err.message);
   }
 }
-
-export { db };

@@ -915,6 +915,59 @@ tr:hover td {
   font-size: .78rem;
 }
 
+.board-container {
+  gap: 16px;
+  padding-bottom: 10px;
+  display: flex;
+  overflow-x: auto;
+}
+
+.board-col {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  flex-direction: column;
+  flex: 0 0 280px;
+  height: calc(100vh - 240px);
+  min-height: 300px;
+  display: flex;
+}
+
+.bc-head {
+  border-bottom: 1px solid var(--border);
+  background: #ffffff05;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  display: flex;
+}
+
+.bc-count {
+  color: var(--text);
+  background: #ffffff1a;
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: .7rem;
+  font-weight: 700;
+}
+
+.bc-body {
+  flex: 1;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+.board-card {
+  cursor: grab;
+  padding: 12px;
+}
+
+.board-card:active {
+  cursor: grabbing;
+}
+
 /* [next]/internal/font/google/inter_5972bc34.module.css [app-client] (css) */
 @font-face {
   font-family: Inter;

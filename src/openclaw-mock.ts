@@ -162,7 +162,17 @@ export class OpenClaw {
       const { lastID } = await dbRun('INSERT INTO members(name,email,role,avatar_color) VALUES(?,?,?,?)', [name, email||'', role||'Employee', color]);
       res.status(201).json(await dbGet('SELECT * FROM members WHERE id=?', [lastID]));
     });
-    this.app.delete('/api/members/:id', async (req, res) => { await dbRun('DELETE FROM members WHERE id=?', [req.params.id]); res.json({ ok: true }); });
+    this.app.put('/api/members/:id', async (req, res) => {
+      const { name, email, role } = req.body;
+      if (!name) return res.status(400).json({ error: 'Name required' });
+      await dbRun('UPDATE members SET name=?, email=?, role=? WHERE id=?', [name, email||'', role||'Employee', req.params.id]);
+      res.json(await dbGet('SELECT * FROM members WHERE id=?', [req.params.id]));
+    });
+    this.app.delete('/api/members/:id', async (req, res) => { 
+      await dbRun('UPDATE tasks SET assigned_to = NULL WHERE assigned_to = ?', [req.params.id]);
+      await dbRun('DELETE FROM members WHERE id=?', [req.params.id]); 
+      res.json({ ok: true }); 
+    });
 
     // ── TASKS ────────────────────────────────────────────────
     this.app.get('/api/tasks', async (req, res) => {
@@ -301,7 +311,7 @@ export class OpenClaw {
       // To prevent spamming every minute, we'll only print credential alerts if the time is exactly 09:00, 
       // but for this mock, we'll just check them (in reality you'd track 'last_alerted' in DB).
       // Since it's a mock, we will just evaluate the logic and let the user see it.
-      const creds = await dbAll('SELECT * FROM credentials');
+      const creds = await dbAll('SELECT * FROM credentials') as any[];
       for (const c of creds) {
         if (!c.reminder_days_before) continue;
         const daysToAlert = c.reminder_days_before.split(',').map((d: string) => parseInt(d.trim()));
@@ -318,10 +328,10 @@ export class OpenClaw {
       }
 
       // 2. Check Meetings (minute-level precision)
-      const meetings = await dbAll('SELECT * FROM meetings');
+      const meetings = await dbAll('SELECT * FROM meetings') as any[];
       for (const m of meetings) {
         if (!m.reminder_minutes_before) continue;
-        const minutesToAlert = m.reminder_minutes_before.split(',').map((m: string) => parseInt(m.trim()));
+        const minutesToAlert = m.reminder_minutes_before.split(',').map((minuteStr: string) => parseInt(minuteStr.trim()));
         
         const scheduledTime = new Date(m.scheduled_at);
         const diffMinutes = Math.floor((scheduledTime.getTime() - now.getTime()) / (1000 * 60));
@@ -333,7 +343,7 @@ export class OpenClaw {
       }
 
       // 3. Check Tenders (daily precision for 7, 3, 1 days)
-      const tenders = await dbAll('SELECT * FROM tenders');
+      const tenders = await dbAll('SELECT * FROM tenders') as any[];
       for (const t of tenders) {
         if (!t.submission_deadline || ['SUBMITTED','WON','LOST'].includes(t.status)) continue;
         const deadline = new Date(t.submission_deadline);

@@ -7,7 +7,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Wallet, Bell, FileText, Phone, Map, MessageCircle, Zap, Key } from 'lucide-react';
+import { LayoutDashboard, Users, Wallet, Bell, FileText, Phone, Map, MessageCircle, Zap, Key, Shield } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -49,6 +49,10 @@ export default function Sidebar() {
         <Link href="/tenders" className={pathname === '/tenders' ? 'on' : ''}>
           <FileText size={18} />
           Tenders
+        </Link>
+        <Link href="/admin" className={pathname === '/admin' ? 'on' : ''}>
+          <Shield size={18} />
+          Admin Section
         </Link>
         <a href="#"><Map size={18} /> Roadmap <span className="soon">Soon</span></a>
         

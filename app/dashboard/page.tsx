@@ -141,7 +141,7 @@ export default function DashboardPage() {
 
         {loading ? (
           <div style={{ color: 'var(--muted)', textAlign: 'center', marginTop: '40px' }}>Loading tasks...</div>
-        ) : (
+        ) : view === 'list' ? (
           <div className="tlist" style={{ marginTop: '20px' }}>
             {tasks.length === 0 && <div style={{ color: 'var(--muted)', textAlign: 'center' }}>No tasks for this day.</div>}
             {tasks.map(t => (
@@ -152,10 +152,50 @@ export default function DashboardPage() {
                 <div className="tbody">
                   <div style={{ fontWeight: 600, fontSize: '0.95rem' }} className="ttitle">{t.title}</div>
                   {t.description && <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '4px' }}>{t.description}</div>}
+                  {t.assignee_name && <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginTop: '4px' }}>Assignee: {t.assignee_name}</div>}
                 </div>
                 <div className={`pdot ${t.priority}`}></div>
               </div>
             ))}
+          </div>
+        ) : (
+          <div className="board-container" style={{ marginTop: '20px' }}>
+            {[{ id: null, name: 'Unassigned', avatar_color: '#4f7eff' }, ...members].map(member => {
+              const memberTasks = tasks.filter(t => t.assigned_to === member.id);
+              return (
+                <div key={member.id || 'unassigned'} className="board-col">
+                  <div className="bc-head">
+                    <div className="av-cell">
+                      <div className="av" style={{ background: member.avatar_color, width: '24px', height: '24px', fontSize: '0.7rem' }}>
+                        {member.name[0].toUpperCase()}
+                      </div>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{member.name}</div>
+                    </div>
+                    <div className="bc-count">{memberTasks.length}</div>
+                  </div>
+                  <div className="bc-body">
+                    {memberTasks.length === 0 && <div style={{ color: 'var(--muted)', fontSize: '0.75rem', textAlign: 'center', marginTop: '20px' }}>No tasks</div>}
+                    {memberTasks.map(t => (
+                      <div key={t.id} className={`tc board-card ${t.status === 'DONE' ? 'done' : ''}`} style={{ marginBottom: '10px' }}>
+                        <div className="tbody">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ fontWeight: 600, fontSize: '0.9rem' }} className="ttitle">{t.title}</div>
+                            <div className={`chk ${t.status === 'DONE' ? 'done' : ''}`} onClick={() => toggleStatus(t)} style={{ width: '16px', height: '16px', marginTop: '2px' }}>
+                              {t.status === 'DONE' && <Check size={10} />}
+                            </div>
+                          </div>
+                          {t.description && <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '4px' }}>{t.description}</div>}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                            <span style={{ fontSize: '0.7rem', color: t.status === 'DONE' ? 'var(--green)' : 'var(--orange)', fontWeight: 600 }}>{t.status}</span>
+                            <div className={`pdot ${t.priority}`}></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

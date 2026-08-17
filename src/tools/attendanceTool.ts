@@ -20,16 +20,12 @@ export const logAttendanceTool = new Tool({
     required: ['action_type', 'phone_number']
   },
   execute: async (args: any) => {
-    return new Promise((resolve, reject) => {
+    try {
       const stmt = db.prepare("INSERT INTO attendance (phone_number, action_type) VALUES (?, ?)");
-      stmt.run([args.phone_number, args.action_type], function(err) {
-        if (err) {
-          reject(`Failed to log attendance: ${err.message}`);
-        } else {
-          resolve(`Successfully logged ${args.action_type} for ${args.phone_number} at server time.`);
-        }
-      });
-      stmt.finalize();
-    });
+      stmt.run([args.phone_number, args.action_type]);
+      return `Successfully logged ${args.action_type} for ${args.phone_number} at server time.`;
+    } catch (err: any) {
+      throw new Error(`Failed to log attendance: ${err.message}`);
+    }
   }
 });

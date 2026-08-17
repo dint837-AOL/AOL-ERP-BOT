@@ -2,6 +2,7 @@
   "/_global-error/page": "/_global-error",
   "/_not-found/page": "/_not-found",
   "/accounts/page": "/accounts",
+  "/admin/page": "/admin",
   "/credentials/page": "/credentials",
   "/dashboard/page": "/dashboard",
   "/hr/page": "/hr",

@@ -36,6 +36,20 @@
       }
     }
   },
+  "/admin": {
+    "hints": 64,
+    "slots": {
+      "children": {
+        "hints": 96,
+        "slots": {
+          "children": {
+            "hints": 160,
+            "slots": null
+          }
+        }
+      }
+    }
+  },
   "/credentials": {
     "hints": 64,
     "slots": {
