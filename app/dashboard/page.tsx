@@ -7,7 +7,7 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Check, X } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
 type Task = {
@@ -28,6 +28,20 @@ export default function DashboardPage() {
   const [view, setView] = useState<'list' | 'board'>('list');
   const [loading, setLoading] = useState(true);
 
+  // Members for Task Assignment
+  const [members, setMembers] = useState<any[]>([]);
+
+  // Task Modal State
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [taskData, setTaskData] = useState({ title: '', description: '', priority: 'GREEN', assigned_to: '' });
+
+  const [toastMsg, setToastMsg] = useState('');
+
+  function showToast(m: string) {
+    setToastMsg(m);
+    setTimeout(() => setToastMsg(''), 2500);
+  }
+
   // Stats
   const total = tasks.length;
   const done = tasks.filter(t => t.status === 'DONE').length;
@@ -36,7 +50,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchTasks();
+    fetchMembers();
   }, [currentDate]);
+
+  const fetchMembers = async () => {
+    try {
+      const res = await fetch('/api/members');
+      setMembers(await res.json());
+    } catch (e) {
+      console.error('Failed to fetch members', e);
+    }
+  };
 
   const fetchTasks = async () => {
     setLoading(true);
@@ -67,6 +91,30 @@ export default function DashboardPage() {
     fetchTasks();
   };
 
+  const submitTask = async () => {
+    if (!taskData.title) {
+      showToast('Task title is required.');
+      return;
+    }
+    try {
+      await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          ...taskData, 
+          task_date: currentDate,
+          assigned_to: taskData.assigned_to ? parseInt(taskData.assigned_to) : null
+        })
+      });
+      setShowTaskModal(false);
+      setTaskData({ title: '', description: '', priority: 'GREEN', assigned_to: '' });
+      showToast('Task added!');
+      fetchTasks();
+    } catch (e) {
+      showToast('Failed to add task.');
+    }
+  };
+
   return (
     <>
       <Topbar title="Daily Tasks">
@@ -75,7 +123,7 @@ export default function DashboardPage() {
           <div className="dchip">{currentDate === new Date().toISOString().split('T')[0] ? 'Today' : currentDate}</div>
           <button onClick={() => shiftDate(1)}><ChevronRight size={18} /></button>
         </div>
-        <button className="btn btn-primary"><Plus size={16} /> Add Task</button>
+        <button className="btn btn-primary" onClick={() => setShowTaskModal(true)}><Plus size={16} /> Add Task</button>
       </Topbar>
 
       <div className="scroll">
@@ -111,6 +159,50 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {showTaskModal && (
+        <div className="veil on" onClick={(e) => { if (e.target === e.currentTarget) setShowTaskModal(false); }}>
+          <div className="modal">
+            <div className="mhead">
+              <h3>New Task</h3>
+              <button className="xbtn" onClick={() => setShowTaskModal(false)}><X size={16} /></button>
+            </div>
+            <div className="fg">
+              <label>Title</label>
+              <input type="text" placeholder="Task title..." value={taskData.title} onChange={e => setTaskData({ ...taskData, title: e.target.value })} />
+            </div>
+            <div className="fg">
+              <label>Description</label>
+              <textarea placeholder="Task details..." value={taskData.description} onChange={e => setTaskData({ ...taskData, description: e.target.value })}></textarea>
+            </div>
+            <div className="drow">
+              <div className="fg">
+                <label>Priority</label>
+                <select value={taskData.priority} onChange={e => setTaskData({ ...taskData, priority: e.target.value })}>
+                  <option value="GREEN">Low (Green)</option>
+                  <option value="ORANGE">Medium (Orange)</option>
+                  <option value="RED">High (Red)</option>
+                </select>
+              </div>
+              <div className="fg">
+                <label>Assign To</label>
+                <select value={taskData.assigned_to} onChange={e => setTaskData({ ...taskData, assigned_to: e.target.value })}>
+                  <option value="">Unassigned</option>
+                  {members.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="mfooter">
+              <button className="btn btn-ghost" onClick={() => setShowTaskModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={submitTask}>Save Task</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toastMsg && <div className="toast on">{toastMsg}</div>}
     </>
   );
 }
