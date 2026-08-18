@@ -143,9 +143,9 @@ async function initDB() {
 }
 
 // Promise helpers
-export const dbAll = async (sql: string, p: any[] = []) => db.all(sql, p);
-export const dbGet = async (sql: string, p: any[] = []) => db.get(sql, p);
-export const dbRun = async (sql: string, p: any[] = []) => { const info = await db.run(sql, p); return { lastID: info.lastID }; };
+export const dbAll = async (sql: string, p: any[] = []) => db.all(sql, p.map(v => v === undefined ? null : v));
+export const dbGet = async (sql: string, p: any[] = []) => db.get(sql, p.map(v => v === undefined ? null : v));
+export const dbRun = async (sql: string, p: any[] = []) => { const info = await db.run(sql, p.map(v => v === undefined ? null : v)); return { lastID: info.lastID }; };
 
 export class WhatsAppGateway { config: any; constructor(c: any) { this.config = c; } }
 export class Tool { config: any; constructor(c: any) { this.config = c; } }
@@ -202,9 +202,19 @@ export class OpenClaw {
       res.status(201).json(await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]));
     });
     this.app.patch('/api/tasks/:id', async (req, res) => {
-      const { status, priority, title, description, deadline, assigned_to, action_type, recipient } = req.body;
-      await dbRun(`UPDATE tasks SET status=COALESCE(?,status),priority=COALESCE(?,priority),title=COALESCE(?,title),description=COALESCE(?,description),deadline=COALESCE(?,deadline),assigned_to=COALESCE(?,assigned_to),action_type=COALESCE(?,action_type),recipient=COALESCE(?,recipient) WHERE id=?`,
-        [status, priority, title, description, deadline, assigned_to, action_type, recipient, req.params.id]);
+      const allowed = ['status', 'priority', 'title', 'description', 'deadline', 'assigned_to', 'action_type', 'recipient'];
+      const updates: string[] = [];
+      const values: any[] = [];
+      for (const key of allowed) {
+        if (key in req.body) {
+          updates.push(`${key} = ?`);
+          values.push(req.body[key] ?? null);
+        }
+      }
+      if (updates.length > 0) {
+        values.push(req.params.id);
+        await dbRun(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`, values);
+      }
       res.json(await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [req.params.id]));
     });
     this.app.delete('/api/tasks/:id', async (req, res) => { await dbRun('DELETE FROM tasks WHERE id=?', [req.params.id]); res.json({ ok: true }); });
