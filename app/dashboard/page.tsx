@@ -303,7 +303,13 @@ export default function DashboardPage() {
 
   /* ─── Team view filtered list for currentDate ─── */
   const filteredTasks = tasks.filter(t => {
-    if (fAssignee && String(t.assigned_to) !== fAssignee) return false;
+    if (fAssignee) {
+      if (fAssignee === 'admin') {
+        if (t.assigned_to !== null) return false;
+      } else {
+        if (String(t.assigned_to) !== fAssignee) return false;
+      }
+    }
     if (fAction   && t.action_type !== fAction)            return false;
     if (fStatus   && t.status !== fStatus)                 return false;
     if (fDeadline && (!t.deadline || !t.deadline.startsWith(fDeadline))) return false;
@@ -312,7 +318,7 @@ export default function DashboardPage() {
 
   /* ─── Board view for currentDate ─────────────── */
   const boardRows = [
-    { id: null as number | null, name: 'Unassigned', avatar_color: '#64748b', role: '' },
+    { id: null as number | null, name: 'Admin', avatar_color: '#4f7eff', role: 'Direct Tasks (SMS / Call / Mail / Meetings)' },
     ...members,
   ].map(m => {
     const mt = tasks.filter(t => t.assigned_to === m.id);
@@ -842,8 +848,9 @@ export default function DashboardPage() {
                 
                 {/* Assignee filter */}
                 <select value={fAssignee} onChange={e => setFAssignee(e.target.value)}
-                  style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: fAssignee ? '#38bdf8' : '#f1f5f9', padding: '8px 12px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', minWidth: '140px' }}>
-                  <option value="">All Team Members</option>
+                  style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: fAssignee ? '#38bdf8' : '#f1f5f9', padding: '8px 12px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', minWidth: '150px' }}>
+                  <option value="">All Assignees</option>
+                  <option value="admin">Admin (Direct Tasks)</option>
                   {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
 
