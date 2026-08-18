@@ -31,8 +31,9 @@ type Task = {
 
 type Member = { id: number; name: string; avatar_color: string; role: string; };
 
-/** Maps action_type to icon + label for display */
-const ACTION_META: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
+type ActionMeta = { icon: React.ReactNode; label: string; color: string };
+
+const ACTION_MAP: Record<string, ActionMeta> = {
   SMS:     { icon: <MessageSquare size={14} />, label: 'SMS',     color: '#26c486' },
   CALL:    { icon: <Phone size={14} />,         label: 'Call',    color: '#4f7eff' },
   MAIL:    { icon: <Mail size={14} />,          label: 'Mail',    color: '#f5a623' },
@@ -40,11 +41,20 @@ const ACTION_META: Record<string, { icon: React.ReactNode; label: string; color:
   ASSIGN:  { icon: <Users size={14} />,         label: 'Assign',  color: '#f472b6' },
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  PENDING: 'var(--muted)',
-  DONE:    'var(--green)',
-  DUE:     'var(--red)',
-};
+const ACTION_KEYS = ['SMS', 'CALL', 'MAIL', 'MEETING', 'ASSIGN'] as const;
+
+function getActionMeta(key?: string): ActionMeta {
+  if (key && key in ACTION_MAP) {
+    return ACTION_MAP[key]!;
+  }
+  return { icon: <Users size={14} />, label: 'Assign', color: '#f472b6' };
+}
+
+function getStatusColor(status?: string): string {
+  if (status === 'DONE') return 'var(--green)';
+  if (status === 'DUE') return 'var(--red)';
+  return 'var(--muted)';
+}
 
 /* ─── Blank new-task row shape ─────────────────────── */
 const BLANK_ROW = { action_type: 'ASSIGN', title: '', assigned_to: '', status: 'PENDING', deadline: '' };
@@ -70,7 +80,6 @@ export default function DashboardPage() {
 
   /* Inline cell editing for existing rows */
   const [editCell, setEditCell] = useState<{ id: number; field: string } | null>(null);
-  const editRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
 
   function showToast(m: string) {
     setToastMsg(m);
@@ -196,10 +205,10 @@ export default function DashboardPage() {
           onBlur={e => saveCell(task.id, 'action_type', e.target.value)}
           onChange={e => saveCell(task.id, 'action_type', e.target.value)}
           style={{ background: 'var(--card)', border: '1px solid var(--primary)', borderRadius: 6, color: 'var(--text)', padding: '4px 8px', fontSize: '.8rem', fontFamily: 'inherit', outline: 'none' }}>
-          {Object.keys(ACTION_META).map(k => <option key={k} value={k}>{ACTION_META[k].label}</option>)}
+          {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
         </select>
       );
-      const am = ACTION_META[task.action_type] || ACTION_META.ASSIGN;
+      const am = getActionMeta(task.action_type);
       return (
         <span onClick={() => setEditCell({ id: task.id, field })}
           style={{ display: 'flex', alignItems: 'center', gap: 5, color: am.color, fontWeight: 600, fontSize: '.78rem', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, background: `${am.color}18` }}>
@@ -220,9 +229,10 @@ export default function DashboardPage() {
           <option value="DUE">Due</option>
         </select>
       );
+      const sColor = getStatusColor(task.status);
       return (
         <span onClick={() => setEditCell({ id: task.id, field })}
-          style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: '.72rem', fontWeight: 700, cursor: 'pointer', background: `${STATUS_COLORS[task.status]}22`, color: STATUS_COLORS[task.status] }}>
+          style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: '.72rem', fontWeight: 700, cursor: 'pointer', background: `${sColor}22`, color: sColor }}>
           {task.status}
         </span>
       );
@@ -363,7 +373,7 @@ export default function DashboardPage() {
                         <select value={newRow.action_type}
                           onChange={e => setNewRow({ ...newRow, action_type: e.target.value })}
                           style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '6px 8px', fontSize: '.8rem', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                          {Object.keys(ACTION_META).map(k => <option key={k} value={k}>{ACTION_META[k].label}</option>)}
+                          {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
                         </select>
                       </td>
                       <td>
@@ -425,7 +435,7 @@ export default function DashboardPage() {
                 <select value={fAction} onChange={e => setFAction(e.target.value)}
                   style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: fAction ? 'var(--primary)' : 'var(--muted)', padding: '8px 12px', fontSize: '.82rem', fontFamily: 'inherit', outline: 'none' }}>
                   <option value="">All Actions</option>
-                  {Object.keys(ACTION_META).map(k => <option key={k} value={k}>{ACTION_META[k].label}</option>)}
+                  {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
                 </select>
                 {/* Status filter */}
                 <select value={fStatus} onChange={e => setFStatus(e.target.value)}
@@ -463,8 +473,9 @@ export default function DashboardPage() {
                         <tr className="empty-r"><td colSpan={5}>No tasks match the current filters.</td></tr>
                       )}
                       {filteredTasks.map(task => {
-                        const am = ACTION_META[task.action_type] || ACTION_META.ASSIGN;
+                        const am = getActionMeta(task.action_type);
                         const dl = task.deadline ? new Date(task.deadline) : null;
+                        const sColor = getStatusColor(task.status);
                         return (
                           <tr key={task.id}>
                             <td>
@@ -477,14 +488,14 @@ export default function DashboardPage() {
                               {task.assignee_name ? (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                                   <div style={{ width: 24, height: 24, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.68rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                                    {task.assignee_name[0].toUpperCase()}
+                                    {(task.assignee_name[0] || 'U').toUpperCase()}
                                   </div>
                                   <span style={{ fontSize: '.83rem' }}>{task.assignee_name}</span>
                                 </div>
                               ) : <span style={{ color: 'var(--muted)', fontSize: '.83rem' }}>—</span>}
                             </td>
                             <td>
-                              <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: '.72rem', fontWeight: 700, background: `${STATUS_COLORS[task.status]}22`, color: STATUS_COLORS[task.status] }}>
+                              <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: '.72rem', fontWeight: 700, background: `${sColor}22`, color: sColor }}>
                                 {task.status}
                               </span>
                             </td>
@@ -525,7 +536,7 @@ export default function DashboardPage() {
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div style={{ width: 32, height: 32, borderRadius: '50%', background: row.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.76rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                              {row.name[0].toUpperCase()}
+                              {(row.name[0] || 'U').toUpperCase()}
                             </div>
                             <div>
                               <div style={{ fontWeight: 600, fontSize: '.88rem' }}>{row.name}</div>
