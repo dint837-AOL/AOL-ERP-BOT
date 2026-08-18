@@ -1,4 +1,5 @@
 node_modules/
+.next/
 .env
 openclaw.db
 openclaw.db-journal
