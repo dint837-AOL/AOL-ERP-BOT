@@ -6,6 +6,11 @@
  *  2. Team View   – full task list with multi-filter (assignee / action / status / deadline)
  *  3. Board View  – per-assignee summary table (Name | Total | Done | WIP | Pending)
  *
+ * Features:
+ *  - Clickable Topbar Date Chip that opens native calendar date picker.
+ *  - Clickable Deadline cell that automatically opens native calendar & time picker.
+ *  - Inline datetime-local picker with dark theme styling.
+ *
  * API: /api/tasks, /api/members
  * Mobile-ready: all tables wrapped in .table-scroll
  */
@@ -56,6 +61,49 @@ function getStatusColor(status?: string): string {
   return 'var(--muted)';
 }
 
+/* ─── Inline Deadline Editor with Auto-Open Calendar ─ */
+function DeadlineEditor({ defaultValue, onSave }: { defaultValue: string; onSave: (val: string) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.focus();
+      try {
+        ref.current.showPicker?.();
+      } catch (err) {
+        // Fallback for browsers that don't allow showPicker on mount
+      }
+    }
+  }, []);
+
+  return (
+    <input
+      ref={ref}
+      type="datetime-local"
+      defaultValue={defaultValue}
+      onBlur={e => onSave(e.target.value)}
+      onChange={e => onSave(e.target.value)}
+      onClick={e => {
+        try {
+          (e.target as HTMLInputElement).showPicker?.();
+        } catch (err) {}
+      }}
+      style={{
+        background: 'var(--card)',
+        border: '1px solid var(--primary)',
+        borderRadius: 6,
+        color: 'var(--text)',
+        padding: '4px 8px',
+        fontSize: '.8rem',
+        fontFamily: 'inherit',
+        outline: 'none',
+        colorScheme: 'dark',
+        cursor: 'pointer'
+      }}
+    />
+  );
+}
+
 /* ─── Blank new-task row shape ─────────────────────── */
 const BLANK_ROW = { action_type: 'ASSIGN', title: '', assigned_to: '', status: 'PENDING', deadline: '' };
 
@@ -67,6 +115,9 @@ export default function DashboardPage() {
   const [tab,         setTab]         = useState<'admin' | 'team' | 'board'>('admin');
   const [loading,     setLoading]     = useState(true);
   const [toastMsg,    setToastMsg]    = useState('');
+
+  /* Topbar date picker ref */
+  const datePickerRef = useRef<HTMLInputElement>(null);
 
   /* New-task inline row state */
   const [newRow, setNewRow] = useState({ ...BLANK_ROW });
@@ -211,7 +262,7 @@ export default function DashboardPage() {
       const am = getActionMeta(task.action_type);
       return (
         <span onClick={() => setEditCell({ id: task.id, field })}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, color: am.color, fontWeight: 600, fontSize: '.78rem', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, background: `${am.color}18` }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 5, color: am.color, fontWeight: 600, fontSize: '.78rem', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, background: `${am.color}18`, width: 'fit-content' }}>
           {am.icon} {am.label}
         </span>
       );
@@ -259,16 +310,17 @@ export default function DashboardPage() {
 
     if (field === 'deadline') {
       if (isEditing) return (
-        <input type="datetime-local" autoFocus
+        <DeadlineEditor
           defaultValue={task.deadline?.slice(0, 16) || ''}
-          onBlur={e => saveCell(task.id, 'deadline', e.target.value)}
-          style={{ background: 'var(--card)', border: '1px solid var(--primary)', borderRadius: 6, color: 'var(--text)', padding: '4px 8px', fontSize: '.8rem', fontFamily: 'inherit', outline: 'none' }} />
+          onSave={val => saveCell(task.id, 'deadline', val)}
+        />
       );
       const dl = task.deadline ? new Date(task.deadline) : null;
       return (
         <span onClick={() => setEditCell({ id: task.id, field })}
-          style={{ cursor: 'pointer', color: dl ? 'var(--text)' : 'var(--muted)', fontSize: '.8rem', whiteSpace: 'nowrap' }}>
-          {dl ? dl.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+          style={{ cursor: 'pointer', color: dl ? 'var(--text)' : 'var(--muted)', fontSize: '.8rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Calendar size={13} style={{ color: dl ? 'var(--primary)' : 'var(--muted)' }} />
+          {dl ? dl.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Set deadline'}
         </span>
       );
     }
@@ -293,13 +345,46 @@ export default function DashboardPage() {
   return (
     <>
       <Topbar title="Daily Tasks">
-        {/* Date navigation */}
-        <div className="dnav" style={{ marginRight: 'auto', marginLeft: 20 }}>
-          <button onClick={() => shiftDate(-1)}><ChevronLeft size={18} /></button>
-          <div className={`dchip${isToday ? ' today' : ''}`}>
-            {isToday ? 'Today' : currentDate}
+        {/* Date navigation with click-to-open calendar */}
+        <div className="dnav" style={{ marginRight: 'auto', marginLeft: 20, position: 'relative' }}>
+          <button onClick={() => shiftDate(-1)} title="Previous Day"><ChevronLeft size={18} /></button>
+          
+          <div
+            className={`dchip${isToday ? ' today' : ''}`}
+            onClick={() => {
+              try {
+                datePickerRef.current?.showPicker?.();
+              } catch (e) {}
+              datePickerRef.current?.focus();
+            }}
+            title="Click to open calendar"
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, minWidth: 200, userSelect: 'none' }}
+          >
+            <Calendar size={14} style={{ color: isToday ? 'var(--primary)' : 'var(--muted)' }} />
+            <span>{isToday ? `Today (${currentDate})` : currentDate}</span>
+            <input
+              ref={datePickerRef}
+              type="date"
+              value={currentDate}
+              onChange={e => {
+                if (e.target.value) {
+                  setCurrentDate(e.target.value);
+                }
+              }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                opacity: 0,
+                cursor: 'pointer',
+                pointerEvents: 'none'
+              }}
+            />
           </div>
-          <button onClick={() => shiftDate(1)}><ChevronRight size={18} /></button>
+
+          <button onClick={() => shiftDate(1)} title="Next Day"><ChevronRight size={18} /></button>
         </div>
       </Topbar>
 
@@ -339,7 +424,7 @@ export default function DashboardPage() {
                       <th>Activity Name</th>
                       <th style={{ width: 130 }}>Recipient</th>
                       <th style={{ width: 110 }}>Status</th>
-                      <th style={{ width: 160 }}>Deadline</th>
+                      <th style={{ width: 175 }}>Deadline</th>
                       <th style={{ width: 44 }}></th>
                     </tr>
                   </thead>
@@ -401,10 +486,17 @@ export default function DashboardPage() {
                         </select>
                       </td>
                       <td>
-                        <input type="datetime-local"
+                        <input
+                          type="datetime-local"
                           value={newRow.deadline}
+                          onClick={e => {
+                            try {
+                              (e.target as HTMLInputElement).showPicker?.();
+                            } catch (err) {}
+                          }}
                           onChange={e => setNewRow({ ...newRow, deadline: e.target.value })}
-                          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '6px 8px', fontSize: '.78rem', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '6px 8px', fontSize: '.78rem', fontFamily: 'inherit', outline: 'none', width: '100%', colorScheme: 'dark', cursor: 'pointer' }}
+                        />
                       </td>
                       <td>
                         <button onClick={submitNewRow} disabled={savingNew}
@@ -446,8 +538,17 @@ export default function DashboardPage() {
                   <option value="DUE">Due</option>
                 </select>
                 {/* Deadline date filter */}
-                <input type="date" value={fDeadline} onChange={e => setFDeadline(e.target.value)}
-                  style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: fDeadline ? 'var(--primary)' : 'var(--muted)', padding: '8px 12px', fontSize: '.82rem', fontFamily: 'inherit', outline: 'none' }} />
+                <input
+                  type="date"
+                  value={fDeadline}
+                  onClick={e => {
+                    try {
+                      (e.target as HTMLInputElement).showPicker?.();
+                    } catch (err) {}
+                  }}
+                  onChange={e => setFDeadline(e.target.value)}
+                  style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: fDeadline ? 'var(--primary)' : 'var(--muted)', padding: '8px 12px', fontSize: '.82rem', fontFamily: 'inherit', outline: 'none', colorScheme: 'dark', cursor: 'pointer' }}
+                />
                 {(fAssignee || fAction || fStatus || fDeadline) && (
                   <button onClick={() => { setFAssignee(''); setFAction(''); setFStatus(''); setFDeadline(''); }}
                     style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', padding: '8px 14px', fontSize: '.82rem', cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -465,7 +566,7 @@ export default function DashboardPage() {
                         <th>Activity Name</th>
                         <th style={{ width: 130 }}>Assignee</th>
                         <th style={{ width: 110 }}>Status</th>
-                        <th style={{ width: 160 }}>Deadline</th>
+                        <th style={{ width: 175 }}>Deadline</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -500,7 +601,12 @@ export default function DashboardPage() {
                               </span>
                             </td>
                             <td style={{ fontSize: '.8rem', color: dl ? 'var(--text)' : 'var(--muted)', whiteSpace: 'nowrap' }}>
-                              {dl ? dl.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                              {dl ? (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <Calendar size={13} style={{ color: 'var(--primary)' }} />
+                                  {dl.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              ) : '—'}
                             </td>
                           </tr>
                         );
