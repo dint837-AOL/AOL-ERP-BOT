@@ -1,22 +1,28 @@
 /**
- * Dashboard / Daily Tasks Module — v2
+ * Dashboard / Daily Tasks Module — v3
  *
- * Three-tab system:
- *  1. Admin View  – inline editable table; last row = new task entry row
- *  2. Team View   – full task list with multi-filter (assignee / action / status / deadline)
- *  3. Board View  – per-assignee summary table (Name | Total | Done | WIP | Pending)
- *
- * Features:
- *  - Clickable Topbar Date Chip that opens native calendar date picker.
- *  - Clickable Deadline cell that automatically opens native calendar & time picker.
- *  - Inline datetime-local picker with dark theme styling.
+ * Requirements:
+ *  1. Admin View:
+ *     - Recipient column:
+ *       • If Action is 'ASSIGN' → Dropdown to select team member
+ *       • If Action is 'SMS' | 'CALL' | 'MAIL' | 'MEETING' → Text field for recipient contact/name/email
+ *     - Inline editable rows + last row for adding new tasks
+ *     - Clickable Deadline cell opening native datetime picker
+ *  2. Team View:
+ *     - Multi-filter bar (Assignee / Action / Status / Deadline)
+ *     - Clean, responsive presentation
+ *  3. Board View:
+ *     - Summary table (Assignee | Total | Done | In Progress | Overdue)
+ *  4. Topbar:
+ *     - Clickable Date chip opening native calendar date picker
+ *  5. Aesthetics:
+ *     - Polished dark UI with high contrast, no truncated dropdowns, smooth hover states
  *
  * API: /api/tasks, /api/members
- * Mobile-ready: all tables wrapped in .table-scroll
  */
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Trash2, Phone, Mail, MessageSquare, Users, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, Phone, Mail, MessageSquare, Users, Calendar, Plus, Check } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
 /* ─── Type Definitions ─────────────────────────────── */
@@ -25,6 +31,7 @@ type Task = {
   title: string;
   description: string;
   action_type: 'SMS' | 'CALL' | 'MAIL' | 'MEETING' | 'ASSIGN';
+  recipient?: string;
   priority: 'GREEN' | 'ORANGE' | 'RED';
   status: 'PENDING' | 'DONE' | 'DUE';
   assigned_to: number | null;
@@ -36,29 +43,29 @@ type Task = {
 
 type Member = { id: number; name: string; avatar_color: string; role: string; };
 
-type ActionMeta = { icon: React.ReactNode; label: string; color: string };
+type ActionMeta = { icon: React.ReactNode; label: string; color: string; bg: string };
 
 const ACTION_MAP: Record<string, ActionMeta> = {
-  SMS:     { icon: <MessageSquare size={14} />, label: 'SMS',     color: '#26c486' },
-  CALL:    { icon: <Phone size={14} />,         label: 'Call',    color: '#4f7eff' },
-  MAIL:    { icon: <Mail size={14} />,          label: 'Mail',    color: '#f5a623' },
-  MEETING: { icon: <Calendar size={14} />,      label: 'Meeting', color: '#a78bfa' },
-  ASSIGN:  { icon: <Users size={14} />,         label: 'Assign',  color: '#f472b6' },
+  ASSIGN:  { icon: <Users size={14} />,         label: 'Assign',  color: '#f472b6', bg: 'rgba(244,114,182,0.15)' },
+  SMS:     { icon: <MessageSquare size={14} />, label: 'SMS',     color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+  CALL:    { icon: <Phone size={14} />,         label: 'Call',    color: '#3b82f6', bg: 'rgba(59,130,246,0.15)' },
+  MAIL:    { icon: <Mail size={14} />,          label: 'Mail',    color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+  MEETING: { icon: <Calendar size={14} />,      label: 'Meeting', color: '#a855f7', bg: 'rgba(168,85,247,0.15)' },
 };
 
-const ACTION_KEYS = ['SMS', 'CALL', 'MAIL', 'MEETING', 'ASSIGN'] as const;
+const ACTION_KEYS = ['ASSIGN', 'SMS', 'CALL', 'MAIL', 'MEETING'] as const;
 
 function getActionMeta(key?: string): ActionMeta {
   if (key && key in ACTION_MAP) {
     return ACTION_MAP[key]!;
   }
-  return { icon: <Users size={14} />, label: 'Assign', color: '#f472b6' };
+  return ACTION_MAP.ASSIGN!;
 }
 
-function getStatusColor(status?: string): string {
-  if (status === 'DONE') return 'var(--green)';
-  if (status === 'DUE') return 'var(--red)';
-  return 'var(--muted)';
+function getStatusStyle(status?: string): { color: string; bg: string; label: string } {
+  if (status === 'DONE') return { color: '#22c55e', bg: 'rgba(34,197,94,0.15)', label: 'Done' };
+  if (status === 'DUE')  return { color: '#ef4444', bg: 'rgba(239,68,68,0.15)', label: 'Due' };
+  return { color: '#94a3b8', bg: 'rgba(148,163,184,0.15)', label: 'Pending' };
 }
 
 /* ─── Inline Deadline Editor with Auto-Open Calendar ─ */
@@ -70,9 +77,7 @@ function DeadlineEditor({ defaultValue, onSave }: { defaultValue: string; onSave
       ref.current.focus();
       try {
         ref.current.showPicker?.();
-      } catch (err) {
-        // Fallback for browsers that don't allow showPicker on mount
-      }
+      } catch (err) {}
     }
   }, []);
 
@@ -89,23 +94,25 @@ function DeadlineEditor({ defaultValue, onSave }: { defaultValue: string; onSave
         } catch (err) {}
       }}
       style={{
-        background: 'var(--card)',
-        border: '1px solid var(--primary)',
-        borderRadius: 6,
-        color: 'var(--text)',
-        padding: '4px 8px',
-        fontSize: '.8rem',
+        background: '#131722',
+        border: '1px solid #4f7eff',
+        borderRadius: '7px',
+        color: '#f1f5f9',
+        padding: '6px 10px',
+        fontSize: '0.82rem',
         fontFamily: 'inherit',
         outline: 'none',
         colorScheme: 'dark',
-        cursor: 'pointer'
+        cursor: 'pointer',
+        width: '100%',
+        minWidth: '160px'
       }}
     />
   );
 }
 
 /* ─── Blank new-task row shape ─────────────────────── */
-const BLANK_ROW = { action_type: 'ASSIGN', title: '', assigned_to: '', status: 'PENDING', deadline: '' };
+const BLANK_ROW = { action_type: 'ASSIGN', title: '', recipient: '', assigned_to: '', status: 'PENDING', deadline: '' };
 
 /* ═══════════════════════════════════════════════════ */
 export default function DashboardPage() {
@@ -173,10 +180,16 @@ export default function DashboardPage() {
   /* ─── Inline save (existing task cell) ─────────── */
   const saveCell = async (id: number, field: string, value: string) => {
     setEditCell(null);
+    const payload: any = {};
+    if (field === 'assigned_to') {
+      payload.assigned_to = value ? parseInt(value) : null;
+    } else {
+      payload[field] = value;
+    }
     await fetch(`/api/tasks/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: field === 'assigned_to' ? (value ? parseInt(value) : null) : value }),
+      body: JSON.stringify(payload),
     });
     fetchTasks();
   };
@@ -199,14 +212,15 @@ export default function DashboardPage() {
         body: JSON.stringify({
           title: newRow.title,
           action_type: newRow.action_type,
+          recipient: newRow.action_type === 'ASSIGN' ? '' : (newRow.recipient || ''),
+          assigned_to: newRow.action_type === 'ASSIGN' ? (newRow.assigned_to ? parseInt(newRow.assigned_to) : null) : null,
           status: newRow.status,
           deadline: newRow.deadline || null,
-          assigned_to: newRow.assigned_to ? parseInt(newRow.assigned_to) : null,
           task_date: currentDate,
         }),
       });
       setNewRow({ ...BLANK_ROW });
-      showToast('Task added!');
+      showToast('Task added successfully!');
       fetchTasks();
     } catch (e) {
       showToast('Failed to add task.');
@@ -232,7 +246,7 @@ export default function DashboardPage() {
 
   /* ─── Board view: group by assignee ──────────── */
   const boardRows = [
-    { id: null as number | null, name: 'Unassigned', avatar_color: '#4f7eff' },
+    { id: null as number | null, name: 'Unassigned', avatar_color: '#64748b', role: '' },
     ...members,
   ].map(m => {
     const mt = tasks.filter(t => t.assigned_to === m.id);
@@ -246,68 +260,144 @@ export default function DashboardPage() {
   }).filter(r => r.total > 0);
 
   /* ─── Inline cell renderer for admin table ────── */
-  const renderCell = (task: Task, field: keyof Task) => {
+  const renderCell = (task: Task, field: string) => {
     const isEditing = editCell?.id === task.id && editCell?.field === field;
 
+    // 1. ACTION TYPE DROPDOWN
     if (field === 'action_type') {
       if (isEditing) return (
         <select autoFocus
           defaultValue={task.action_type}
           onBlur={e => saveCell(task.id, 'action_type', e.target.value)}
           onChange={e => saveCell(task.id, 'action_type', e.target.value)}
-          style={{ background: 'var(--card)', border: '1px solid var(--primary)', borderRadius: 6, color: 'var(--text)', padding: '4px 8px', fontSize: '.8rem', fontFamily: 'inherit', outline: 'none' }}>
+          style={{
+            background: '#131722',
+            border: '1px solid #4f7eff',
+            borderRadius: '7px',
+            color: '#f1f5f9',
+            padding: '6px 10px',
+            fontSize: '0.82rem',
+            fontFamily: 'inherit',
+            outline: 'none',
+            minWidth: '120px'
+          }}>
           {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
         </select>
       );
       const am = getActionMeta(task.action_type);
       return (
-        <span onClick={() => setEditCell({ id: task.id, field })}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, color: am.color, fontWeight: 600, fontSize: '.78rem', cursor: 'pointer', padding: '4px 8px', borderRadius: 6, background: `${am.color}18`, width: 'fit-content' }}>
-          {am.icon} {am.label}
-        </span>
+        <div onClick={() => setEditCell({ id: task.id, field })}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: am.color, background: am.bg, fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', padding: '5px 10px', borderRadius: '6px', border: `1px solid ${am.color}30` }}
+          title="Click to change action">
+          {am.icon} <span>{am.label}</span>
+        </div>
       );
     }
 
+    // 2. RECIPIENT / ASSIGNEE COLUMN
+    // If action is ASSIGN -> dropdown of team members. Else -> text input for recipient.
+    if (field === 'recipient_col') {
+      if (task.action_type === 'ASSIGN') {
+        if (isEditing) return (
+          <select autoFocus
+            defaultValue={task.assigned_to?.toString() || ''}
+            onBlur={e => saveCell(task.id, 'assigned_to', e.target.value)}
+            onChange={e => saveCell(task.id, 'assigned_to', e.target.value)}
+            style={{
+              background: '#131722',
+              border: '1px solid #4f7eff',
+              borderRadius: '7px',
+              color: '#f1f5f9',
+              padding: '6px 10px',
+              fontSize: '0.82rem',
+              fontFamily: 'inherit',
+              outline: 'none',
+              minWidth: '150px'
+            }}>
+            <option value="">Unassigned</option>
+            {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        );
+        return (
+          <div onClick={() => setEditCell({ id: task.id, field })} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+            {task.assignee_name ? (
+              <>
+                <div style={{ width: 24, height: 24, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                  {(task.assignee_name[0] || 'U').toUpperCase()}
+                </div>
+                <span style={{ fontSize: '0.84rem', color: '#f1f5f9', fontWeight: 500 }}>{task.assignee_name}</span>
+              </>
+            ) : (
+              <span style={{ color: '#64748b', fontSize: '0.82rem', fontStyle: 'italic' }}>Select member...</span>
+            )}
+          </div>
+        );
+      } else {
+        // Text field for non-ASSIGN actions
+        if (isEditing) return (
+          <input autoFocus type="text"
+            defaultValue={task.recipient || ''}
+            placeholder="Recipient / Contact..."
+            onBlur={e => saveCell(task.id, 'recipient', e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') saveCell(task.id, 'recipient', (e.target as HTMLInputElement).value); }}
+            style={{
+              background: '#131722',
+              border: '1px solid #4f7eff',
+              borderRadius: '7px',
+              color: '#f1f5f9',
+              fontSize: '0.82rem',
+              padding: '6px 10px',
+              width: '100%',
+              minWidth: '140px',
+              outline: 'none',
+              fontFamily: 'inherit'
+            }} />
+        );
+        return (
+          <div onClick={() => setEditCell({ id: task.id, field })}
+            style={{ cursor: 'pointer', fontSize: '0.84rem', color: task.recipient ? '#f1f5f9' : '#64748b', minWidth: '120px' }}
+            title="Click to edit recipient">
+            {task.recipient || <span style={{ fontStyle: 'italic', color: '#64748b' }}>Enter recipient...</span>}
+          </div>
+        );
+      }
+    }
+
+    // 3. STATUS DROPDOWN
     if (field === 'status') {
       if (isEditing) return (
         <select autoFocus
           defaultValue={task.status}
           onBlur={e => saveCell(task.id, 'status', e.target.value)}
           onChange={e => saveCell(task.id, 'status', e.target.value)}
-          style={{ background: 'var(--card)', border: '1px solid var(--primary)', borderRadius: 6, color: 'var(--text)', padding: '4px 8px', fontSize: '.8rem', fontFamily: 'inherit', outline: 'none' }}>
+          style={{
+            background: '#131722',
+            border: '1px solid #4f7eff',
+            borderRadius: '7px',
+            color: '#f1f5f9',
+            padding: '6px 10px',
+            fontSize: '0.82rem',
+            fontFamily: 'inherit',
+            outline: 'none',
+            minWidth: '120px'
+          }}>
           <option value="PENDING">Pending</option>
           <option value="DONE">Done</option>
           <option value="DUE">Due</option>
         </select>
       );
-      const sColor = getStatusColor(task.status);
+      const st = getStatusStyle(task.status);
       return (
-        <span onClick={() => setEditCell({ id: task.id, field })}
-          style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: '.72rem', fontWeight: 700, cursor: 'pointer', background: `${sColor}22`, color: sColor }}>
-          {task.status}
-        </span>
+        <div onClick={() => setEditCell({ id: task.id, field })}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', background: st.bg, color: st.color, border: `1px solid ${st.color}35` }}
+          title="Click to change status">
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.color }}></span>
+          <span>{st.label}</span>
+        </div>
       );
     }
 
-    if (field === 'assigned_to') {
-      if (isEditing) return (
-        <select autoFocus
-          defaultValue={task.assigned_to?.toString() || ''}
-          onBlur={e => saveCell(task.id, 'assigned_to', e.target.value)}
-          onChange={e => saveCell(task.id, 'assigned_to', e.target.value)}
-          style={{ background: 'var(--card)', border: '1px solid var(--primary)', borderRadius: 6, color: 'var(--text)', padding: '4px 8px', fontSize: '.8rem', fontFamily: 'inherit', outline: 'none' }}>
-          <option value="">—</option>
-          {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-      );
-      return (
-        <span onClick={() => setEditCell({ id: task.id, field })}
-          style={{ cursor: 'pointer', color: task.assignee_name ? 'var(--text)' : 'var(--muted)', fontSize: '.83rem' }}>
-          {task.assignee_name || '—'}
-        </span>
-      );
-    }
-
+    // 4. DEADLINE CALENDAR PICKER
     if (field === 'deadline') {
       if (isEditing) return (
         <DeadlineEditor
@@ -317,28 +407,45 @@ export default function DashboardPage() {
       );
       const dl = task.deadline ? new Date(task.deadline) : null;
       return (
-        <span onClick={() => setEditCell({ id: task.id, field })}
-          style={{ cursor: 'pointer', color: dl ? 'var(--text)' : 'var(--muted)', fontSize: '.8rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Calendar size={13} style={{ color: dl ? 'var(--primary)' : 'var(--muted)' }} />
-          {dl ? dl.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Set deadline'}
-        </span>
+        <div onClick={() => setEditCell({ id: task.id, field })}
+          style={{ cursor: 'pointer', color: dl ? '#e2e8f0' : '#64748b', fontSize: '0.82rem', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: '6px', background: dl ? 'rgba(255,255,255,0.03)' : 'transparent' }}
+          title="Click to set deadline">
+          <Calendar size={13} style={{ color: dl ? '#38bdf8' : '#64748b' }} />
+          <span>{dl ? dl.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Set deadline'}</span>
+        </div>
       );
     }
 
-    /* Default: title */
-    if (isEditing) return (
-      <input autoFocus type="text"
-        defaultValue={String(task[field] || '')}
-        onBlur={e => saveCell(task.id, field as string, e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') saveCell(task.id, field as string, (e.target as HTMLInputElement).value); }}
-        style={{ background: 'transparent', border: 'none', borderBottom: '1px solid var(--primary)', color: 'var(--text)', fontSize: '.83rem', padding: '2px 4px', width: '100%', outline: 'none', fontFamily: 'inherit' }} />
-    );
-    return (
-      <span onClick={() => setEditCell({ id: task.id, field })}
-        style={{ cursor: 'text', fontSize: '.83rem', display: 'block', minWidth: 120 }}>
-        {String(task[field] || '—')}
-      </span>
-    );
+    // 5. ACTIVITY NAME (TITLE)
+    if (field === 'title') {
+      if (isEditing) return (
+        <input autoFocus type="text"
+          defaultValue={task.title}
+          onBlur={e => saveCell(task.id, 'title', e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') saveCell(task.id, 'title', (e.target as HTMLInputElement).value); }}
+          style={{
+            background: '#131722',
+            border: '1px solid #4f7eff',
+            borderRadius: '7px',
+            color: '#f1f5f9',
+            fontSize: '0.84rem',
+            padding: '6px 10px',
+            width: '100%',
+            minWidth: '180px',
+            outline: 'none',
+            fontFamily: 'inherit'
+          }} />
+      );
+      return (
+        <div onClick={() => setEditCell({ id: task.id, field })}
+          style={{ cursor: 'text', fontSize: '0.86rem', color: '#f8fafc', fontWeight: 500, display: 'block', minWidth: '160px' }}
+          title="Click to edit activity name">
+          {task.title || <span style={{ fontStyle: 'italic', color: '#64748b' }}>Enter activity name...</span>}
+        </div>
+      );
+    }
+
+    return null;
   };
 
   /* ─── Render ──────────────────────────────────── */
@@ -346,8 +453,8 @@ export default function DashboardPage() {
     <>
       <Topbar title="Daily Tasks">
         {/* Date navigation with click-to-open calendar */}
-        <div className="dnav" style={{ marginRight: 'auto', marginLeft: 20, position: 'relative' }}>
-          <button onClick={() => shiftDate(-1)} title="Previous Day"><ChevronLeft size={18} /></button>
+        <div className="dnav" style={{ marginRight: 'auto', marginLeft: 20, position: 'relative', background: '#161926', border: '1px solid #2a3050', borderRadius: '9px' }}>
+          <button onClick={() => shiftDate(-1)} title="Previous Day" style={{ padding: '8px 14px', color: '#94a3b8' }}><ChevronLeft size={18} /></button>
           
           <div
             className={`dchip${isToday ? ' today' : ''}`}
@@ -358,9 +465,9 @@ export default function DashboardPage() {
               datePickerRef.current?.focus();
             }}
             title="Click to open calendar"
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, minWidth: 200, userSelect: 'none' }}
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minWidth: 210, padding: '8px 16px', userSelect: 'none', color: isToday ? '#38bdf8' : '#f1f5f9', fontWeight: 600, fontSize: '0.88rem' }}
           >
-            <Calendar size={14} style={{ color: isToday ? 'var(--primary)' : 'var(--muted)' }} />
+            <Calendar size={15} style={{ color: isToday ? '#38bdf8' : '#94a3b8' }} />
             <span>{isToday ? `Today (${currentDate})` : currentDate}</span>
             <input
               ref={datePickerRef}
@@ -384,108 +491,207 @@ export default function DashboardPage() {
             />
           </div>
 
-          <button onClick={() => shiftDate(1)} title="Next Day"><ChevronRight size={18} /></button>
+          <button onClick={() => shiftDate(1)} title="Next Day" style={{ padding: '8px 14px', color: '#94a3b8' }}><ChevronRight size={18} /></button>
         </div>
       </Topbar>
 
-      <div className="scroll">
+      <div className="scroll" style={{ padding: '24px' }}>
 
         {/* ── Tab bar ─────────────────────────────── */}
-        <div className="tabs">
+        <div className="tabs" style={{ borderBottom: '1px solid #2a3050', marginBottom: 20 }}>
           {(['admin', 'team', 'board'] as const).map(t => (
-            <div key={t} className={`tab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)}>
+            <div key={t} className={`tab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)}
+              style={{
+                padding: '10px 22px',
+                fontSize: '0.88rem',
+                fontWeight: tab === t ? 600 : 500,
+                color: tab === t ? '#38bdf8' : '#94a3b8',
+                borderBottom: tab === t ? '2px solid #38bdf8' : '2px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}>
               {t === 'admin' ? 'Admin View' : t === 'team' ? 'Team View' : 'Board View'}
             </div>
           ))}
         </div>
 
         {/* ── Summary line ────────────────────────── */}
-        <div style={{ fontSize: '.8rem', color: 'var(--muted)', marginBottom: 18, letterSpacing: '.01em' }}>
-          <span style={{ color: 'var(--text)', fontWeight: 600 }}>{total}</span> tasks &nbsp;·&nbsp;
-          <span style={{ color: 'var(--green)', fontWeight: 600 }}>{done}</span> done &nbsp;·&nbsp;
-          <span style={{ color: 'var(--orange)', fontWeight: 600 }}>{wip}</span> in progress &nbsp;·&nbsp;
-          <span style={{ color: 'var(--red)', fontWeight: 600 }}>{overdue}</span> overdue
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: '0.82rem', color: '#94a3b8', marginBottom: 20, background: '#161926', border: '1px solid #2a3050', borderRadius: '10px', padding: '12px 18px' }}>
+          <div>Total Tasks: <span style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.95rem' }}>{total}</span></div>
+          <span style={{ color: '#334155' }}>|</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e' }}></span>
+            <span>Done:</span>
+            <span style={{ color: '#22c55e', fontWeight: 700 }}>{done}</span>
+          </div>
+          <span style={{ color: '#334155' }}>|</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b' }}></span>
+            <span>In Progress:</span>
+            <span style={{ color: '#f59e0b', fontWeight: 700 }}>{wip}</span>
+          </div>
+          <span style={{ color: '#334155' }}>|</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444' }}></span>
+            <span>Overdue:</span>
+            <span style={{ color: '#ef4444', fontWeight: 700 }}>{overdue}</span>
+          </div>
         </div>
 
         {loading ? (
-          <div style={{ color: 'var(--muted)', textAlign: 'center', marginTop: 40 }}>Loading…</div>
+          <div style={{ color: '#94a3b8', textAlign: 'center', marginTop: 40, fontSize: '0.9rem' }}>Loading tasks…</div>
         ) : (
 
           /* ══════════════════════════════════════════ */
           /* TAB 1 – ADMIN VIEW                        */
           /* ══════════════════════════════════════════ */
           tab === 'admin' ? (
-            <div className="card">
+            <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
               <div className="table-scroll">
-                <table>
+                <table style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr>
-                      <th style={{ width: 110 }}>Action</th>
-                      <th>Activity Name</th>
-                      <th style={{ width: 130 }}>Recipient</th>
-                      <th style={{ width: 110 }}>Status</th>
-                      <th style={{ width: 175 }}>Deadline</th>
-                      <th style={{ width: 44 }}></th>
+                    <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
+                      <th style={{ width: '140px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action</th>
+                      <th style={{ minWidth: '200px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity Name</th>
+                      <th style={{ width: '180px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recipient / Assignee</th>
+                      <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                      <th style={{ width: '190px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deadline</th>
+                      <th style={{ width: '50px', padding: '12px 16px' }}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {tasks.length === 0 && (
-                      <tr className="empty-r"><td colSpan={6}>No tasks for this day. Add one below.</td></tr>
+                      <tr className="empty-r"><td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>No tasks for this day. Enter one in the row below.</td></tr>
                     )}
 
-                    {/* Existing task rows – all cells are click-to-edit */}
+                    {/* Existing task rows */}
                     {tasks.map(task => (
-                      <tr key={task.id} style={{ transition: 'background .15s' }}>
-                        <td>{renderCell(task, 'action_type')}</td>
-                        <td>{renderCell(task, 'title')}</td>
-                        <td>{renderCell(task, 'assigned_to')}</td>
-                        <td>{renderCell(task, 'status')}</td>
-                        <td>{renderCell(task, 'deadline')}</td>
-                        <td>
+                      <tr key={task.id} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)', transition: 'background 0.15s' }}>
+                        <td style={{ padding: '12px 16px' }}>{renderCell(task, 'action_type')}</td>
+                        <td style={{ padding: '12px 16px' }}>{renderCell(task, 'title')}</td>
+                        <td style={{ padding: '12px 16px' }}>{renderCell(task, 'recipient_col')}</td>
+                        <td style={{ padding: '12px 16px' }}>{renderCell(task, 'status')}</td>
+                        <td style={{ padding: '12px 16px' }}>{renderCell(task, 'deadline')}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                           <button onClick={() => deleteTask(task.id)}
-                            style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', transition: 'color .15s' }}
-                            onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')}
-                            onMouseOut={e  => (e.currentTarget.style.color = 'var(--muted)')}>
+                            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s' }}
+                            onMouseOver={e => (e.currentTarget.style.color = '#ef4444')}
+                            onMouseOut={e  => (e.currentTarget.style.color = '#64748b')}
+                            title="Delete Task">
                             <Trash2 size={15} />
                           </button>
                         </td>
                       </tr>
                     ))}
 
-                    {/* ── Add new task row (always visible at the bottom) ── */}
-                    <tr style={{ background: 'rgba(79,126,255,.04)' }}>
-                      <td>
+                    {/* ── Add new task row (always visible at bottom) ── */}
+                    <tr style={{ background: 'rgba(79,126,255,0.06)', borderTop: '2px solid rgba(79,126,255,0.2)' }}>
+                      {/* Action selector */}
+                      <td style={{ padding: '12px 16px' }}>
                         <select value={newRow.action_type}
                           onChange={e => setNewRow({ ...newRow, action_type: e.target.value })}
-                          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '6px 8px', fontSize: '.8rem', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                          style={{
+                            background: '#131722',
+                            border: '1px solid #2a3050',
+                            borderRadius: '7px',
+                            color: '#f1f5f9',
+                            padding: '8px 10px',
+                            fontSize: '0.82rem',
+                            fontFamily: 'inherit',
+                            outline: 'none',
+                            width: '100%',
+                            minWidth: '110px'
+                          }}>
                           {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
                         </select>
                       </td>
-                      <td>
-                        <input type="text" placeholder="+ New activity..."
+
+                      {/* Activity name */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <input type="text" placeholder="+ New activity name..."
                           value={newRow.title}
                           onChange={e => setNewRow({ ...newRow, title: e.target.value })}
                           onKeyDown={e => { if (e.key === 'Enter') submitNewRow(); }}
-                          style={{ background: 'transparent', border: 'none', borderBottom: '1px dashed var(--border)', color: 'var(--text)', fontSize: '.83rem', padding: '6px 4px', width: '100%', outline: 'none', fontFamily: 'inherit' }} />
+                          style={{
+                            background: '#131722',
+                            border: '1px solid #2a3050',
+                            borderRadius: '7px',
+                            color: '#f1f5f9',
+                            fontSize: '0.84rem',
+                            padding: '8px 12px',
+                            width: '100%',
+                            minWidth: '180px',
+                            outline: 'none',
+                            fontFamily: 'inherit'
+                          }} />
                       </td>
-                      <td>
-                        <select value={newRow.assigned_to}
-                          onChange={e => setNewRow({ ...newRow, assigned_to: e.target.value })}
-                          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '6px 8px', fontSize: '.8rem', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                          <option value="">Unassigned</option>
-                          {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                        </select>
+
+                      {/* Dynamic Recipient / Assignee */}
+                      <td style={{ padding: '12px 16px' }}>
+                        {newRow.action_type === 'ASSIGN' ? (
+                          <select value={newRow.assigned_to}
+                            onChange={e => setNewRow({ ...newRow, assigned_to: e.target.value })}
+                            style={{
+                              background: '#131722',
+                              border: '1px solid #2a3050',
+                              borderRadius: '7px',
+                              color: '#f1f5f9',
+                              padding: '8px 10px',
+                              fontSize: '0.82rem',
+                              fontFamily: 'inherit',
+                              outline: 'none',
+                              width: '100%',
+                              minWidth: '150px'
+                            }}>
+                            <option value="">Select team member...</option>
+                            {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          </select>
+                        ) : (
+                          <input type="text"
+                            placeholder={newRow.action_type === 'MAIL' ? 'e.g. client@email.com' : newRow.action_type === 'CALL' || newRow.action_type === 'SMS' ? 'e.g. +88017... or Name' : 'e.g. Client / Contact'}
+                            value={newRow.recipient}
+                            onChange={e => setNewRow({ ...newRow, recipient: e.target.value })}
+                            onKeyDown={e => { if (e.key === 'Enter') submitNewRow(); }}
+                            style={{
+                              background: '#131722',
+                              border: '1px solid #2a3050',
+                              borderRadius: '7px',
+                              color: '#f1f5f9',
+                              fontSize: '0.82rem',
+                              padding: '8px 12px',
+                              width: '100%',
+                              minWidth: '140px',
+                              outline: 'none',
+                              fontFamily: 'inherit'
+                            }}
+                          />
+                        )}
                       </td>
-                      <td>
+
+                      {/* Status */}
+                      <td style={{ padding: '12px 16px' }}>
                         <select value={newRow.status}
                           onChange={e => setNewRow({ ...newRow, status: e.target.value })}
-                          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '6px 8px', fontSize: '.8rem', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                          style={{
+                            background: '#131722',
+                            border: '1px solid #2a3050',
+                            borderRadius: '7px',
+                            color: '#f1f5f9',
+                            padding: '8px 10px',
+                            fontSize: '0.82rem',
+                            fontFamily: 'inherit',
+                            outline: 'none',
+                            width: '100%',
+                            minWidth: '110px'
+                          }}>
                           <option value="PENDING">Pending</option>
                           <option value="DONE">Done</option>
                           <option value="DUE">Due</option>
                         </select>
                       </td>
-                      <td>
+
+                      {/* Deadline */}
+                      <td style={{ padding: '12px 16px' }}>
                         <input
                           type="datetime-local"
                           value={newRow.deadline}
@@ -495,13 +701,43 @@ export default function DashboardPage() {
                             } catch (err) {}
                           }}
                           onChange={e => setNewRow({ ...newRow, deadline: e.target.value })}
-                          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '6px 8px', fontSize: '.78rem', fontFamily: 'inherit', outline: 'none', width: '100%', colorScheme: 'dark', cursor: 'pointer' }}
+                          style={{
+                            background: '#131722',
+                            border: '1px solid #2a3050',
+                            borderRadius: '7px',
+                            color: '#f1f5f9',
+                            padding: '7px 10px',
+                            fontSize: '0.8rem',
+                            fontFamily: 'inherit',
+                            outline: 'none',
+                            width: '100%',
+                            minWidth: '160px',
+                            colorScheme: 'dark',
+                            cursor: 'pointer'
+                          }}
                         />
                       </td>
-                      <td>
+
+                      {/* Submit button */}
+                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                         <button onClick={submitNewRow} disabled={savingNew}
-                          style={{ background: 'var(--primary)', border: 'none', color: '#fff', cursor: 'pointer', padding: '6px 10px', borderRadius: 6, fontSize: '.75rem', fontWeight: 700, fontFamily: 'inherit', opacity: savingNew ? .5 : 1 }}>
-                          {savingNew ? '…' : '+ Add'}
+                          style={{
+                            background: '#4f7eff',
+                            border: 'none',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            padding: '8px 14px',
+                            borderRadius: '7px',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            fontFamily: 'inherit',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            opacity: savingNew ? 0.5 : 1,
+                            transition: 'background 0.15s'
+                          }}>
+                          <Plus size={14} /> <span>{savingNew ? '...' : 'Add'}</span>
                         </button>
                       </td>
                     </tr>
@@ -516,27 +752,32 @@ export default function DashboardPage() {
           ) : tab === 'team' ? (
             <>
               {/* Filter bar */}
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20, background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', padding: '14px 18px', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filters:</span>
+                
                 {/* Assignee filter */}
                 <select value={fAssignee} onChange={e => setFAssignee(e.target.value)}
-                  style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: fAssignee ? 'var(--primary)' : 'var(--muted)', padding: '8px 12px', fontSize: '.82rem', fontFamily: 'inherit', outline: 'none' }}>
-                  <option value="">All Assignees</option>
+                  style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: fAssignee ? '#38bdf8' : '#f1f5f9', padding: '8px 12px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', minWidth: '140px' }}>
+                  <option value="">All Team Members</option>
                   {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
+
                 {/* Action filter */}
                 <select value={fAction} onChange={e => setFAction(e.target.value)}
-                  style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: fAction ? 'var(--primary)' : 'var(--muted)', padding: '8px 12px', fontSize: '.82rem', fontFamily: 'inherit', outline: 'none' }}>
+                  style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: fAction ? '#38bdf8' : '#f1f5f9', padding: '8px 12px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', minWidth: '120px' }}>
                   <option value="">All Actions</option>
                   {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
                 </select>
+
                 {/* Status filter */}
                 <select value={fStatus} onChange={e => setFStatus(e.target.value)}
-                  style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: fStatus ? 'var(--primary)' : 'var(--muted)', padding: '8px 12px', fontSize: '.82rem', fontFamily: 'inherit', outline: 'none' }}>
+                  style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: fStatus ? '#38bdf8' : '#f1f5f9', padding: '8px 12px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', minWidth: '120px' }}>
                   <option value="">All Statuses</option>
                   <option value="PENDING">Pending</option>
                   <option value="DONE">Done</option>
                   <option value="DUE">Due</option>
                 </select>
+
                 {/* Deadline date filter */}
                 <input
                   type="date"
@@ -547,64 +788,70 @@ export default function DashboardPage() {
                     } catch (err) {}
                   }}
                   onChange={e => setFDeadline(e.target.value)}
-                  style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: fDeadline ? 'var(--primary)' : 'var(--muted)', padding: '8px 12px', fontSize: '.82rem', fontFamily: 'inherit', outline: 'none', colorScheme: 'dark', cursor: 'pointer' }}
+                  style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: fDeadline ? '#38bdf8' : '#f1f5f9', padding: '8px 12px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', colorScheme: 'dark', cursor: 'pointer', minWidth: '140px' }}
                 />
+
                 {(fAssignee || fAction || fStatus || fDeadline) && (
                   <button onClick={() => { setFAssignee(''); setFAction(''); setFStatus(''); setFDeadline(''); }}
-                    style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', padding: '8px 14px', fontSize: '.82rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    style={{ background: 'transparent', border: '1px solid #334155', borderRadius: '7px', color: '#94a3b8', padding: '8px 14px', fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto' }}>
                     Clear Filters
                   </button>
                 )}
               </div>
 
-              <div className="card">
+              <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
                 <div className="table-scroll">
-                  <table>
+                  <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse' }}>
                     <thead>
-                      <tr>
-                        <th style={{ width: 110 }}>Action</th>
-                        <th>Activity Name</th>
-                        <th style={{ width: 130 }}>Assignee</th>
-                        <th style={{ width: 110 }}>Status</th>
-                        <th style={{ width: 175 }}>Deadline</th>
+                      <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
+                        <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action</th>
+                        <th style={{ padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity Name</th>
+                        <th style={{ width: '180px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recipient / Assignee</th>
+                        <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                        <th style={{ width: '180px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deadline</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredTasks.length === 0 && (
-                        <tr className="empty-r"><td colSpan={5}>No tasks match the current filters.</td></tr>
+                        <tr className="empty-r"><td colSpan={5} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>No tasks match the selected filters.</td></tr>
                       )}
                       {filteredTasks.map(task => {
                         const am = getActionMeta(task.action_type);
                         const dl = task.deadline ? new Date(task.deadline) : null;
-                        const sColor = getStatusColor(task.status);
+                        const st = getStatusStyle(task.status);
                         return (
-                          <tr key={task.id}>
-                            <td>
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: am.color, fontWeight: 600, fontSize: '.78rem', padding: '3px 8px', borderRadius: 6, background: `${am.color}18`, width: 'fit-content' }}>
-                                {am.icon} {am.label}
+                          <tr key={task.id} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)' }}>
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: am.color, background: am.bg, fontWeight: 600, fontSize: '0.78rem', padding: '4px 10px', borderRadius: '6px', border: `1px solid ${am.color}30` }}>
+                                {am.icon} <span>{am.label}</span>
                               </span>
                             </td>
-                            <td style={{ fontWeight: 500 }}>{task.title}</td>
-                            <td>
-                              {task.assignee_name ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                                  <div style={{ width: 24, height: 24, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.68rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                                    {(task.assignee_name[0] || 'U').toUpperCase()}
+                            <td style={{ padding: '12px 16px', fontWeight: 500, color: '#f8fafc', fontSize: '0.86rem' }}>{task.title}</td>
+                            <td style={{ padding: '12px 16px' }}>
+                              {task.action_type === 'ASSIGN' ? (
+                                task.assignee_name ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <div style={{ width: 24, height: 24, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                                      {(task.assignee_name[0] || 'U').toUpperCase()}
+                                    </div>
+                                    <span style={{ fontSize: '0.84rem', color: '#f1f5f9', fontWeight: 500 }}>{task.assignee_name}</span>
                                   </div>
-                                  <span style={{ fontSize: '.83rem' }}>{task.assignee_name}</span>
-                                </div>
-                              ) : <span style={{ color: 'var(--muted)', fontSize: '.83rem' }}>—</span>}
+                                ) : <span style={{ color: '#64748b', fontSize: '0.82rem' }}>—</span>
+                              ) : (
+                                <span style={{ color: task.recipient ? '#f1f5f9' : '#64748b', fontSize: '0.84rem' }}>{task.recipient || '—'}</span>
+                              )}
                             </td>
-                            <td>
-                              <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: '.72rem', fontWeight: 700, background: `${sColor}22`, color: sColor }}>
-                                {task.status}
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700, background: st.bg, color: st.color, border: `1px solid ${st.color}35` }}>
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.color }}></span>
+                                <span>{st.label}</span>
                               </span>
                             </td>
-                            <td style={{ fontSize: '.8rem', color: dl ? 'var(--text)' : 'var(--muted)', whiteSpace: 'nowrap' }}>
+                            <td style={{ padding: '12px 16px', fontSize: '0.82rem', color: dl ? '#e2e8f0' : '#64748b', whiteSpace: 'nowrap' }}>
                               {dl ? (
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                  <Calendar size={13} style={{ color: 'var(--primary)' }} />
-                                  {dl.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                  <Calendar size={13} style={{ color: '#38bdf8' }} />
+                                  <span>{dl.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                                 </span>
                               ) : '—'}
                             </td>
@@ -621,43 +868,52 @@ export default function DashboardPage() {
           /* TAB 3 – BOARD VIEW                        */
           /* ══════════════════════════════════════════ */
           ) : (
-            <div className="card">
+            <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
               <div className="table-scroll">
-                <table>
+                <table style={{ width: '100%', minWidth: '700px', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr>
-                      <th>Assignee</th>
-                      <th style={{ width: 100, textAlign: 'center' }}>Total Jobs</th>
-                      <th style={{ width: 100, textAlign: 'center' }}>Done</th>
-                      <th style={{ width: 100, textAlign: 'center' }}>In Progress</th>
-                      <th style={{ width: 100, textAlign: 'center' }}>Overdue</th>
+                    <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
+                      <th style={{ padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Assignee Name</th>
+                      <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Jobs</th>
+                      <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Done</th>
+                      <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>WIP (Pending)</th>
+                      <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Overdue</th>
                     </tr>
                   </thead>
                   <tbody>
                     {boardRows.length === 0 && (
-                      <tr className="empty-r"><td colSpan={5}>No tasks assigned for this day.</td></tr>
+                      <tr className="empty-r"><td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No tasks assigned for this day.</td></tr>
                     )}
                     {boardRows.map(row => (
-                      <tr key={row.id ?? 'unassigned'}>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: '50%', background: row.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.76rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                      <tr key={row.id ?? 'unassigned'} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)', transition: 'background 0.15s' }}>
+                        <td style={{ padding: '14px 20px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ width: 34, height: 34, borderRadius: '50%', background: row.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
                               {(row.name[0] || 'U').toUpperCase()}
                             </div>
                             <div>
-                              <div style={{ fontWeight: 600, fontSize: '.88rem' }}>{row.name}</div>
+                              <div style={{ fontWeight: 600, fontSize: '0.92rem', color: '#f8fafc' }}>{row.name}</div>
+                              {row.role && <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 2 }}>{row.role}</div>}
                             </div>
                           </div>
                         </td>
-                        <td style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)' }}>{row.total}</td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--green)' }}>{row.done}</span>
+                        <td style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.15rem', color: '#f1f5f9', padding: '14px 20px' }}>
+                          {row.total}
                         </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--orange)' }}>{row.wip}</span>
+                        <td style={{ textAlign: 'center', padding: '14px 20px' }}>
+                          <span style={{ display: 'inline-block', background: 'rgba(34,197,94,0.15)', color: '#22c55e', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>
+                            {row.done}
+                          </span>
                         </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--red)' }}>{row.pending}</span>
+                        <td style={{ textAlign: 'center', padding: '14px 20px' }}>
+                          <span style={{ display: 'inline-block', background: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>
+                            {row.wip}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center', padding: '14px 20px' }}>
+                          <span style={{ display: 'inline-block', background: 'rgba(239,68,68,0.15)', color: '#ef4444', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>
+                            {row.pending}
+                          </span>
                         </td>
                       </tr>
                     ))}
@@ -670,7 +926,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Toast notification */}
-      {toastMsg && <div className="toast on">{toastMsg}</div>}
+      {toastMsg && <div className="toast on" style={{ background: '#1e2438', border: '1px solid #4f7eff', color: '#f8fafc', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>{toastMsg}</div>}
     </>
   );
 }
