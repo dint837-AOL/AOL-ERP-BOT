@@ -56,11 +56,13 @@ async function initDB() {
     priority TEXT CHECK(priority IN ('RED','ORANGE','GREEN')) DEFAULT 'GREEN',
     status TEXT CHECK(status IN ('PENDING','DONE','DUE')) DEFAULT 'PENDING',
     assigned_to INTEGER REFERENCES members(id),
+    is_archived INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
   // Migrations for tasks table
   try { await db.exec(`ALTER TABLE tasks ADD COLUMN action_type TEXT DEFAULT 'ASSIGN'`); } catch (e) {}
   try { await db.exec(`ALTER TABLE tasks ADD COLUMN recipient TEXT DEFAULT ''`); } catch (e) {}
+  try { await db.exec(`ALTER TABLE tasks ADD COLUMN is_archived INTEGER DEFAULT 0`); } catch (e) {}
   await db.exec(`CREATE TABLE IF NOT EXISTS leave_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     member_id INTEGER NOT NULL REFERENCES members(id),
@@ -190,8 +192,10 @@ export class OpenClaw {
     this.app.get('/api/tasks', async (req, res) => {
       const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
       const today = new Date().toISOString().split('T')[0];
+      const includeArchived = req.query.archived === 'true';
       await dbRun(`UPDATE tasks SET status='DUE' WHERE status='PENDING' AND task_date < ?`, [today]);
-      res.json(await dbAll(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.task_date=? ORDER BY t.created_at DESC`, [date]));
+      const archivedFilter = includeArchived ? 't.is_archived=1' : '(t.is_archived=0 OR t.is_archived IS NULL)';
+      res.json(await dbAll(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.task_date=? AND ${archivedFilter} ORDER BY t.created_at DESC`, [date]));
     });
     this.app.post('/api/tasks', async (req, res) => {
       const { title, description, deadline, priority, assigned_to, task_date, action_type, recipient } = req.body;
@@ -202,7 +206,7 @@ export class OpenClaw {
       res.status(201).json(await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]));
     });
     this.app.patch('/api/tasks/:id', async (req, res) => {
-      const allowed = ['status', 'priority', 'title', 'description', 'deadline', 'assigned_to', 'action_type', 'recipient'];
+      const allowed = ['status', 'priority', 'title', 'description', 'deadline', 'assigned_to', 'action_type', 'recipient', 'is_archived'];
       const updates: string[] = [];
       const values: any[] = [];
       for (const key of allowed) {
