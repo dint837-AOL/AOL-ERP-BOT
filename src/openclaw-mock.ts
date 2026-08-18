@@ -193,9 +193,9 @@ export class OpenClaw {
       const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
       const today = new Date().toISOString().split('T')[0];
       const includeArchived = req.query.archived === 'true';
-      await dbRun(`UPDATE tasks SET status='DUE' WHERE status='PENDING' AND task_date < ?`, [today]);
+      await dbRun(`UPDATE tasks SET status='DUE' WHERE status='PENDING' AND date(task_date) < date(?)`, [today]);
       const archivedFilter = includeArchived ? 't.is_archived=1' : '(t.is_archived=0 OR t.is_archived IS NULL)';
-      res.json(await dbAll(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.task_date=? AND ${archivedFilter} ORDER BY t.created_at DESC`, [date]));
+      res.json(await dbAll(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE date(t.task_date)=date(?) AND ${archivedFilter} ORDER BY t.created_at DESC`, [date]));
     });
     this.app.post('/api/tasks', async (req, res) => {
       const { title, description, deadline, priority, assigned_to, task_date, action_type, recipient } = req.body;

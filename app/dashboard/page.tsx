@@ -1,32 +1,36 @@
 /**
- * Dashboard / Daily Tasks Module — v3.1
+ * Dashboard / Daily Tasks Module — v3.2
  *
  * Requirements:
- *  1. Admin View:
- *     - Recipient column:
- *       • If Action is 'ASSIGN' → Dropdown to select team member
- *       • If Action is 'SMS' | 'CALL' | 'MAIL' | 'MEETING' → Text field for recipient contact/name/email
- *     - Inline editable rows + last row for adding new tasks
- *     - Clickable Deadline cell opening native datetime picker
- *  2. Soft Delete & Permanent Delete Confirmation Modal:
- *     - Clicking delete icon pops up a confirmation dialog
- *     - Option 1: "Archive / Soft Delete" (keeps in DB with is_archived=1)
- *     - Option 2: "Permanent Delete" (removes from DB)
- *     - Option 3: "Cancel"
- *     - "View Archived" button to view and restore archived tasks
- *  3. Team View:
- *     - Multi-filter bar (Assignee / Action / Status / Deadline)
- *  4. Board View:
- *     - Summary table (Assignee | Total | Done | In Progress | Overdue)
- *  5. Topbar:
- *     - Clickable Date chip opening native calendar date picker
+ *  1. Date-Exclusive Views (Admin, Team, Board):
+ *     - Each day strictly shows only the tasks belonging to that specific date.
+ *     - Timezone-safe local date calculation for navigation & calendar selection.
+ *  2. Topbar Date Picker:
+ *     - Full overlay calendar input on the date chip for instant native picker opening.
+ *  3. Admin View:
+ *     - Dynamic Recipient (Assignee dropdown for ASSIGN, Text input for other actions)
+ *     - Inline editable cells + last row for adding new tasks
+ *     - Soft Delete (Archive) & Permanent Delete Confirmation Modal
+ *     - "Archived Tasks" popup with 1-click restore
+ *  4. Team View:
+ *     - Date-exclusive filtered view (Assignee / Action / Status / Deadline)
+ *  5. Board View:
+ *     - Date-exclusive summary table (Assignee | Total | Done | WIP | Overdue)
  *
  * API: /api/tasks, /api/members
  */
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Trash2, Phone, Mail, MessageSquare, Users, Calendar, Plus, Archive, RotateCcw, X, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, Phone, Mail, MessageSquare, Users, Calendar, Plus, Archive, RotateCcw, X, AlertTriangle } from 'lucide-react';
 import Topbar from '../components/Topbar';
+
+/* ─── Helpers ──────────────────────────────────────── */
+function getLocalDateString(d = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 /* ─── Type Definitions ─────────────────────────────── */
 type Task = {
@@ -122,7 +126,7 @@ const BLANK_ROW = { action_type: 'ASSIGN', title: '', recipient: '', assigned_to
 export default function DashboardPage() {
   const [tasks,         setTasks]         = useState<Task[]>([]);
   const [members,       setMembers]       = useState<Member[]>([]);
-  const [currentDate,   setCurrentDate]   = useState(new Date().toISOString().split('T')[0]!);
+  const [currentDate,   setCurrentDate]   = useState(getLocalDateString());
   const [tab,           setTab]           = useState<'admin' | 'team' | 'board'>('admin');
   const [loading,       setLoading]       = useState(true);
   const [toastMsg,      setToastMsg]      = useState('');
@@ -134,9 +138,6 @@ export default function DashboardPage() {
   const [showArchived,  setShowArchived]  = useState(false);
   const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
   const [loadingArchived, setLoadingArchived] = useState(false);
-
-  /* Topbar date picker ref */
-  const datePickerRef = useRef<HTMLInputElement>(null);
 
   /* New-task inline row state */
   const [newRow, setNewRow] = useState({ ...BLANK_ROW });
@@ -156,7 +157,7 @@ export default function DashboardPage() {
     setTimeout(() => setToastMsg(''), 2500);
   }
 
-  /* ─── Data fetching ───────────────────────────── */
+  /* ─── Data fetching (strictly for currentDate) ─── */
   const fetchTasks = useCallback(async () => {
     setLoading(true);
     try {
@@ -190,16 +191,20 @@ export default function DashboardPage() {
     }
   }, [currentDate]);
 
-  useEffect(() => { fetchTasks(); fetchMembers(); }, [fetchTasks, fetchMembers]);
+  useEffect(() => {
+    fetchTasks();
+    fetchMembers();
+  }, [fetchTasks, fetchMembers]);
 
-  /* ─── Date navigation ─────────────────────────── */
+  /* ─── Date navigation (Timezone safe) ─────────── */
   const shiftDate = (days: number) => {
-    const d = new Date(currentDate);
-    d.setDate(d.getDate() + days);
-    setCurrentDate(d.toISOString().split('T')[0]!);
+    const [y, m, d] = currentDate.split('-').map(Number);
+    const date = new Date(y!, m! - 1, d!);
+    date.setDate(date.getDate() + days);
+    setCurrentDate(getLocalDateString(date));
   };
 
-  const isToday = currentDate === new Date().toISOString().split('T')[0]!;
+  const isToday = currentDate === getLocalDateString();
 
   /* ─── Inline save (existing task cell) ─────────── */
   const saveCell = async (id: number, field: string, value: string) => {
@@ -239,7 +244,7 @@ export default function DashboardPage() {
     try {
       await fetch(`/api/tasks/${task.id}`, { method: 'DELETE' });
       setTaskToDelete(null);
-      showToast('Task permanently deleted from database.');
+      showToast('Task permanently deleted.');
       fetchTasks();
     } catch (e) {
       showToast('Failed to delete task.');
@@ -290,13 +295,13 @@ export default function DashboardPage() {
     }
   };
 
-  /* ─── Computed stats ──────────────────────────── */
+  /* ─── Computed stats for currentDate ──────────── */
   const total   = tasks.length;
   const done    = tasks.filter(t => t.status === 'DONE').length;
   const wip     = tasks.filter(t => t.status === 'PENDING').length;
   const overdue = tasks.filter(t => t.status === 'DUE').length;
 
-  /* ─── Team view filtered list ─────────────────── */
+  /* ─── Team view filtered list for currentDate ─── */
   const filteredTasks = tasks.filter(t => {
     if (fAssignee && String(t.assigned_to) !== fAssignee) return false;
     if (fAction   && t.action_type !== fAction)            return false;
@@ -305,7 +310,7 @@ export default function DashboardPage() {
     return true;
   });
 
-  /* ─── Board view: group by assignee ──────────── */
+  /* ─── Board view for currentDate ─────────────── */
   const boardRows = [
     { id: null as number | null, name: 'Unassigned', avatar_color: '#64748b', role: '' },
     ...members,
@@ -513,24 +518,16 @@ export default function DashboardPage() {
     <>
       <Topbar title="Daily Tasks">
         {/* Date navigation with click-to-open calendar */}
-        <div className="dnav" style={{ marginRight: 'auto', marginLeft: 20, position: 'relative', background: '#161926', border: '1px solid #2a3050', borderRadius: '9px' }}>
-          <button onClick={() => shiftDate(-1)} title="Previous Day" style={{ padding: '8px 14px', color: '#94a3b8' }}><ChevronLeft size={18} /></button>
+        <div className="dnav" style={{ marginRight: 'auto', marginLeft: 20, position: 'relative', background: '#161926', border: '1px solid #2a3050', borderRadius: '9px', display: 'flex', alignItems: 'center' }}>
+          <button onClick={() => shiftDate(-1)} title="Previous Day" style={{ padding: '8px 14px', color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', zIndex: 10 }}><ChevronLeft size={18} /></button>
           
           <div
             className={`dchip${isToday ? ' today' : ''}`}
-            onClick={() => {
-              try {
-                datePickerRef.current?.showPicker?.();
-              } catch (e) {}
-              datePickerRef.current?.focus();
-            }}
-            title="Click to open calendar"
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minWidth: 210, padding: '8px 16px', userSelect: 'none', color: isToday ? '#38bdf8' : '#f1f5f9', fontWeight: 600, fontSize: '0.88rem' }}
+            style={{ position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minWidth: 210, padding: '8px 16px', userSelect: 'none', color: isToday ? '#38bdf8' : '#f1f5f9', fontWeight: 600, fontSize: '0.88rem' }}
           >
-            <Calendar size={15} style={{ color: isToday ? '#38bdf8' : '#94a3b8' }} />
-            <span>{isToday ? `Today (${currentDate})` : currentDate}</span>
+            <Calendar size={15} style={{ color: isToday ? '#38bdf8' : '#94a3b8', pointerEvents: 'none' }} />
+            <span style={{ pointerEvents: 'none' }}>{isToday ? `Today (${currentDate})` : currentDate}</span>
             <input
-              ref={datePickerRef}
               type="date"
               value={currentDate}
               onChange={e => {
@@ -546,12 +543,12 @@ export default function DashboardPage() {
                 height: '100%',
                 opacity: 0,
                 cursor: 'pointer',
-                pointerEvents: 'none'
+                zIndex: 5
               }}
             />
           </div>
 
-          <button onClick={() => shiftDate(1)} title="Next Day" style={{ padding: '8px 14px', color: '#94a3b8' }}><ChevronRight size={18} /></button>
+          <button onClick={() => shiftDate(1)} title="Next Day" style={{ padding: '8px 14px', color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', zIndex: 10 }}><ChevronRight size={18} /></button>
         </div>
 
         {/* View Archived Tasks Button */}
@@ -605,7 +602,7 @@ export default function DashboardPage() {
 
         {/* ── Summary line ────────────────────────── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: '0.82rem', color: '#94a3b8', marginBottom: 20, background: '#161926', border: '1px solid #2a3050', borderRadius: '10px', padding: '12px 18px' }}>
-          <div>Total Tasks: <span style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.95rem' }}>{total}</span></div>
+          <div>Tasks on {currentDate}: <span style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.95rem' }}>{total}</span></div>
           <span style={{ color: '#334155' }}>|</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e' }}></span>
@@ -627,7 +624,7 @@ export default function DashboardPage() {
         </div>
 
         {loading ? (
-          <div style={{ color: '#94a3b8', textAlign: 'center', marginTop: 40, fontSize: '0.9rem' }}>Loading tasks…</div>
+          <div style={{ color: '#94a3b8', textAlign: 'center', marginTop: 40, fontSize: '0.9rem' }}>Loading tasks for {currentDate}…</div>
         ) : (
 
           /* ══════════════════════════════════════════ */
@@ -649,7 +646,7 @@ export default function DashboardPage() {
                   </thead>
                   <tbody>
                     {tasks.length === 0 && (
-                      <tr className="empty-r"><td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>No tasks for this day. Enter one in the row below.</td></tr>
+                      <tr className="empty-r"><td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>No tasks for {currentDate}. Enter one in the row below.</td></tr>
                     )}
 
                     {/* Existing task rows */}
@@ -901,7 +898,7 @@ export default function DashboardPage() {
                     </thead>
                     <tbody>
                       {filteredTasks.length === 0 && (
-                        <tr className="empty-r"><td colSpan={5} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>No tasks match the selected filters.</td></tr>
+                        <tr className="empty-r"><td colSpan={5} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>No tasks match the selected filters on {currentDate}.</td></tr>
                       )}
                       {filteredTasks.map(task => {
                         const am = getActionMeta(task.action_type);
@@ -970,7 +967,7 @@ export default function DashboardPage() {
                   </thead>
                   <tbody>
                     {boardRows.length === 0 && (
-                      <tr className="empty-r"><td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No tasks assigned for this day.</td></tr>
+                      <tr className="empty-r"><td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No tasks assigned on {currentDate}.</td></tr>
                     )}
                     {boardRows.map(row => (
                       <tr key={row.id ?? 'unassigned'} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)', transition: 'background 0.15s' }}>
