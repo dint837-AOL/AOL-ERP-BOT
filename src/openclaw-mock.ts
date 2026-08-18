@@ -49,6 +49,7 @@ async function initDB() {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     description TEXT DEFAULT '',
+    action_type TEXT DEFAULT 'ASSIGN',
     deadline TEXT,
     task_date TEXT NOT NULL,
     priority TEXT CHECK(priority IN ('RED','ORANGE','GREEN')) DEFAULT 'GREEN',
@@ -56,6 +57,8 @@ async function initDB() {
     assigned_to INTEGER REFERENCES members(id),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  // Migration: add action_type column to tasks if it doesn't exist
+  try { await db.exec(`ALTER TABLE tasks ADD COLUMN action_type TEXT DEFAULT 'ASSIGN'`); } catch (e) {}
   await db.exec(`CREATE TABLE IF NOT EXISTS leave_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     member_id INTEGER NOT NULL REFERENCES members(id),
@@ -189,17 +192,17 @@ export class OpenClaw {
       res.json(await dbAll(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.task_date=? ORDER BY t.created_at DESC`, [date]));
     });
     this.app.post('/api/tasks', async (req, res) => {
-      const { title, description, deadline, priority, assigned_to, task_date } = req.body;
+      const { title, description, deadline, priority, assigned_to, task_date, action_type } = req.body;
       if (!title) return res.status(400).json({ error: 'Title required' });
       const date = task_date || new Date().toISOString().split('T')[0];
-      const { lastID } = await dbRun(`INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date) VALUES(?,?,?,?,?,?)`,
-        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date]);
+      const { lastID } = await dbRun(`INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date,action_type) VALUES(?,?,?,?,?,?,?)`,
+        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'ASSIGN']);
       res.status(201).json(await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]));
     });
     this.app.patch('/api/tasks/:id', async (req, res) => {
-      const { status, priority, title, description, deadline, assigned_to } = req.body;
-      await dbRun(`UPDATE tasks SET status=COALESCE(?,status),priority=COALESCE(?,priority),title=COALESCE(?,title),description=COALESCE(?,description),deadline=COALESCE(?,deadline),assigned_to=COALESCE(?,assigned_to) WHERE id=?`,
-        [status, priority, title, description, deadline, assigned_to, req.params.id]);
+      const { status, priority, title, description, deadline, assigned_to, action_type } = req.body;
+      await dbRun(`UPDATE tasks SET status=COALESCE(?,status),priority=COALESCE(?,priority),title=COALESCE(?,title),description=COALESCE(?,description),deadline=COALESCE(?,deadline),assigned_to=COALESCE(?,assigned_to),action_type=COALESCE(?,action_type) WHERE id=?`,
+        [status, priority, title, description, deadline, assigned_to, action_type, req.params.id]);
       res.json(await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [req.params.id]));
     });
     this.app.delete('/api/tasks/:id', async (req, res) => { await dbRun('DELETE FROM tasks WHERE id=?', [req.params.id]); res.json({ ok: true }); });
