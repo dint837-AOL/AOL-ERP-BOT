@@ -1,27 +1,47 @@
 /**
- * Dashboard / Daily Tasks Module — v3.2
+ * Dashboard / Daily Tasks Module — v4.0
  *
  * Requirements:
- *  1. Date-Exclusive Views (Admin, Team, Board):
- *     - Each day strictly shows only the tasks belonging to that specific date.
- *     - Timezone-safe local date calculation for navigation & calendar selection.
- *  2. Topbar Date Picker:
- *     - Full overlay calendar input on the date chip for instant native picker opening.
- *  3. Admin View:
- *     - Dynamic Recipient (Assignee dropdown for ASSIGN, Text input for other actions)
- *     - Inline editable cells + last row for adding new tasks
- *     - Soft Delete (Archive) & Permanent Delete Confirmation Modal
- *     - "Archived Tasks" popup with 1-click restore
- *  4. Team View:
- *     - Date-exclusive filtered view (Assignee / Action / Status / Deadline)
- *  5. Board View:
- *     - Date-exclusive summary table (Assignee | Total | Done | WIP | Overdue)
+ *  1. Topbar Date Picker:
+ *     - Clicking on the date section immediately opens the native calendar date picker.
+ *  2. Action Dropdown:
+ *     - Includes: Assign, SMS, Call, Mail, Meeting, Reminder.
+ *     - Clean, consistent plain theme color for all actions, with distinct icons.
+ *  3. Separate Recipient & Assignee Columns:
+ *     - Recipient: Text field for client/contact name, email, or phone.
+ *     - Assignee: Dropdown to assign any task to a specific team member.
+ *  4. Status Dropdown:
+ *     - Options in exact order: Done, WIP, Pending.
+ *  5. Summary at the Bottom of Task Table:
+ *     - Positioned below the table.
+ *     - Removed "Total tasks on date" text.
+ *     - Larger typography with big, vibrant, glowing status dots.
+ *  6. Board View & Team View:
+ *     - Grouped by team member without hardcoded admin; unassigned tasks clearly identified.
+ *  7. Delete & Archive:
+ *     - Delete confirmation modal with Soft Delete (Archive) & Permanent Delete.
+ *     - Archived tasks viewer modal with 1-click restore.
  *
  * API: /api/tasks, /api/members
  */
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Trash2, Phone, Mail, MessageSquare, Users, Calendar, Plus, Archive, RotateCcw, X, AlertTriangle } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  Phone,
+  Mail,
+  MessageSquare,
+  Users,
+  Calendar,
+  Bell,
+  Plus,
+  Archive,
+  RotateCcw,
+  X,
+  AlertTriangle
+} from 'lucide-react';
 import Topbar from '../components/Topbar';
 
 /* ─── Helpers ──────────────────────────────────────── */
@@ -37,10 +57,10 @@ type Task = {
   id: number;
   title: string;
   description: string;
-  action_type: 'SMS' | 'CALL' | 'MAIL' | 'MEETING' | 'ASSIGN';
+  action_type: 'ASSIGN' | 'SMS' | 'CALL' | 'MAIL' | 'MEETING' | 'REMINDER';
   recipient?: string;
   priority: 'GREEN' | 'ORANGE' | 'RED';
-  status: 'PENDING' | 'DONE' | 'DUE';
+  status: 'DONE' | 'WIP' | 'PENDING' | 'DUE';
   assigned_to: number | null;
   assignee_name?: string;
   assignee_color?: string;
@@ -51,17 +71,18 @@ type Task = {
 
 type Member = { id: number; name: string; avatar_color: string; role: string; };
 
-type ActionMeta = { icon: React.ReactNode; label: string; color: string; bg: string };
+type ActionMeta = { icon: React.ReactNode; label: string };
 
 const ACTION_MAP: Record<string, ActionMeta> = {
-  ASSIGN:  { icon: <Users size={14} />,         label: 'Assign',  color: '#f472b6', bg: 'rgba(244,114,182,0.15)' },
-  SMS:     { icon: <MessageSquare size={14} />, label: 'SMS',     color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
-  CALL:    { icon: <Phone size={14} />,         label: 'Call',    color: '#3b82f6', bg: 'rgba(59,130,246,0.15)' },
-  MAIL:    { icon: <Mail size={14} />,          label: 'Mail',    color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
-  MEETING: { icon: <Calendar size={14} />,      label: 'Meeting', color: '#a855f7', bg: 'rgba(168,85,247,0.15)' },
+  ASSIGN:   { icon: <Users size={14} />,         label: 'Assign' },
+  SMS:      { icon: <MessageSquare size={14} />, label: 'SMS' },
+  CALL:     { icon: <Phone size={14} />,         label: 'Call' },
+  MAIL:     { icon: <Mail size={14} />,          label: 'Mail' },
+  MEETING:  { icon: <Calendar size={14} />,      label: 'Meeting' },
+  REMINDER: { icon: <Bell size={14} />,          label: 'Reminder' },
 };
 
-const ACTION_KEYS = ['ASSIGN', 'SMS', 'CALL', 'MAIL', 'MEETING'] as const;
+const ACTION_KEYS = ['ASSIGN', 'SMS', 'CALL', 'MAIL', 'MEETING', 'REMINDER'] as const;
 
 function getActionMeta(key?: string): ActionMeta {
   if (key && key in ACTION_MAP) {
@@ -70,10 +91,29 @@ function getActionMeta(key?: string): ActionMeta {
   return ACTION_MAP.ASSIGN!;
 }
 
-function getStatusStyle(status?: string): { color: string; bg: string; label: string } {
-  if (status === 'DONE') return { color: '#22c55e', bg: 'rgba(34,197,94,0.15)', label: 'Done' };
-  if (status === 'DUE')  return { color: '#ef4444', bg: 'rgba(239,68,68,0.15)', label: 'Due' };
-  return { color: '#94a3b8', bg: 'rgba(148,163,184,0.15)', label: 'Pending' };
+function getStatusStyle(status?: string): { color: string; bg: string; dotGlow: string; label: string } {
+  if (status === 'DONE') {
+    return {
+      color: '#22c55e',
+      bg: 'rgba(34,197,94,0.15)',
+      dotGlow: '0 0 10px #22c55e',
+      label: 'Done'
+    };
+  }
+  if (status === 'WIP' || status === 'DUE') {
+    return {
+      color: '#f59e0b',
+      bg: 'rgba(245,158,11,0.15)',
+      dotGlow: '0 0 10px #f59e0b',
+      label: 'WIP'
+    };
+  }
+  return {
+    color: '#94a3b8',
+    bg: 'rgba(148,163,184,0.15)',
+    dotGlow: '0 0 10px #94a3b8',
+    label: 'Pending'
+  };
 }
 
 /* ─── Inline Deadline Editor with Auto-Open Calendar ─ */
@@ -120,7 +160,7 @@ function DeadlineEditor({ defaultValue, onSave }: { defaultValue: string; onSave
 }
 
 /* ─── Blank new-task row shape ─────────────────────── */
-const BLANK_ROW = { action_type: 'ASSIGN', title: '', recipient: '', assigned_to: '', status: 'PENDING', deadline: '' };
+const BLANK_ROW = { action_type: 'ASSIGN', title: '', recipient: '', assigned_to: '', status: 'DONE', deadline: '' };
 
 /* ═══════════════════════════════════════════════════ */
 export default function DashboardPage() {
@@ -232,7 +272,7 @@ export default function DashboardPage() {
         body: JSON.stringify({ is_archived: 1 }),
       });
       setTaskToDelete(null);
-      showToast('Task archived (soft deleted).');
+      showToast('Task archived.');
       fetchTasks();
     } catch (e) {
       showToast('Failed to archive task.');
@@ -278,9 +318,9 @@ export default function DashboardPage() {
         body: JSON.stringify({
           title: newRow.title,
           action_type: newRow.action_type,
-          recipient: newRow.action_type === 'ASSIGN' ? '' : (newRow.recipient || ''),
-          assigned_to: newRow.action_type === 'ASSIGN' ? (newRow.assigned_to ? parseInt(newRow.assigned_to) : null) : null,
-          status: newRow.status,
+          recipient: newRow.recipient || '',
+          assigned_to: newRow.assigned_to ? parseInt(newRow.assigned_to) : null,
+          status: newRow.status || 'DONE',
           deadline: newRow.deadline || null,
           task_date: currentDate,
         }),
@@ -296,15 +336,14 @@ export default function DashboardPage() {
   };
 
   /* ─── Computed stats for currentDate ──────────── */
-  const total   = tasks.length;
   const done    = tasks.filter(t => t.status === 'DONE').length;
-  const wip     = tasks.filter(t => t.status === 'PENDING').length;
-  const overdue = tasks.filter(t => t.status === 'DUE').length;
+  const wip     = tasks.filter(t => t.status === 'WIP' || t.status === 'DUE').length;
+  const pending = tasks.filter(t => t.status === 'PENDING').length;
 
   /* ─── Team view filtered list for currentDate ─── */
   const filteredTasks = tasks.filter(t => {
     if (fAssignee) {
-      if (fAssignee === 'admin') {
+      if (fAssignee === 'unassigned') {
         if (t.assigned_to !== null) return false;
       } else {
         if (String(t.assigned_to) !== fAssignee) return false;
@@ -318,7 +357,7 @@ export default function DashboardPage() {
 
   /* ─── Board view for currentDate ─────────────── */
   const boardRows = [
-    { id: null as number | null, name: 'Admin', avatar_color: '#4f7eff', role: 'Direct Tasks (SMS / Call / Mail / Meetings)' },
+    { id: null as number | null, name: 'Unassigned', avatar_color: '#64748b', role: '' },
     ...members,
   ].map(m => {
     const mt = tasks.filter(t => t.assigned_to === m.id);
@@ -326,8 +365,8 @@ export default function DashboardPage() {
       ...m,
       total:   mt.length,
       done:    mt.filter(t => t.status === 'DONE').length,
-      wip:     mt.filter(t => t.status === 'PENDING').length,
-      pending: mt.filter(t => t.status === 'DUE').length,
+      wip:     mt.filter(t => t.status === 'WIP' || t.status === 'DUE').length,
+      pending: mt.filter(t => t.status === 'PENDING').length,
     };
   }).filter(r => r.total > 0);
 
@@ -335,7 +374,7 @@ export default function DashboardPage() {
   const renderCell = (task: Task, field: string) => {
     const isEditing = editCell?.id === task.id && editCell?.field === field;
 
-    // 1. ACTION TYPE DROPDOWN
+    // 1. ACTION TYPE DROPDOWN (Plain consistent theme with icons)
     if (field === 'action_type') {
       if (isEditing) return (
         <select autoFocus
@@ -359,86 +398,100 @@ export default function DashboardPage() {
       const am = getActionMeta(task.action_type);
       return (
         <div onClick={() => setEditCell({ id: task.id, field })}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: am.color, background: am.bg, fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', padding: '5px 10px', borderRadius: '6px', border: `1px solid ${am.color}30` }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            color: '#e2e8f0',
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            fontWeight: 600,
+            fontSize: '0.8rem',
+            cursor: 'pointer',
+            padding: '5px 10px',
+            borderRadius: '6px',
+            transition: 'all 0.15s'
+          }}
           title="Click to change action">
-          {am.icon} <span>{am.label}</span>
+          <span style={{ color: '#94a3b8' }}>{am.icon}</span>
+          <span>{am.label}</span>
         </div>
       );
     }
 
-    // 2. RECIPIENT / ASSIGNEE COLUMN
-    if (field === 'recipient_col') {
-      if (task.action_type === 'ASSIGN') {
-        if (isEditing) return (
-          <select autoFocus
-            defaultValue={task.assigned_to?.toString() || ''}
-            onBlur={e => saveCell(task.id, 'assigned_to', e.target.value)}
-            onChange={e => saveCell(task.id, 'assigned_to', e.target.value)}
-            style={{
-              background: '#131722',
-              border: '1px solid #4f7eff',
-              borderRadius: '7px',
-              color: '#f1f5f9',
-              padding: '6px 10px',
-              fontSize: '0.82rem',
-              fontFamily: 'inherit',
-              outline: 'none',
-              minWidth: '150px'
-            }}>
-            <option value="">Unassigned</option>
-            {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
-        );
-        return (
-          <div onClick={() => setEditCell({ id: task.id, field })} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-            {task.assignee_name ? (
-              <>
-                <div style={{ width: 24, height: 24, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                  {(task.assignee_name[0] || 'U').toUpperCase()}
-                </div>
-                <span style={{ fontSize: '0.84rem', color: '#f1f5f9', fontWeight: 500 }}>{task.assignee_name}</span>
-              </>
-            ) : (
-              <span style={{ color: '#64748b', fontSize: '0.82rem', fontStyle: 'italic' }}>Select member...</span>
-            )}
-          </div>
-        );
-      } else {
-        // Text field for non-ASSIGN actions
-        if (isEditing) return (
-          <input autoFocus type="text"
-            defaultValue={task.recipient || ''}
-            placeholder="Recipient / Contact..."
-            onBlur={e => saveCell(task.id, 'recipient', e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') saveCell(task.id, 'recipient', (e.target as HTMLInputElement).value); }}
-            style={{
-              background: '#131722',
-              border: '1px solid #4f7eff',
-              borderRadius: '7px',
-              color: '#f1f5f9',
-              fontSize: '0.82rem',
-              padding: '6px 10px',
-              width: '100%',
-              minWidth: '140px',
-              outline: 'none',
-              fontFamily: 'inherit'
-            }} />
-        );
-        return (
-          <div onClick={() => setEditCell({ id: task.id, field })}
-            style={{ cursor: 'pointer', fontSize: '0.84rem', color: task.recipient ? '#f1f5f9' : '#64748b', minWidth: '120px' }}
-            title="Click to edit recipient">
-            {task.recipient || <span style={{ fontStyle: 'italic', color: '#64748b' }}>Enter recipient...</span>}
-          </div>
-        );
-      }
+    // 2. RECIPIENT COLUMN (Text field)
+    if (field === 'recipient') {
+      if (isEditing) return (
+        <input autoFocus type="text"
+          defaultValue={task.recipient || ''}
+          placeholder="Enter recipient/contact..."
+          onBlur={e => saveCell(task.id, 'recipient', e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') saveCell(task.id, 'recipient', (e.target as HTMLInputElement).value); }}
+          style={{
+            background: '#131722',
+            border: '1px solid #4f7eff',
+            borderRadius: '7px',
+            color: '#f1f5f9',
+            fontSize: '0.82rem',
+            padding: '6px 10px',
+            width: '100%',
+            minWidth: '140px',
+            outline: 'none',
+            fontFamily: 'inherit'
+          }} />
+      );
+      return (
+        <div onClick={() => setEditCell({ id: task.id, field })}
+          style={{ cursor: 'pointer', fontSize: '0.84rem', color: task.recipient ? '#f1f5f9' : '#64748b', minWidth: '120px' }}
+          title="Click to edit recipient">
+          {task.recipient || <span style={{ fontStyle: 'italic', color: '#64748b' }}>Enter recipient...</span>}
+        </div>
+      );
     }
 
-    // 3. STATUS DROPDOWN
+    // 3. ASSIGNEE COLUMN (Team Member Dropdown)
+    if (field === 'assigned_to') {
+      if (isEditing) return (
+        <select autoFocus
+          defaultValue={task.assigned_to?.toString() || ''}
+          onBlur={e => saveCell(task.id, 'assigned_to', e.target.value)}
+          onChange={e => saveCell(task.id, 'assigned_to', e.target.value)}
+          style={{
+            background: '#131722',
+            border: '1px solid #4f7eff',
+            borderRadius: '7px',
+            color: '#f1f5f9',
+            padding: '6px 10px',
+            fontSize: '0.82rem',
+            fontFamily: 'inherit',
+            outline: 'none',
+            minWidth: '150px'
+          }}>
+          <option value="">Unassigned</option>
+          {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+      );
+      return (
+        <div onClick={() => setEditCell({ id: task.id, field })} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {task.assignee_name ? (
+            <>
+              <div style={{ width: 24, height: 24, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                {(task.assignee_name[0] || 'U').toUpperCase()}
+              </div>
+              <span style={{ fontSize: '0.84rem', color: '#f1f5f9', fontWeight: 500 }}>{task.assignee_name}</span>
+            </>
+          ) : (
+            <span style={{ color: '#64748b', fontSize: '0.82rem', fontStyle: 'italic' }}>Unassigned</span>
+          )}
+        </div>
+      );
+    }
+
+    // 4. STATUS DROPDOWN (Done, WIP, Pending order)
     if (field === 'status') {
       if (isEditing) return (
         <select autoFocus
-          defaultValue={task.status}
+          defaultValue={task.status === 'DUE' ? 'WIP' : task.status}
           onBlur={e => saveCell(task.id, 'status', e.target.value)}
           onChange={e => saveCell(task.id, 'status', e.target.value)}
           style={{
@@ -452,23 +505,35 @@ export default function DashboardPage() {
             outline: 'none',
             minWidth: '120px'
           }}>
-          <option value="PENDING">Pending</option>
           <option value="DONE">Done</option>
-          <option value="DUE">Due</option>
+          <option value="WIP">WIP</option>
+          <option value="PENDING">Pending</option>
         </select>
       );
       const st = getStatusStyle(task.status);
       return (
         <div onClick={() => setEditCell({ id: task.id, field })}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', background: st.bg, color: st.color, border: `1px solid ${st.color}35` }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '4px 12px',
+            borderRadius: '20px',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            background: st.bg,
+            color: st.color,
+            border: `1px solid ${st.color}35`
+          }}
           title="Click to change status">
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.color }}></span>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.color, boxShadow: st.dotGlow }}></span>
           <span>{st.label}</span>
         </div>
       );
     }
 
-    // 4. DEADLINE CALENDAR PICKER
+    // 5. DEADLINE CALENDAR PICKER
     if (field === 'deadline') {
       if (isEditing) return (
         <DeadlineEditor
@@ -487,7 +552,7 @@ export default function DashboardPage() {
       );
     }
 
-    // 5. ACTIVITY NAME (TITLE)
+    // 6. ACTIVITY NAME (TITLE)
     if (field === 'title') {
       if (isEditing) return (
         <input autoFocus type="text"
@@ -523,16 +588,29 @@ export default function DashboardPage() {
   return (
     <>
       <Topbar title="Daily Tasks">
-        {/* Date navigation with click-to-open calendar */}
-        <div className="dnav" style={{ marginRight: 'auto', marginLeft: 20, position: 'relative', background: '#161926', border: '1px solid #2a3050', borderRadius: '9px', display: 'flex', alignItems: 'center' }}>
+        {/* Date navigation with click-to-open calendar via label */}
+        <div className="dnav" style={{ marginRight: 'auto', marginLeft: 20, background: '#161926', border: '1px solid #2a3050', borderRadius: '9px', display: 'flex', alignItems: 'center' }}>
           <button onClick={() => shiftDate(-1)} title="Previous Day" style={{ padding: '8px 14px', color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', zIndex: 10 }}><ChevronLeft size={18} /></button>
           
-          <div
-            className={`dchip${isToday ? ' today' : ''}`}
-            style={{ position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minWidth: 210, padding: '8px 16px', userSelect: 'none', color: isToday ? '#38bdf8' : '#f1f5f9', fontWeight: 600, fontSize: '0.88rem' }}
+          <label
+            style={{
+              position: 'relative',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              minWidth: 210,
+              padding: '8px 16px',
+              userSelect: 'none',
+              color: isToday ? '#38bdf8' : '#f1f5f9',
+              fontWeight: 600,
+              fontSize: '0.88rem'
+            }}
+            title="Click to open calendar"
           >
-            <Calendar size={15} style={{ color: isToday ? '#38bdf8' : '#94a3b8', pointerEvents: 'none' }} />
-            <span style={{ pointerEvents: 'none' }}>{isToday ? `Today (${currentDate})` : currentDate}</span>
+            <Calendar size={15} style={{ color: isToday ? '#38bdf8' : '#94a3b8' }} />
+            <span>{isToday ? `Today (${currentDate})` : currentDate}</span>
             <input
               type="date"
               value={currentDate}
@@ -541,18 +619,21 @@ export default function DashboardPage() {
                   setCurrentDate(e.target.value);
                 }
               }}
+              onClick={e => {
+                try {
+                  (e.target as HTMLInputElement).showPicker?.();
+                } catch (err) {}
+              }}
               style={{
                 position: 'absolute',
-                top: 0,
-                left: 0,
+                inset: 0,
                 width: '100%',
                 height: '100%',
                 opacity: 0,
-                cursor: 'pointer',
-                zIndex: 5
+                cursor: 'pointer'
               }}
             />
-          </div>
+          </label>
 
           <button onClick={() => shiftDate(1)} title="Next Day" style={{ padding: '8px 14px', color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', zIndex: 10 }}><ChevronRight size={18} /></button>
         </div>
@@ -606,29 +687,6 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* ── Summary line ────────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: '0.82rem', color: '#94a3b8', marginBottom: 20, background: '#161926', border: '1px solid #2a3050', borderRadius: '10px', padding: '12px 18px' }}>
-          <div>Tasks on {currentDate}: <span style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.95rem' }}>{total}</span></div>
-          <span style={{ color: '#334155' }}>|</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e' }}></span>
-            <span>Done:</span>
-            <span style={{ color: '#22c55e', fontWeight: 700 }}>{done}</span>
-          </div>
-          <span style={{ color: '#334155' }}>|</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b' }}></span>
-            <span>In Progress:</span>
-            <span style={{ color: '#f59e0b', fontWeight: 700 }}>{wip}</span>
-          </div>
-          <span style={{ color: '#334155' }}>|</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444' }}></span>
-            <span>Overdue:</span>
-            <span style={{ color: '#ef4444', fontWeight: 700 }}>{overdue}</span>
-          </div>
-        </div>
-
         {loading ? (
           <div style={{ color: '#94a3b8', textAlign: 'center', marginTop: 40, fontSize: '0.9rem' }}>Loading tasks for {currentDate}…</div>
         ) : (
@@ -637,91 +695,53 @@ export default function DashboardPage() {
           /* TAB 1 – ADMIN VIEW                        */
           /* ══════════════════════════════════════════ */
           tab === 'admin' ? (
-            <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
-              <div className="table-scroll">
-                <table style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
-                      <th style={{ width: '140px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action</th>
-                      <th style={{ minWidth: '200px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity Name</th>
-                      <th style={{ width: '180px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recipient / Assignee</th>
-                      <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
-                      <th style={{ width: '190px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deadline</th>
-                      <th style={{ width: '50px', padding: '12px 16px' }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tasks.length === 0 && (
-                      <tr className="empty-r"><td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>No tasks for {currentDate}. Enter one in the row below.</td></tr>
-                    )}
-
-                    {/* Existing task rows */}
-                    {tasks.map(task => (
-                      <tr key={task.id} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)', transition: 'background 0.15s' }}>
-                        <td style={{ padding: '12px 16px' }}>{renderCell(task, 'action_type')}</td>
-                        <td style={{ padding: '12px 16px' }}>{renderCell(task, 'title')}</td>
-                        <td style={{ padding: '12px 16px' }}>{renderCell(task, 'recipient_col')}</td>
-                        <td style={{ padding: '12px 16px' }}>{renderCell(task, 'status')}</td>
-                        <td style={{ padding: '12px 16px' }}>{renderCell(task, 'deadline')}</td>
-                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                          <button onClick={() => setTaskToDelete(task)}
-                            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s' }}
-                            onMouseOver={e => (e.currentTarget.style.color = '#ef4444')}
-                            onMouseOut={e  => (e.currentTarget.style.color = '#64748b')}
-                            title="Delete / Archive Task">
-                            <Trash2 size={15} />
-                          </button>
-                        </td>
+            <>
+              <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
+                <div className="table-scroll">
+                  <table style={{ width: '100%', minWidth: '920px', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
+                        <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action</th>
+                        <th style={{ minWidth: '200px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity Name</th>
+                        <th style={{ width: '170px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recipient</th>
+                        <th style={{ width: '170px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Assignee</th>
+                        <th style={{ width: '125px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                        <th style={{ width: '180px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deadline</th>
+                        <th style={{ width: '50px', padding: '12px 16px' }}></th>
                       </tr>
-                    ))}
+                    </thead>
+                    <tbody>
+                      {tasks.length === 0 && (
+                        <tr className="empty-r"><td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>No tasks for {currentDate}. Enter one in the row below.</td></tr>
+                      )}
 
-                    {/* ── Add new task row (always visible at bottom) ── */}
-                    <tr style={{ background: 'rgba(79,126,255,0.06)', borderTop: '2px solid rgba(79,126,255,0.2)' }}>
-                      {/* Action selector */}
-                      <td style={{ padding: '12px 16px' }}>
-                        <select value={newRow.action_type}
-                          onChange={e => setNewRow({ ...newRow, action_type: e.target.value })}
-                          style={{
-                            background: '#131722',
-                            border: '1px solid #2a3050',
-                            borderRadius: '7px',
-                            color: '#f1f5f9',
-                            padding: '8px 10px',
-                            fontSize: '0.82rem',
-                            fontFamily: 'inherit',
-                            outline: 'none',
-                            width: '100%',
-                            minWidth: '110px'
-                          }}>
-                          {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
-                        </select>
-                      </td>
+                      {/* Existing task rows */}
+                      {tasks.map(task => (
+                        <tr key={task.id} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)', transition: 'background 0.15s' }}>
+                          <td style={{ padding: '12px 16px' }}>{renderCell(task, 'action_type')}</td>
+                          <td style={{ padding: '12px 16px' }}>{renderCell(task, 'title')}</td>
+                          <td style={{ padding: '12px 16px' }}>{renderCell(task, 'recipient')}</td>
+                          <td style={{ padding: '12px 16px' }}>{renderCell(task, 'assigned_to')}</td>
+                          <td style={{ padding: '12px 16px' }}>{renderCell(task, 'status')}</td>
+                          <td style={{ padding: '12px 16px' }}>{renderCell(task, 'deadline')}</td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            <button onClick={() => setTaskToDelete(task)}
+                              style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s' }}
+                              onMouseOver={e => (e.currentTarget.style.color = '#ef4444')}
+                              onMouseOut={e  => (e.currentTarget.style.color = '#64748b')}
+                              title="Delete / Archive Task">
+                              <Trash2 size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
 
-                      {/* Activity name */}
-                      <td style={{ padding: '12px 16px' }}>
-                        <input type="text" placeholder="+ New activity name..."
-                          value={newRow.title}
-                          onChange={e => setNewRow({ ...newRow, title: e.target.value })}
-                          onKeyDown={e => { if (e.key === 'Enter') submitNewRow(); }}
-                          style={{
-                            background: '#131722',
-                            border: '1px solid #2a3050',
-                            borderRadius: '7px',
-                            color: '#f1f5f9',
-                            fontSize: '0.84rem',
-                            padding: '8px 12px',
-                            width: '100%',
-                            minWidth: '180px',
-                            outline: 'none',
-                            fontFamily: 'inherit'
-                          }} />
-                      </td>
-
-                      {/* Dynamic Recipient / Assignee */}
-                      <td style={{ padding: '12px 16px' }}>
-                        {newRow.action_type === 'ASSIGN' ? (
-                          <select value={newRow.assigned_to}
-                            onChange={e => setNewRow({ ...newRow, assigned_to: e.target.value })}
+                      {/* ── Add new task row (always visible at bottom) ── */}
+                      <tr style={{ background: 'rgba(79,126,255,0.06)', borderTop: '2px solid rgba(79,126,255,0.2)' }}>
+                        {/* Action selector */}
+                        <td style={{ padding: '12px 16px' }}>
+                          <select value={newRow.action_type}
+                            onChange={e => setNewRow({ ...newRow, action_type: e.target.value })}
                             style={{
                               background: '#131722',
                               border: '1px solid #2a3050',
@@ -732,14 +752,36 @@ export default function DashboardPage() {
                               fontFamily: 'inherit',
                               outline: 'none',
                               width: '100%',
-                              minWidth: '150px'
+                              minWidth: '110px'
                             }}>
-                            <option value="">Select team member...</option>
-                            {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                            {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
                           </select>
-                        ) : (
+                        </td>
+
+                        {/* Activity name */}
+                        <td style={{ padding: '12px 16px' }}>
+                          <input type="text" placeholder="+ New activity name..."
+                            value={newRow.title}
+                            onChange={e => setNewRow({ ...newRow, title: e.target.value })}
+                            onKeyDown={e => { if (e.key === 'Enter') submitNewRow(); }}
+                            style={{
+                              background: '#131722',
+                              border: '1px solid #2a3050',
+                              borderRadius: '7px',
+                              color: '#f1f5f9',
+                              fontSize: '0.84rem',
+                              padding: '8px 12px',
+                              width: '100%',
+                              minWidth: '180px',
+                              outline: 'none',
+                              fontFamily: 'inherit'
+                            }} />
+                        </td>
+
+                        {/* Recipient text input */}
+                        <td style={{ padding: '12px 16px' }}>
                           <input type="text"
-                            placeholder={newRow.action_type === 'MAIL' ? 'e.g. client@email.com' : newRow.action_type === 'CALL' || newRow.action_type === 'SMS' ? 'e.g. +88017... or Name' : 'e.g. Client / Contact'}
+                            placeholder="Recipient / Contact..."
                             value={newRow.recipient}
                             onChange={e => setNewRow({ ...newRow, recipient: e.target.value })}
                             onKeyDown={e => { if (e.key === 'Enter') submitNewRow(); }}
@@ -756,86 +798,167 @@ export default function DashboardPage() {
                               fontFamily: 'inherit'
                             }}
                           />
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Status */}
-                      <td style={{ padding: '12px 16px' }}>
-                        <select value={newRow.status}
-                          onChange={e => setNewRow({ ...newRow, status: e.target.value })}
-                          style={{
-                            background: '#131722',
-                            border: '1px solid #2a3050',
-                            borderRadius: '7px',
-                            color: '#f1f5f9',
-                            padding: '8px 10px',
-                            fontSize: '0.82rem',
-                            fontFamily: 'inherit',
-                            outline: 'none',
-                            width: '100%',
-                            minWidth: '110px'
-                          }}>
-                          <option value="PENDING">Pending</option>
-                          <option value="DONE">Done</option>
-                          <option value="DUE">Due</option>
-                        </select>
-                      </td>
+                        {/* Assignee team member dropdown */}
+                        <td style={{ padding: '12px 16px' }}>
+                          <select value={newRow.assigned_to}
+                            onChange={e => setNewRow({ ...newRow, assigned_to: e.target.value })}
+                            style={{
+                              background: '#131722',
+                              border: '1px solid #2a3050',
+                              borderRadius: '7px',
+                              color: '#f1f5f9',
+                              padding: '8px 10px',
+                              fontSize: '0.82rem',
+                              fontFamily: 'inherit',
+                              outline: 'none',
+                              width: '100%',
+                              minWidth: '140px'
+                            }}>
+                            <option value="">Select assignee...</option>
+                            {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          </select>
+                        </td>
 
-                      {/* Deadline */}
-                      <td style={{ padding: '12px 16px' }}>
-                        <input
-                          type="datetime-local"
-                          value={newRow.deadline}
-                          onClick={e => {
-                            try {
-                              (e.target as HTMLInputElement).showPicker?.();
-                            } catch (err) {}
-                          }}
-                          onChange={e => setNewRow({ ...newRow, deadline: e.target.value })}
-                          style={{
-                            background: '#131722',
-                            border: '1px solid #2a3050',
-                            borderRadius: '7px',
-                            color: '#f1f5f9',
-                            padding: '7px 10px',
-                            fontSize: '0.8rem',
-                            fontFamily: 'inherit',
-                            outline: 'none',
-                            width: '100%',
-                            minWidth: '160px',
-                            colorScheme: 'dark',
-                            cursor: 'pointer'
-                          }}
-                        />
-                      </td>
+                        {/* Status (Done, WIP, Pending order) */}
+                        <td style={{ padding: '12px 16px' }}>
+                          <select value={newRow.status}
+                            onChange={e => setNewRow({ ...newRow, status: e.target.value as any })}
+                            style={{
+                              background: '#131722',
+                              border: '1px solid #2a3050',
+                              borderRadius: '7px',
+                              color: '#f1f5f9',
+                              padding: '8px 10px',
+                              fontSize: '0.82rem',
+                              fontFamily: 'inherit',
+                              outline: 'none',
+                              width: '100%',
+                              minWidth: '110px'
+                            }}>
+                            <option value="DONE">Done</option>
+                            <option value="WIP">WIP</option>
+                            <option value="PENDING">Pending</option>
+                          </select>
+                        </td>
 
-                      {/* Submit button */}
-                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                        <button onClick={submitNewRow} disabled={savingNew}
-                          style={{
-                            background: '#4f7eff',
-                            border: 'none',
-                            color: '#fff',
-                            cursor: 'pointer',
-                            padding: '8px 14px',
-                            borderRadius: '7px',
-                            fontSize: '0.8rem',
-                            fontWeight: 700,
-                            fontFamily: 'inherit',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 5,
-                            opacity: savingNew ? 0.5 : 1,
-                            transition: 'background 0.15s'
-                          }}>
-                          <Plus size={14} /> <span>{savingNew ? '...' : 'Add'}</span>
-                        </button>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                        {/* Deadline */}
+                        <td style={{ padding: '12px 16px' }}>
+                          <input
+                            type="datetime-local"
+                            value={newRow.deadline}
+                            onClick={e => {
+                              try {
+                                (e.target as HTMLInputElement).showPicker?.();
+                              } catch (err) {}
+                            }}
+                            onChange={e => setNewRow({ ...newRow, deadline: e.target.value })}
+                            style={{
+                              background: '#131722',
+                              border: '1px solid #2a3050',
+                              borderRadius: '7px',
+                              color: '#f1f5f9',
+                              padding: '7px 10px',
+                              fontSize: '0.8rem',
+                              fontFamily: 'inherit',
+                              outline: 'none',
+                              width: '100%',
+                              minWidth: '160px',
+                              colorScheme: 'dark',
+                              cursor: 'pointer'
+                            }}
+                          />
+                        </td>
+
+                        {/* Submit button */}
+                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                          <button onClick={submitNewRow} disabled={savingNew}
+                            style={{
+                              background: '#4f7eff',
+                              border: 'none',
+                              color: '#fff',
+                              cursor: 'pointer',
+                              padding: '8px 14px',
+                              borderRadius: '7px',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              fontFamily: 'inherit',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              opacity: savingNew ? 0.5 : 1,
+                              transition: 'background 0.15s'
+                            }}>
+                            <Plus size={14} /> <span>{savingNew ? '...' : 'Add'}</span>
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+
+              {/* ── Summary at the Bottom of Task Table ── */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                gap: 36,
+                marginTop: 20,
+                padding: '16px 24px',
+                background: '#161926',
+                border: '1px solid #2a3050',
+                borderRadius: '12px',
+                flexWrap: 'wrap'
+              }}>
+                {/* DONE */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: '50%',
+                    background: '#22c55e',
+                    boxShadow: '0 0 12px #22c55e, 0 0 24px rgba(34,197,94,0.5)',
+                    display: 'inline-block'
+                  }}></span>
+                  <span style={{ fontSize: '1.05rem', fontWeight: 600, color: '#94a3b8' }}>Done:</span>
+                  <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#22c55e' }}>{done}</span>
+                </div>
+
+                <span style={{ color: '#2a3050', fontSize: '1.2rem' }}>|</span>
+
+                {/* WIP */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: '50%',
+                    background: '#f59e0b',
+                    boxShadow: '0 0 12px #f59e0b, 0 0 24px rgba(245,158,11,0.5)',
+                    display: 'inline-block'
+                  }}></span>
+                  <span style={{ fontSize: '1.05rem', fontWeight: 600, color: '#94a3b8' }}>WIP:</span>
+                  <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#f59e0b' }}>{wip}</span>
+                </div>
+
+                <span style={{ color: '#2a3050', fontSize: '1.2rem' }}>|</span>
+
+                {/* PENDING */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: '50%',
+                    background: '#60a5fa',
+                    boxShadow: '0 0 12px #60a5fa, 0 0 24px rgba(96,165,250,0.5)',
+                    display: 'inline-block'
+                  }}></span>
+                  <span style={{ fontSize: '1.05rem', fontWeight: 600, color: '#94a3b8' }}>Pending:</span>
+                  <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#93c5fd' }}>{pending}</span>
+                </div>
+              </div>
+            </>
 
           /* ══════════════════════════════════════════ */
           /* TAB 2 – TEAM VIEW                         */
@@ -850,7 +973,7 @@ export default function DashboardPage() {
                 <select value={fAssignee} onChange={e => setFAssignee(e.target.value)}
                   style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: fAssignee ? '#38bdf8' : '#f1f5f9', padding: '8px 12px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', minWidth: '150px' }}>
                   <option value="">All Assignees</option>
-                  <option value="admin">Admin (Direct Tasks)</option>
+                  <option value="unassigned">Unassigned</option>
                   {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
 
@@ -865,9 +988,9 @@ export default function DashboardPage() {
                 <select value={fStatus} onChange={e => setFStatus(e.target.value)}
                   style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: fStatus ? '#38bdf8' : '#f1f5f9', padding: '8px 12px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', minWidth: '120px' }}>
                   <option value="">All Statuses</option>
-                  <option value="PENDING">Pending</option>
                   <option value="DONE">Done</option>
-                  <option value="DUE">Due</option>
+                  <option value="WIP">WIP</option>
+                  <option value="PENDING">Pending</option>
                 </select>
 
                 {/* Deadline date filter */}
@@ -893,19 +1016,20 @@ export default function DashboardPage() {
 
               <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
                 <div className="table-scroll">
-                  <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse' }}>
+                  <table style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
                         <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action</th>
                         <th style={{ padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity Name</th>
-                        <th style={{ width: '180px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recipient / Assignee</th>
-                        <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                        <th style={{ width: '170px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recipient</th>
+                        <th style={{ width: '170px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Assignee</th>
+                        <th style={{ width: '125px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
                         <th style={{ width: '180px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deadline</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredTasks.length === 0 && (
-                        <tr className="empty-r"><td colSpan={5} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>No tasks match the selected filters on {currentDate}.</td></tr>
+                        <tr className="empty-r"><td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>No tasks match the selected filters on {currentDate}.</td></tr>
                       )}
                       {filteredTasks.map(task => {
                         const am = getActionMeta(task.action_type);
@@ -914,28 +1038,28 @@ export default function DashboardPage() {
                         return (
                           <tr key={task.id} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)' }}>
                             <td style={{ padding: '12px 16px' }}>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: am.color, background: am.bg, fontWeight: 600, fontSize: '0.78rem', padding: '4px 10px', borderRadius: '6px', border: `1px solid ${am.color}30` }}>
-                                {am.icon} <span>{am.label}</span>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#e2e8f0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', fontWeight: 600, fontSize: '0.78rem', padding: '4px 10px', borderRadius: '6px' }}>
+                                <span style={{ color: '#94a3b8' }}>{am.icon}</span>
+                                <span>{am.label}</span>
                               </span>
                             </td>
                             <td style={{ padding: '12px 16px', fontWeight: 500, color: '#f8fafc', fontSize: '0.86rem' }}>{task.title}</td>
-                            <td style={{ padding: '12px 16px' }}>
-                              {task.action_type === 'ASSIGN' ? (
-                                task.assignee_name ? (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <div style={{ width: 24, height: 24, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                                      {(task.assignee_name[0] || 'U').toUpperCase()}
-                                    </div>
-                                    <span style={{ fontSize: '0.84rem', color: '#f1f5f9', fontWeight: 500 }}>{task.assignee_name}</span>
-                                  </div>
-                                ) : <span style={{ color: '#64748b', fontSize: '0.82rem' }}>—</span>
-                              ) : (
-                                <span style={{ color: task.recipient ? '#f1f5f9' : '#64748b', fontSize: '0.84rem' }}>{task.recipient || '—'}</span>
-                              )}
+                            <td style={{ padding: '12px 16px', color: task.recipient ? '#f1f5f9' : '#64748b', fontSize: '0.84rem' }}>
+                              {task.recipient || '—'}
                             </td>
                             <td style={{ padding: '12px 16px' }}>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700, background: st.bg, color: st.color, border: `1px solid ${st.color}35` }}>
-                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.color }}></span>
+                              {task.assignee_name ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <div style={{ width: 24, height: 24, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                                    {(task.assignee_name[0] || 'U').toUpperCase()}
+                                  </div>
+                                  <span style={{ fontSize: '0.84rem', color: '#f1f5f9', fontWeight: 500 }}>{task.assignee_name}</span>
+                                </div>
+                              ) : <span style={{ color: '#64748b', fontSize: '0.82rem' }}>—</span>}
+                            </td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700, background: st.bg, color: st.color, border: `1px solid ${st.color}35` }}>
+                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.color, boxShadow: st.dotGlow }}></span>
                                 <span>{st.label}</span>
                               </span>
                             </td>
@@ -968,8 +1092,8 @@ export default function DashboardPage() {
                       <th style={{ padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Assignee Name</th>
                       <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Jobs</th>
                       <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Done</th>
-                      <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>WIP (Pending)</th>
-                      <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Overdue</th>
+                      <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>WIP</th>
+                      <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1003,7 +1127,7 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td style={{ textAlign: 'center', padding: '14px 20px' }}>
-                          <span style={{ display: 'inline-block', background: 'rgba(239,68,68,0.15)', color: '#ef4444', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>
+                          <span style={{ display: 'inline-block', background: 'rgba(148,163,184,0.15)', color: '#93c5fd', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>
                             {row.pending}
                           </span>
                         </td>
@@ -1048,19 +1172,17 @@ export default function DashboardPage() {
                 {(() => {
                   const am = getActionMeta(taskToDelete.action_type);
                   return (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: am.color, background: am.bg, fontWeight: 600, fontSize: '0.74rem', padding: '2px 8px', borderRadius: '5px' }}>
-                      {am.icon} {am.label}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#e2e8f0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', fontWeight: 600, fontSize: '0.74rem', padding: '2px 8px', borderRadius: '5px' }}>
+                      <span style={{ color: '#94a3b8' }}>{am.icon}</span>
+                      <span>{am.label}</span>
                     </span>
                   );
                 })()}
                 <span style={{ fontWeight: 600, fontSize: '0.92rem', color: '#f1f5f9' }}>{taskToDelete.title}</span>
               </div>
-              <div style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'flex', gap: 14 }}>
-                {taskToDelete.action_type === 'ASSIGN' ? (
-                  <span>Assignee: <strong style={{ color: '#f1f5f9' }}>{taskToDelete.assignee_name || 'Unassigned'}</strong></span>
-                ) : (
-                  <span>Recipient: <strong style={{ color: '#f1f5f9' }}>{taskToDelete.recipient || 'None'}</strong></span>
-                )}
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                {taskToDelete.recipient && <span>Recipient: <strong style={{ color: '#f1f5f9' }}>{taskToDelete.recipient}</strong></span>}
+                {taskToDelete.assignee_name && <span>Assignee: <strong style={{ color: '#f1f5f9' }}>{taskToDelete.assignee_name}</strong></span>}
                 {taskToDelete.deadline && <span>Deadline: <strong style={{ color: '#f1f5f9' }}>{new Date(taskToDelete.deadline).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</strong></span>}
               </div>
             </div>
@@ -1186,13 +1308,15 @@ export default function DashboardPage() {
                       <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#131722', border: '1px solid #2a3050', borderRadius: '9px', padding: '12px 16px' }}>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: am.color, background: am.bg, fontWeight: 600, fontSize: '0.72rem', padding: '2px 7px', borderRadius: '4px' }}>
-                              {am.icon} {am.label}
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#e2e8f0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', fontWeight: 600, fontSize: '0.72rem', padding: '2px 7px', borderRadius: '4px' }}>
+                              <span style={{ color: '#94a3b8' }}>{am.icon}</span>
+                              <span>{am.label}</span>
                             </span>
                             <span style={{ fontWeight: 600, fontSize: '0.88rem', color: '#f1f5f9' }}>{t.title}</span>
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                            {t.action_type === 'ASSIGN' ? `Assignee: ${t.assignee_name || 'Unassigned'}` : `Recipient: ${t.recipient || 'None'}`}
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', gap: 12 }}>
+                            {t.recipient && <span>Recipient: {t.recipient}</span>}
+                            {t.assignee_name && <span>Assignee: {t.assignee_name}</span>}
                           </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

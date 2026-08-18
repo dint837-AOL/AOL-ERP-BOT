@@ -53,8 +53,8 @@ async function initDB() {
     recipient TEXT DEFAULT '',
     deadline TEXT,
     task_date TEXT NOT NULL,
-    priority TEXT CHECK(priority IN ('RED','ORANGE','GREEN')) DEFAULT 'GREEN',
-    status TEXT CHECK(status IN ('PENDING','DONE','DUE')) DEFAULT 'PENDING',
+    priority TEXT DEFAULT 'GREEN',
+    status TEXT DEFAULT 'DONE',
     assigned_to INTEGER REFERENCES members(id),
     is_archived INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -63,6 +63,30 @@ async function initDB() {
   try { await db.exec(`ALTER TABLE tasks ADD COLUMN action_type TEXT DEFAULT 'ASSIGN'`); } catch (e) {}
   try { await db.exec(`ALTER TABLE tasks ADD COLUMN recipient TEXT DEFAULT ''`); } catch (e) {}
   try { await db.exec(`ALTER TABLE tasks ADD COLUMN is_archived INTEGER DEFAULT 0`); } catch (e) {}
+  try {
+    const tableSql: any = await db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'");
+    if (tableSql && tableSql.sql && tableSql.sql.includes("CHECK(status IN ('PENDING','DONE','DUE'))")) {
+      await db.exec(`
+        CREATE TABLE tasks_temp (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          description TEXT DEFAULT '',
+          action_type TEXT DEFAULT 'ASSIGN',
+          recipient TEXT DEFAULT '',
+          deadline TEXT,
+          task_date TEXT NOT NULL,
+          priority TEXT DEFAULT 'GREEN',
+          status TEXT DEFAULT 'DONE',
+          assigned_to INTEGER REFERENCES members(id),
+          is_archived INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO tasks_temp SELECT id, title, description, action_type, recipient, deadline, task_date, priority, CASE WHEN status='DUE' THEN 'WIP' ELSE status END, assigned_to, is_archived, created_at FROM tasks;
+        DROP TABLE tasks;
+        ALTER TABLE tasks_temp RENAME TO tasks;
+      `);
+    }
+  } catch (e) {}
   await db.exec(`CREATE TABLE IF NOT EXISTS leave_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     member_id INTEGER NOT NULL REFERENCES members(id),
@@ -191,18 +215,16 @@ export class OpenClaw {
     // ── TASKS ────────────────────────────────────────────────
     this.app.get('/api/tasks', async (req, res) => {
       const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
-      const today = new Date().toISOString().split('T')[0];
       const includeArchived = req.query.archived === 'true';
-      await dbRun(`UPDATE tasks SET status='DUE' WHERE status='PENDING' AND date(task_date) < date(?)`, [today]);
       const archivedFilter = includeArchived ? 't.is_archived=1' : '(t.is_archived=0 OR t.is_archived IS NULL)';
       res.json(await dbAll(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE date(t.task_date)=date(?) AND ${archivedFilter} ORDER BY t.created_at DESC`, [date]));
     });
     this.app.post('/api/tasks', async (req, res) => {
-      const { title, description, deadline, priority, assigned_to, task_date, action_type, recipient } = req.body;
+      const { title, description, deadline, priority, assigned_to, task_date, action_type, recipient, status } = req.body;
       if (!title) return res.status(400).json({ error: 'Title required' });
       const date = task_date || new Date().toISOString().split('T')[0];
-      const { lastID } = await dbRun(`INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date,action_type,recipient) VALUES(?,?,?,?,?,?,?,?)`,
-        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'ASSIGN', recipient||'']);
+      const { lastID } = await dbRun(`INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date,action_type,recipient,status) VALUES(?,?,?,?,?,?,?,?,?)`,
+        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'ASSIGN', recipient||'', status||'DONE']);
       res.status(201).json(await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]));
     });
     this.app.patch('/api/tasks/:id', async (req, res) => {
