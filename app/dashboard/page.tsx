@@ -96,22 +96,22 @@ function getStatusStyle(status?: string): { color: string; bg: string; dotGlow: 
     return {
       color: '#22c55e',
       bg: 'rgba(34,197,94,0.15)',
-      dotGlow: '0 0 10px #22c55e',
+      dotGlow: '0 0 10px #22c55e, 0 0 20px rgba(34,197,94,0.5)',
       label: 'Done'
     };
   }
-  if (status === 'WIP' || status === 'DUE') {
+  if (status === 'WIP') {
     return {
-      color: '#f59e0b',
-      bg: 'rgba(245,158,11,0.15)',
-      dotGlow: '0 0 10px #f59e0b',
+      color: '#eab308',
+      bg: 'rgba(234,179,8,0.15)',
+      dotGlow: '0 0 10px #eab308, 0 0 20px rgba(234,179,8,0.5)',
       label: 'WIP'
     };
   }
   return {
-    color: '#94a3b8',
-    bg: 'rgba(148,163,184,0.15)',
-    dotGlow: '0 0 10px #94a3b8',
+    color: '#ef4444',
+    bg: 'rgba(239,68,68,0.15)',
+    dotGlow: '0 0 10px #ef4444, 0 0 20px rgba(239,68,68,0.5)',
     label: 'Pending'
   };
 }
@@ -898,66 +898,6 @@ export default function DashboardPage() {
                   </table>
                 </div>
               </div>
-
-              {/* ── Summary at the Bottom of Task Table ── */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-start',
-                gap: 36,
-                marginTop: 20,
-                padding: '16px 24px',
-                background: '#161926',
-                border: '1px solid #2a3050',
-                borderRadius: '12px',
-                flexWrap: 'wrap'
-              }}>
-                {/* DONE */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: '50%',
-                    background: '#22c55e',
-                    boxShadow: '0 0 12px #22c55e, 0 0 24px rgba(34,197,94,0.5)',
-                    display: 'inline-block'
-                  }}></span>
-                  <span style={{ fontSize: '1.05rem', fontWeight: 600, color: '#94a3b8' }}>Done:</span>
-                  <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#22c55e' }}>{done}</span>
-                </div>
-
-                <span style={{ color: '#2a3050', fontSize: '1.2rem' }}>|</span>
-
-                {/* WIP */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: '50%',
-                    background: '#f59e0b',
-                    boxShadow: '0 0 12px #f59e0b, 0 0 24px rgba(245,158,11,0.5)',
-                    display: 'inline-block'
-                  }}></span>
-                  <span style={{ fontSize: '1.05rem', fontWeight: 600, color: '#94a3b8' }}>WIP:</span>
-                  <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#f59e0b' }}>{wip}</span>
-                </div>
-
-                <span style={{ color: '#2a3050', fontSize: '1.2rem' }}>|</span>
-
-                {/* PENDING */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: '50%',
-                    background: '#60a5fa',
-                    boxShadow: '0 0 12px #60a5fa, 0 0 24px rgba(96,165,250,0.5)',
-                    display: 'inline-block'
-                  }}></span>
-                  <span style={{ fontSize: '1.05rem', fontWeight: 600, color: '#94a3b8' }}>Pending:</span>
-                  <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#93c5fd' }}>{pending}</span>
-                </div>
-              </div>
             </>
 
           /* ══════════════════════════════════════════ */
@@ -1117,17 +1057,17 @@ export default function DashboardPage() {
                           {row.total}
                         </td>
                         <td style={{ textAlign: 'center', padding: '14px 20px' }}>
-                          <span style={{ display: 'inline-block', background: 'rgba(34,197,94,0.15)', color: '#22c55e', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>
+                          <span style={{ display: 'inline-block', background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.35)', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>
                             {row.done}
                           </span>
                         </td>
                         <td style={{ textAlign: 'center', padding: '14px 20px' }}>
-                          <span style={{ display: 'inline-block', background: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>
+                          <span style={{ display: 'inline-block', background: 'rgba(234,179,8,0.15)', color: '#eab308', border: '1px solid rgba(234,179,8,0.35)', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>
                             {row.wip}
                           </span>
                         </td>
                         <td style={{ textAlign: 'center', padding: '14px 20px' }}>
-                          <span style={{ display: 'inline-block', background: 'rgba(148,163,184,0.15)', color: '#93c5fd', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>
+                          <span style={{ display: 'inline-block', background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.35)', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>
                             {row.pending}
                           </span>
                         </td>
@@ -1138,6 +1078,68 @@ export default function DashboardPage() {
               </div>
             </div>
           )
+        )}
+
+        {/* ── Summary at the Bottom of Task Table (Traffic Light Colors) ── */}
+        {!loading && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            gap: 36,
+            marginTop: 20,
+            padding: '16px 24px',
+            background: '#161926',
+            border: '1px solid #2a3050',
+            borderRadius: '12px',
+            flexWrap: 'wrap'
+          }}>
+            {/* DONE - GREEN */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                background: '#22c55e',
+                boxShadow: '0 0 12px #22c55e, 0 0 24px rgba(34,197,94,0.5)',
+                display: 'inline-block'
+              }}></span>
+              <span style={{ fontSize: '1.05rem', fontWeight: 600, color: '#94a3b8' }}>Done:</span>
+              <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#22c55e' }}>{done}</span>
+            </div>
+
+            <span style={{ color: '#2a3050', fontSize: '1.2rem' }}>|</span>
+
+            {/* WIP - YELLOW */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                background: '#eab308',
+                boxShadow: '0 0 12px #eab308, 0 0 24px rgba(234,179,8,0.5)',
+                display: 'inline-block'
+              }}></span>
+              <span style={{ fontSize: '1.05rem', fontWeight: 600, color: '#94a3b8' }}>WIP:</span>
+              <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#eab308' }}>{wip}</span>
+            </div>
+
+            <span style={{ color: '#2a3050', fontSize: '1.2rem' }}>|</span>
+
+            {/* PENDING - RED */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                background: '#ef4444',
+                boxShadow: '0 0 12px #ef4444, 0 0 24px rgba(239,68,68,0.5)',
+                display: 'inline-block'
+              }}></span>
+              <span style={{ fontSize: '1.05rem', fontWeight: 600, color: '#94a3b8' }}>Pending:</span>
+              <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ef4444' }}>{pending}</span>
+            </div>
+          </div>
         )}
       </div>
 
