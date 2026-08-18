@@ -1,5 +1,4 @@
-import { Tool } from '../openclaw-mock.js';
-import { db } from '../db/init.js';
+import { Tool, dbRun } from '../openclaw-mock.js';
 
 export const logAttendanceTool = new Tool({
   name: 'log_attendance',
@@ -21,8 +20,7 @@ export const logAttendanceTool = new Tool({
   },
   execute: async (args: any) => {
     try {
-      const stmt = db.prepare("INSERT INTO attendance (phone_number, action_type) VALUES (?, ?)");
-      stmt.run([args.phone_number, args.action_type]);
+      await dbRun("INSERT INTO attendance (phone_number, action_type) VALUES (?, ?)", [args.phone_number, args.action_type]);
       return `Successfully logged ${args.action_type} for ${args.phone_number} at server time.`;
     } catch (err: any) {
       throw new Error(`Failed to log attendance: ${err.message}`);

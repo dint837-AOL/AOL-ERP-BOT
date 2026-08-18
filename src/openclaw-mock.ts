@@ -13,15 +13,21 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import Database from 'better-sqlite3';
+import sqlite3 from 'sqlite3';
+import { open, Database } from 'sqlite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
-const db = new Database('./openclaw.db');
+let db: Database;
 
-function initDB() {
-  db.exec(`CREATE TABLE IF NOT EXISTS members (
+async function initDB() {
+  db = await open({
+    filename: './openclaw.db',
+    driver: sqlite3.Database
+  });
+
+  await db.exec(`CREATE TABLE IF NOT EXISTS members (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     email TEXT DEFAULT '',
@@ -30,16 +36,16 @@ function initDB() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
   
-  try { db.exec(`ALTER TABLE members ADD COLUMN email TEXT DEFAULT ''`); } catch (e) {}
+  try { await db.exec(`ALTER TABLE members ADD COLUMN email TEXT DEFAULT ''`); } catch (e) {}
   
-  db.exec(`CREATE TABLE IF NOT EXISTS attendance (
+  await db.exec(`CREATE TABLE IF NOT EXISTS attendance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     member_id INTEGER REFERENCES members(id),
     phone_number TEXT,
     action_type TEXT CHECK(action_type IN ('IN','OUT')) NOT NULL,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  db.exec(`CREATE TABLE IF NOT EXISTS tasks (
+  await db.exec(`CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     description TEXT DEFAULT '',
@@ -50,7 +56,7 @@ function initDB() {
     assigned_to INTEGER REFERENCES members(id),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  db.exec(`CREATE TABLE IF NOT EXISTS leave_requests (
+  await db.exec(`CREATE TABLE IF NOT EXISTS leave_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     member_id INTEGER NOT NULL REFERENCES members(id),
     leave_type TEXT CHECK(leave_type IN ('SICK','CASUAL','ANNUAL')) NOT NULL,
@@ -61,13 +67,13 @@ function initDB() {
     reviewed_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  db.exec(`CREATE TABLE IF NOT EXISTS expense_categories (
+  await db.exec(`CREATE TABLE IF NOT EXISTS expense_categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     budget_limit REAL DEFAULT 0,
     color TEXT DEFAULT '#4f7eff'
   )`);
-  db.exec(`CREATE TABLE IF NOT EXISTS expenses (
+  await db.exec(`CREATE TABLE IF NOT EXISTS expenses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     category_id INTEGER REFERENCES expense_categories(id),
     amount REAL NOT NULL,
@@ -77,7 +83,7 @@ function initDB() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  const row = db.prepare('SELECT COUNT(*) as c FROM expense_categories').get() as any;
+  const row = await db.get('SELECT COUNT(*) as c FROM expense_categories') as any;
   if (row?.c === 0) {
     const cats = [
       ['IT & Software', 50000, '#4f7eff'],
@@ -87,13 +93,14 @@ function initDB() {
       ['Utilities', 15000, '#f472b6'],
       ['Miscellaneous', 10000, '#8890a8'],
     ];
-    const stmt = db.prepare('INSERT OR IGNORE INTO expense_categories (name,budget_limit,color) VALUES(?,?,?)');
-    cats.forEach(([n, b, c]) => stmt.run(n, b, c));
+    for (const [n, b, c] of cats) {
+      await db.run('INSERT OR IGNORE INTO expense_categories (name,budget_limit,color) VALUES(?,?,?)', [n, b, c]);
+    }
   }
 
-  db.exec('DROP TABLE IF EXISTS it_assets');
-  db.exec('DROP TABLE IF EXISTS password_reminders');
-  db.exec(`CREATE TABLE IF NOT EXISTS credentials (
+  await db.exec('DROP TABLE IF EXISTS it_assets');
+  await db.exec('DROP TABLE IF EXISTS password_reminders');
+  await db.exec(`CREATE TABLE IF NOT EXISTS credentials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     cred_type TEXT DEFAULT 'OTHER',
@@ -105,7 +112,7 @@ function initDB() {
     reminder_days_before TEXT DEFAULT '5,2,1',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  db.exec(`CREATE TABLE IF NOT EXISTS meetings (
+  await db.exec(`CREATE TABLE IF NOT EXISTS meetings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     contact_name TEXT DEFAULT '',
@@ -113,7 +120,7 @@ function initDB() {
     reminder_minutes_before TEXT DEFAULT '30,15',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  db.exec(`CREATE TABLE IF NOT EXISTS tenders (
+  await db.exec(`CREATE TABLE IF NOT EXISTS tenders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     organization TEXT DEFAULT '',
@@ -131,9 +138,9 @@ function initDB() {
 }
 
 // Promise helpers
-const dbAll = async (sql: string, p: any[] = []) => db.prepare(sql).all(p);
-const dbGet = async (sql: string, p: any[] = []) => db.prepare(sql).get(p);
-const dbRun = async (sql: string, p: any[] = []) => { const info = db.prepare(sql).run(p); return { lastID: info.lastInsertRowid }; };
+export const dbAll = async (sql: string, p: any[] = []) => db.all(sql, p);
+export const dbGet = async (sql: string, p: any[] = []) => db.get(sql, p);
+export const dbRun = async (sql: string, p: any[] = []) => { const info = await db.run(sql, p); return { lastID: info.lastID }; };
 
 export class WhatsAppGateway { config: any; constructor(c: any) { this.config = c; } }
 export class Tool { config: any; constructor(c: any) { this.config = c; } }
@@ -150,7 +157,7 @@ export class OpenClaw {
   setSystemPrompt(p: string) { this.systemPrompt = p; }
 
   async start(port: number, listen = true) {
-    initDB();
+    await initDB();
 
     // ── MEMBERS ──────────────────────────────────────────────
     this.app.get('/api/members', async (_, res) => res.json(await dbAll('SELECT * FROM members ORDER BY name')));
