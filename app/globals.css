@@ -142,7 +142,7 @@ tr:last-child td{border:none}tr:hover td{background:rgba(255,255,255,.015)}
 .dnav{display:flex;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:9px;overflow:hidden}
 .dnav button{background:none;border:none;color:var(--muted);cursor:pointer;padding:9px 14px;font-size:1.1rem;line-height:1;transition:all .15s;display:flex;align-items:center}
 .dnav button:hover{background:var(--border);color:var(--text)}
-.dchip{padding:9px 16px;font-size:.88rem;font-weight:600;color:var(--text);border-left:1px solid var(--border);border-right:1px solid var(--border);cursor:pointer;min-width:180px;text-align:center;user-select:none}
+.dchip{padding:9px 16px;font-size:.88rem;font-weight:600;color:var(--text);border-left:1px solid var(--border);border-right:1px solid var(--border);cursor:pointer;min-width:180px;text-align:center;user-select:none;position:relative}
 .dchip:hover{background:rgba(255,255,255,.03);color:var(--primary)}
 .dchip.today{color:var(--primary)}
 
@@ -173,3 +173,35 @@ tr:last-child td{border:none}tr:hover td{background:rgba(255,255,255,.015)}
 .bc-body{padding:14px;flex:1;overflow-y:auto}
 .board-card{padding:12px;cursor:grab}
 .board-card:active{cursor:grabbing}
+
+/* ── HR MONTHLY CALENDAR ─────────────────── */
+.hr-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.hr-cal-hdr{text-align:center;font-size:.67rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:6px 2px}
+.hr-cal-hdr.weekend{color:var(--red);opacity:.6}
+.hr-cal-cell{border-radius:8px;padding:8px 4px 6px;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;position:relative;border:1px solid transparent;transition:border-color .15s,background .15s;cursor:default}
+.hr-cal-cell.empty{background:transparent;border-color:transparent}
+.hr-cal-cell.weekend{background:rgba(255,255,255,.025);border-color:rgba(255,255,255,.04)}
+.hr-cal-cell.present{background:rgba(38,196,134,.08);border-color:rgba(38,196,134,.25)}
+.hr-cal-cell.absent{background:rgba(242,92,122,.07);border-color:rgba(242,92,122,.2)}
+.hr-cal-cell.on-leave{background:rgba(245,166,35,.07);border-color:rgba(245,166,35,.22)}
+.hr-cal-cell.cal-today{outline:2px solid var(--primary);outline-offset:-2px}
+.hr-cal-cell:not(.empty):hover{border-color:rgba(255,255,255,.15)}
+.cal-day-num{font-size:.8rem;font-weight:600;color:var(--text);line-height:1}
+.hr-cal-cell.weekend .cal-day-num{color:var(--muted)}
+.cal-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.green-dot{background:var(--green);box-shadow:0 0 5px var(--green)}
+.red-dot{background:var(--red);box-shadow:0 0 5px var(--red)}
+.yellow-dot{background:var(--orange);box-shadow:0 0 5px var(--orange)}
+
+/* ── MOBILE: HR page ────────── */
+@media(max-width:768px){
+  .hr-cal-cell{min-height:36px;padding:5px 2px 4px;border-radius:5px}
+  .cal-day-num{font-size:.68rem}
+  .hr-cal-hdr{font-size:.55rem;padding:4px 1px}
+  .cal-dot{width:6px;height:6px}
+  .cal-stats-grid{grid-template-columns:repeat(2,1fr)!important}
+  .checkin-widget .cw-btns{flex-direction:column}
+  .checkin-widget .cw-btns button{width:100%}
+  .top .dnav .dchip{min-width:120px!important;font-size:.76rem}
+}
+

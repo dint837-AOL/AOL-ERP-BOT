@@ -45,16 +45,29 @@ async function initDB() {
   try { await db.exec(`ALTER TABLE members ADD COLUMN email TEXT DEFAULT ''`); } catch (e) {}
   try { await db.exec(`ALTER TABLE members ADD COLUMN password_hash TEXT DEFAULT ''`); } catch (e) {}
   
-  // Seed initial Admin if members table is empty
+  // Seed initial Admin + 4 Employees if members table is empty
   const memberCountRow = await db.get('SELECT COUNT(*) as count FROM members') as any;
   if (memberCountRow && memberCountRow.count === 0) {
-    const defaultPasswordHash = await bcrypt.hash('password123', 10);
-    await db.run(`
-      INSERT INTO members (name, email, password_hash, role, avatar_color)
-      VALUES (?, ?, ?, ?, ?)
-    `, ['System Admin', 'admin@alliedone.com', defaultPasswordHash, 'Admin', '#ff4d4f']);
-    console.log('✅ Created default Admin user (admin@alliedone.com / password123)');
+    const adminHash    = await bcrypt.hash('Admin@123', 10);
+    const employeeHash = await bcrypt.hash('Employee@123', 10);
+    await db.run(`INSERT INTO members (name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?)`,
+      ['System Admin', 'admin@alliedone.com', adminHash, 'Admin', '#ff4d4f']);
+    await db.run(`INSERT INTO members (name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?)`,
+      ['Ahsan Kabir', 'ahsankabir@alliedone.com', employeeHash, 'Employee', '#a78bfa']);
+    await db.run(`INSERT INTO members (name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?)`,
+      ['Tajimur Rafi', 'rafi@alliedone.com', employeeHash, 'Employee', '#4f7eff']);
+    await db.run(`INSERT INTO members (name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?)`,
+      ['Orko', 'orko@alliedone.com', employeeHash, 'Employee', '#26c486']);
+    await db.run(`INSERT INTO members (name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?)`,
+      ['Kamrul Islam', 'kamrul@alliedone.com', employeeHash, 'Employee', '#f5a623']);
+    console.log('✅ Admin:    admin@alliedone.com     / Admin@123');
+    console.log('✅ Employee: ahsankabir@alliedone.com / Employee@123');
+    console.log('✅ Employee: rafi@alliedone.com       / Employee@123');
+    console.log('✅ Employee: orko@alliedone.com       / Employee@123');
+    console.log('✅ Employee: kamrul@alliedone.com     / Employee@123');
   }
+
+
   
   await db.exec(`CREATE TABLE IF NOT EXISTS attendance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -335,6 +348,19 @@ export class OpenClaw {
       const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
       res.json(await dbAll(`SELECT a.*,m.name as member_name,m.avatar_color FROM attendance a LEFT JOIN members m ON a.member_id=m.id WHERE date(a.timestamp)=? ORDER BY a.timestamp DESC`, [date]));
     });
+    // Monthly attendance for a specific member (used by HR calendar)
+    this.app.get('/api/attendance/monthly', async (req, res) => {
+      const { member_id, month } = req.query as { member_id: string; month: string };
+      if (!member_id || !month) return res.status(400).json({ error: 'member_id and month (YYYY-MM) required' });
+      const rows = await dbAll(
+        `SELECT date(a.timestamp) as att_date, a.action_type, a.timestamp
+         FROM attendance a
+         WHERE a.member_id=? AND strftime('%Y-%m', a.timestamp)=?
+         ORDER BY a.timestamp ASC`,
+        [member_id, month]
+      );
+      res.json(rows);
+    });
     this.app.post('/api/attendance', async (req, res) => {
       const { member_id, action_type } = req.body;
       if (!action_type || !['IN','OUT'].includes(action_type)) return res.status(400).json({ error: 'action_type must be IN or OUT' });
@@ -343,7 +369,32 @@ export class OpenClaw {
     });
 
     // ── LEAVE ────────────────────────────────────────────────
-    this.app.get('/api/leaves', async (_, res) => res.json(await dbAll(`SELECT l.*,m.name as member_name,m.avatar_color FROM leave_requests l JOIN members m ON l.member_id=m.id ORDER BY l.created_at DESC`)));
+    this.app.get('/api/leaves', async (req, res) => {
+      // Optionally filter by member_id for employee self-view
+      const memberId = req.query.member_id as string;
+      if (memberId) {
+        res.json(await dbAll(`SELECT l.*,m.name as member_name,m.avatar_color FROM leave_requests l JOIN members m ON l.member_id=m.id WHERE l.member_id=? ORDER BY l.created_at DESC`, [memberId]));
+      } else {
+        res.json(await dbAll(`SELECT l.*,m.name as member_name,m.avatar_color FROM leave_requests l JOIN members m ON l.member_id=m.id ORDER BY l.created_at DESC`));
+      }
+    });
+    // Monthly leaves for a specific member (used by HR calendar)
+    this.app.get('/api/leaves/monthly', async (req, res) => {
+      const { member_id, month } = req.query as { member_id: string; month: string };
+      if (!member_id || !month) return res.status(400).json({ error: 'member_id and month (YYYY-MM) required' });
+      const rows = await dbAll(
+        `SELECT * FROM leave_requests
+         WHERE member_id=?
+           AND (
+             strftime('%Y-%m', start_date)=? OR
+             strftime('%Y-%m', end_date)=? OR
+             (start_date <= ? AND end_date >= ?)
+           )
+         ORDER BY start_date ASC`,
+        [member_id, month, month, month + '-01', month + '-31']
+      );
+      res.json(rows);
+    });
     this.app.post('/api/leaves', async (req, res) => {
       const { member_id, leave_type, start_date, end_date, reason } = req.body;
       if (!member_id || !leave_type || !start_date || !end_date) return res.status(400).json({ error: 'Missing required fields' });
