@@ -5,7 +5,7 @@
  *  - Employee: sees check-in/out widget (own name pre-filled), their own leave requests, leave submit
  *  - Admin: sees full attendance log, all leave requests with approve/reject, monthly attendance calendar
  *
- * Check-in/out is system-recorded (Dhaka time via server CURRENT_TIMESTAMP).
+ * Check-in/out is system-recorded (accurate UTC timestamp converted to local time).
  * Monthly calendar uses traffic-light coloring: Green=Present, Red=Absent, Yellow=On Leave.
  * Fridays and Saturdays are shaded as weekends/holidays.
  */
@@ -16,14 +16,40 @@ import { LogIn, LogOut, Plus, ChevronLeft, ChevronRight, X, Calendar, Download, 
 import Topbar from '../components/Topbar';
 import { useAuth } from '../context/AuthContext';
 
-// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Helpers ---
 
 function todayDhaka(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
 }
 
 function nowDhaka(): string {
-  return new Date().toLocaleTimeString('en-BD', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit' });
+  return new Date().toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Dhaka'
+  });
+}
+
+function parseTimestamp(ts: string): Date {
+  if (!ts) return new Date();
+  if (ts.endsWith('Z')) return new Date(ts);
+  if (ts.includes('T')) return new Date(ts + 'Z');
+  return new Date(ts.replace(' ', 'T') + 'Z');
+}
+
+function formatTime(ts: string): string {
+  try {
+    const d = parseTimestamp(ts);
+    return d.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Dhaka'
+    });
+  } catch {
+    return ts || '-';
+  }
 }
 
 function fmtDateLabel(dateStr: string): string {
@@ -45,7 +71,7 @@ function shiftDateStr(dateStr: string, delta: number): string {
 }
 
 function monthLabel(year: number, month: number): string {
-  return new Date(year, month, 1).toLocaleDateString('en-BD', { month: 'long', year: 'numeric' });
+  return new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
 function daysInMonth(year: number, month: number): number {
@@ -56,7 +82,7 @@ function firstDayOfWeek(year: number, month: number): number {
   return new Date(year, month, 1).getDay();
 }
 
-// â”€â”€ Monthly Calendar Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Monthly Calendar Component ---
 
 interface CalDay {
   date: string;
@@ -68,7 +94,6 @@ interface CalDay {
   checkOutTime: string | undefined;
   leaveType: string | undefined;
   leaveStatus: string | undefined;
-
 }
 
 interface MonthCalendarProps {
@@ -113,7 +138,7 @@ function MonthCalendar({ year, month, calDays }: MonthCalendarProps) {
 
         const dayNum = parseInt(cell.date.split('-')[2] || '0');
         const tip = cell.isPresent
-          ? `Present\nIn: ${cell.checkInTime || '?'}  Out: ${cell.checkOutTime || 'â€”'}`
+          ? `Present - In: ${cell.checkInTime || '-'}  Out: ${cell.checkOutTime || '-'}`
           : cell.isLeave
             ? `Leave: ${cell.leaveType} (${cell.leaveStatus})`
             : cell.isWeekend ? 'Weekend' : cell.isAbsent ? 'Absent' : '';
@@ -131,7 +156,7 @@ function MonthCalendar({ year, month, calDays }: MonthCalendarProps) {
   );
 }
 
-// â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Main Page ---
 
 export default function HRPage() {
   const { user, token } = useAuth();
@@ -211,7 +236,7 @@ export default function HRPage() {
       attRows.forEach((r: any) => {
         const d = r.att_date as string;
         const ex = attMap.get(d) || { hasIn: false, hasOut: false, inTime: '', outTime: '' };
-        const t = new Date(r.timestamp).toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' });
+        const t = formatTime(r.timestamp);
         if (r.action_type === 'IN') { ex.hasIn = true; ex.inTime = t; }
         if (r.action_type === 'OUT') { ex.hasOut = true; ex.outTime = t; }
         attMap.set(d, ex);
@@ -265,7 +290,7 @@ export default function HRPage() {
         method: 'POST',
         body: JSON.stringify({ member_id: user.id, action_type: type }),
       });
-      showToast(`${type === 'IN' ? 'âœ“ Checked In' : 'âœ“ Checked Out'} at ${nowDhaka()} (Dhaka time)`);
+      showToast(`${type === 'IN' ? 'Checked In' : 'Checked Out'} at ${nowDhaka()}`);
       await loadAll();
     } catch { showToast('Cannot reach server.'); }
     finally { setAttLoading(false); }
@@ -283,7 +308,7 @@ export default function HRPage() {
       });
       setShowLeaveModal(false);
       setLeaveData({ leave_type: 'SICK', start_date: '', end_date: '', reason: '' });
-      showToast('Leave request submitted! Awaiting admin approval.');
+      showToast('Leave request submitted. Awaiting admin approval.');
       await loadAll();
     } catch { showToast('Cannot reach server.'); }
   };
@@ -294,7 +319,7 @@ export default function HRPage() {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       });
-      showToast(status === 'APPROVED' ? 'Leave approved âœ“' : 'Leave rejected.');
+      showToast(status === 'APPROVED' ? 'Leave approved' : 'Leave rejected');
       await loadAll();
     } catch { showToast('Cannot reach server.'); }
   };
@@ -316,7 +341,6 @@ export default function HRPage() {
             : d.isAbsent
               ? 'Absent'
               : 'N/A';
-      // Prefix date with = and quote to prevent Excel treating it as a formula / showing ####
       return [`"=${d.date}"`, dayName, status, d.checkInTime || '', d.checkOutTime || ''];
     });
     const csv = [header, ...rows].map(r => r.join(',')).join('\n');
@@ -327,7 +351,7 @@ export default function HRPage() {
     a.download = `${empName.replace(/\s+/g, '_')}_${calYear}-${String(calMonth + 1).padStart(2, '0')}_Attendance.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast('Report downloaded!');
+    showToast('Report downloaded.');
   };
 
   const presentCount = new Set(att.filter(a => a.action_type === 'IN').map((a: any) => a.member_id)).size;
@@ -340,7 +364,7 @@ export default function HRPage() {
     <>
       <Topbar title="HR & Attendance">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* Date navigator â€” same dnav pill as Dashboard */}
+          {/* Date navigator */}
           <div className="dnav" style={{ position: 'relative' }}>
             <button onClick={() => setCurDate(s => shiftDateStr(s, -1))} aria-label="Previous day">
               <ChevronLeft size={16} />
@@ -371,7 +395,7 @@ export default function HRPage() {
             </button>
           </div>
 
-          {/* Leave Request — Employee only, Admin manages via Leave Requests tab */}
+          {/* Leave Request button - Employee only */}
           {!isAdmin && (
             <button className="btn btn-primary" onClick={() => setShowLeaveModal(true)}>
               <Plus size={15} /> Leave Request
@@ -388,8 +412,8 @@ export default function HRPage() {
             <div className="cw-title">Mark Your Attendance</div>
             <div style={{ marginBottom: 12, fontSize: '.83rem', color: 'var(--muted)' }}>
               Logged in as <strong style={{ color: 'var(--text)' }}>{user?.name}</strong>
-              {' '}Â·{' '}
-              <span style={{ color: 'var(--muted)', fontSize: '.78rem' }}>Time recorded automatically (Dhaka)</span>
+              <span style={{ margin: '0 8px', opacity: 0.5 }}>|</span>
+              <span style={{ color: 'var(--muted)', fontSize: '.78rem' }}>Time recorded automatically</span>
             </div>
             <div className="cw-btns" style={{ gap: 12 }}>
               <button
@@ -411,7 +435,7 @@ export default function HRPage() {
             </div>
             {alreadyCheckedIn && (
               <div style={{ marginTop: 10, fontSize: '.78rem', color: 'var(--green)', fontWeight: 600 }}>
-                âœ“ You are checked in{alreadyCheckedOut ? ' and checked out' : ''} today
+                You are checked in{alreadyCheckedOut ? ' and checked out' : ''} today
               </div>
             )}
           </div>
@@ -445,7 +469,7 @@ export default function HRPage() {
                   <tr>
                     <th>Member</th>
                     <th>Action</th>
-                    <th>Time (Dhaka)</th>
+                    <th>Time</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -466,7 +490,7 @@ export default function HRPage() {
                           </td>
                           <td><span className={'badge ' + a.action_type}>{a.action_type}</span></td>
                           <td style={{ color: 'var(--muted)' }}>
-                            {new Date(a.timestamp).toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' })}
+                            {formatTime(a.timestamp)}
                           </td>
                         </tr>
                       ))
@@ -517,8 +541,8 @@ export default function HRPage() {
                           </td>
                         )}
                         <td><span className={'badge ' + l.leave_type}>{l.leave_type}</span></td>
-                        <td style={{ color: 'var(--muted)', fontSize: '.76rem' }}>{l.start_date} â†’ {l.end_date}</td>
-                        <td style={{ color: 'var(--muted)', fontSize: '.76rem', maxWidth: 130 }}>{l.reason || 'â€”'}</td>
+                        <td style={{ color: 'var(--muted)', fontSize: '.76rem' }}>{l.start_date} to {l.end_date}</td>
+                        <td style={{ color: 'var(--muted)', fontSize: '.76rem', maxWidth: 130 }}>{l.reason || '-'}</td>
                         <td>
                           <span className={'badge ' + (l.status === 'APPROVED' ? 'APPROVED' : l.status === 'REJECTED' ? 'REJECTED' : 'PENDING')}>
                             {l.status}
@@ -545,7 +569,7 @@ export default function HRPage() {
           </div>
         )}
 
-        {/* Summary cards â€” bottom */}
+        {/* Summary cards - bottom */}
         <div className="stats" style={{ marginTop: 4 }}>
           <div className="s-card">
             <div className="s-lbl">Present Today</div>
@@ -561,7 +585,7 @@ export default function HRPage() {
           </div>
         </div>
 
-        {/* Monthly Report â€” Admin only */}
+        {/* Monthly Report - Admin only */}
         {isAdmin && (
           <div className="card" style={{ marginTop: 8 }}>
             <div className="card-head">
@@ -630,7 +654,7 @@ export default function HRPage() {
                   Select an employee above to view their monthly attendance calendar.
                 </div>
               ) : calLoading ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--muted)' }}>Loading calendarâ€¦</div>
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--muted)' }}>Loading calendar...</div>
               ) : (
                 <MonthCalendar year={calYear} month={calMonth} calDays={calDays} />
               )}
@@ -689,10 +713,10 @@ export default function HRPage() {
             </div>
             <div className="fg">
               <label>Reason</label>
-              <textarea placeholder="Optional reasonâ€¦" value={leaveData.reason} onChange={e => setLeaveData({ ...leaveData, reason: e.target.value })} />
+              <textarea placeholder="Optional reason..." value={leaveData.reason} onChange={e => setLeaveData({ ...leaveData, reason: e.target.value })} />
             </div>
             <div style={{ marginBottom: 8, padding: '8px 10px', borderRadius: 7, background: 'rgba(79,126,255,.08)', fontSize: '.76rem', color: 'var(--muted)' }}>
-              ðŸ“Œ Your request will be sent to Admin for approval.
+              Note: Your request will be sent to Admin for approval.
             </div>
             <div className="mfooter">
               <button className="btn btn-ghost" onClick={() => setShowLeaveModal(false)}>Cancel</button>

@@ -20,7 +20,8 @@ export const logAttendanceTool = new Tool({
   },
   execute: async (args: any) => {
     try {
-      await dbRun("INSERT INTO attendance (phone_number, action_type) VALUES (?, ?)", [args.phone_number, args.action_type]);
+      const nowIso = new Date().toISOString();
+      await dbRun("INSERT INTO attendance (phone_number, action_type, timestamp) VALUES (?, ?, ?)", [args.phone_number, args.action_type, nowIso]);
       return `Successfully logged ${args.action_type} for ${args.phone_number} at server time.`;
     } catch (err: any) {
       throw new Error(`Failed to log attendance: ${err.message}`);

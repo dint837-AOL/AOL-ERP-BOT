@@ -103,9 +103,8 @@ tr:last-child td{border:none}tr:hover td{background:rgba(255,255,255,.015)}
 .av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.76rem;color:#fff;flex-shrink:0}
 .badge{font-size:.64rem;font-weight:600;padding:2px 8px;border-radius:5px;text-transform:uppercase;letter-spacing:.03em}
 .badge.IN,.badge.APPROVED{background:var(--gs);color:var(--green)}
-.badge.OUT{background:var(--os);color:var(--orange)}
+.badge.OUT,.badge.REJECTED,.badge.SICK{background:var(--rs);color:var(--red)}
 .badge.PENDING{background:rgba(255,255,255,.06);color:var(--muted)}
-.badge.REJECTED,.badge.SICK{background:var(--rs);color:var(--red)}
 .badge.CASUAL{background:var(--os);color:var(--orange)}
 .badge.ANNUAL{background:rgba(79,126,255,.12);color:var(--primary)}
 .empty-r td{text-align:center;padding:36px;color:var(--muted);font-size:.82rem}

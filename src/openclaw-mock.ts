@@ -364,7 +364,8 @@ export class OpenClaw {
     this.app.post('/api/attendance', async (req, res) => {
       const { member_id, action_type } = req.body;
       if (!action_type || !['IN','OUT'].includes(action_type)) return res.status(400).json({ error: 'action_type must be IN or OUT' });
-      const { lastID } = await dbRun('INSERT INTO attendance(member_id,action_type) VALUES(?,?)', [member_id||null, action_type]);
+      const nowIso = new Date().toISOString();
+      const { lastID } = await dbRun('INSERT INTO attendance(member_id,action_type,timestamp) VALUES(?,?,?)', [member_id||null, action_type, nowIso]);
       res.status(201).json(await dbGet(`SELECT a.*,m.name as member_name FROM attendance a LEFT JOIN members m ON a.member_id=m.id WHERE a.id=?`, [lastID]));
     });
 
