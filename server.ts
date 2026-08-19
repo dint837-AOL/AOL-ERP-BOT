@@ -53,8 +53,10 @@ async function start() {
     4. Confirm to the user that their attendance was recorded.
   `);
 
+  const port = parseInt(process.env.PORT || '3000', 10);
+
   // Start the bot which initializes the Express app and DB
-  await bot.start(3000, false); // Pass false to prevent it from listening yet
+  await bot.start(port, false); // Pass false to prevent it from listening yet
 
   const app = bot.app;
 
@@ -64,10 +66,10 @@ async function start() {
     handle(req, res).catch(next);
   });
 
-  app.listen(3000, () => {
+  app.listen(port, '0.0.0.0', () => {
     console.log('============================================================');
     console.log('ALLIEDONE ERP SYSTEM READY (Next.js + Express)');
-    console.log('Running on http://localhost:3000');
+    console.log(`Running on http://0.0.0.0:${port}`);
     console.log('============================================================');
   });
 }
