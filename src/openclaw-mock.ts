@@ -45,27 +45,33 @@ async function initDB() {
   try { await db.exec(`ALTER TABLE members ADD COLUMN email TEXT DEFAULT ''`); } catch (e) {}
   try { await db.exec(`ALTER TABLE members ADD COLUMN password_hash TEXT DEFAULT ''`); } catch (e) {}
   
-  // Seed initial Admin + 4 Employees if members table is empty
-  const memberCountRow = await db.get('SELECT COUNT(*) as count FROM members') as any;
-  if (memberCountRow && memberCountRow.count === 0) {
-    const adminHash    = await bcrypt.hash('Admin@123', 10);
-    const employeeHash = await bcrypt.hash('Employee@123', 10);
-    await db.run(`INSERT INTO members (name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?)`,
-      ['System Admin', 'admin@alliedone.com', adminHash, 'Admin', '#ff4d4f']);
-    await db.run(`INSERT INTO members (name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?)`,
-      ['Ahsan Kabir', 'ahsankabir@alliedone.com', employeeHash, 'Employee', '#a78bfa']);
-    await db.run(`INSERT INTO members (name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?)`,
-      ['Tajimur Rafi', 'rafi@alliedone.com', employeeHash, 'Employee', '#4f7eff']);
-    await db.run(`INSERT INTO members (name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?)`,
-      ['Orko', 'orko@alliedone.com', employeeHash, 'Employee', '#26c486']);
-    await db.run(`INSERT INTO members (name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?)`,
-      ['Kamrul Islam', 'kamrul@alliedone.com', employeeHash, 'Employee', '#f5a623']);
-    console.log('✅ Admin:    admin@alliedone.com     / Admin@123');
-    console.log('✅ Employee: ahsankabir@alliedone.com / Employee@123');
-    console.log('✅ Employee: rafi@alliedone.com       / Employee@123');
-    console.log('✅ Employee: orko@alliedone.com       / Employee@123');
-    console.log('✅ Employee: kamrul@alliedone.com     / Employee@123');
+  // Always ensure default Admin and Employee accounts exist with correct passwords
+  const adminHash    = await bcrypt.hash('Admin@123', 10);
+  const employeeHash = await bcrypt.hash('Employee@123', 10);
+
+  const defaultAccounts = [
+    { name: 'System Admin', email: 'admin@alliedone.com', role: 'Admin', color: '#ff4d4f', hash: adminHash },
+    { name: 'Ahsan Kabir', email: 'ahsankabir@alliedone.com', role: 'Employee', color: '#a78bfa', hash: employeeHash },
+    { name: 'Tajimur Rafi', email: 'rafi@alliedone.com', role: 'Employee', color: '#4f7eff', hash: employeeHash },
+    { name: 'Orko', email: 'orko@alliedone.com', role: 'Employee', color: '#26c486', hash: employeeHash },
+    { name: 'Kamrul Islam', email: 'kamrul@alliedone.com', role: 'Employee', color: '#f5a623', hash: employeeHash },
+  ];
+
+  for (const acc of defaultAccounts) {
+    const existing = await db.get('SELECT id FROM members WHERE LOWER(TRIM(email)) = LOWER(?)', [acc.email]) as any;
+    if (!existing) {
+      await db.run(
+        `INSERT INTO members (name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?)`,
+        [acc.name, acc.email, acc.hash, acc.role, acc.color]
+      );
+    } else {
+      await db.run(
+        `UPDATE members SET password_hash = ?, role = ?, name = ? WHERE id = ?`,
+        [acc.hash, acc.role, acc.name, existing.id]
+      );
+    }
   }
+  console.log('Default credentials verified and ready.');
 
 
   
@@ -247,13 +253,15 @@ export class OpenClaw {
     // ── AUTH ENDPOINTS ───────────────────────────────────────
     this.app.post('/api/auth/login', async (req, res) => {
       const { email, password } = req.body;
-      if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const cleanPassword = (password || '').trim();
+      if (!cleanEmail || !cleanPassword) return res.status(400).json({ error: 'Email and password required' });
 
       try {
-        const member = await dbGet('SELECT * FROM members WHERE email = ?', [email]) as any;
+        const member = await dbGet('SELECT * FROM members WHERE LOWER(TRIM(email)) = ?', [cleanEmail]) as any;
         if (!member) return res.status(401).json({ error: 'Invalid credentials' });
 
-        const validPassword = await bcrypt.compare(password, member.password_hash || '');
+        const validPassword = await bcrypt.compare(cleanPassword, member.password_hash || '');
         if (!validPassword) return res.status(401).json({ error: 'Invalid credentials' });
 
         const token = jwt.sign({ id: member.id, email: member.email, role: member.role, name: member.name }, JWT_SECRET, { expiresIn: '7d' });
