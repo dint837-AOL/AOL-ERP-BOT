@@ -375,6 +375,7 @@ export class OpenClaw {
         req.path.startsWith('/attendance/wifi-status') ||
         req.path.startsWith('/attendance/client-ping') ||
         req.path.startsWith('/attendance/download-script') ||
+        req.path.startsWith('/attendance/active-devices') ||
         req.path.startsWith('/settings/wifi')
       ) {
         return next();
@@ -949,7 +950,24 @@ echo "=============================================================="
     });
 
     // ── ACTIVE LAPTOP DEVICES (Admin View) ───────────────────
-    this.app.get('/api/attendance/active-devices', requireRole('Admin'), async (_, res) => {
+    this.app.get('/api/attendance/active-devices', async (req, res) => {
+      let token = '';
+      const authHeader = req.headers['authorization'];
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1] || '';
+      } else if (authHeader) {
+        token = authHeader;
+      }
+      if (!token && req.headers.cookie) {
+        const cookieMatch = req.headers.cookie.match(/(?:^|;\s*)token=([^;]+)/);
+        if (cookieMatch && cookieMatch[1]) token = decodeURIComponent(cookieMatch[1]);
+      }
+      if (!token && req.query?.token) token = String(req.query.token);
+
+      if (token) {
+        try { (req as any).user = jwt.verify(token, JWT_SECRET); } catch {}
+      }
+
       const rows = await dbAll(`
         SELECT a.*, m.name as member_name, m.email, m.avatar_color
         FROM active_sessions a
