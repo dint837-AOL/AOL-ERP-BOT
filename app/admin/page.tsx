@@ -138,7 +138,10 @@ export default function AdminPage() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify(wifiSettings)
+        body: JSON.stringify({
+          ...wifiSettings,
+          token
+        })
       });
       if (res.ok) {
         showToast('Wi-Fi attendance settings saved successfully!');

@@ -299,8 +299,30 @@ export class OpenClaw {
 
     // ── AUTH MIDDLEWARES ─────────────────────────────────────
     const authenticateToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      let token = '';
       const authHeader = req.headers['authorization'];
-      const token = authHeader && authHeader.split(' ')[1];
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1] || '';
+      } else if (authHeader) {
+        token = authHeader;
+      }
+
+      // Check cookie header if not in Authorization header
+      if (!token && req.headers.cookie) {
+        const cookieMatch = req.headers.cookie.match(/(?:^|;\s*)token=([^;]+)/);
+        if (cookieMatch && cookieMatch[1]) {
+          token = decodeURIComponent(cookieMatch[1]);
+        }
+      }
+
+      // Check query or body token fallback
+      if (!token && req.query?.token) {
+        token = String(req.query.token);
+      }
+      if (!token && req.body?.token) {
+        token = String(req.body.token);
+      }
+
       if (!token) return res.status(401).json({ error: 'Access denied. Token required.' });
 
       jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
@@ -353,13 +375,8 @@ export class OpenClaw {
         req.path.startsWith('/attendance/wifi-status') ||
         req.path.startsWith('/attendance/client-ping') ||
         req.path.startsWith('/attendance/download-script') ||
-        (req.path.startsWith('/settings/wifi') && req.method === 'GET')
+        req.path.startsWith('/settings/wifi')
       ) {
-        const authHeader = req.headers['authorization'];
-        const token = authHeader && authHeader.split(' ')[1];
-        if (token) {
-          try { (req as any).user = jwt.verify(token, JWT_SECRET); } catch {}
-        }
         return next();
       }
       authenticateToken(req, res, next);
@@ -478,30 +495,47 @@ export class OpenClaw {
     });
 
     this.app.post('/api/settings/wifi', async (req, res) => {
-      const authHeader = req.headers['authorization'];
-      const token = authHeader && authHeader.split(' ')[1];
-      if (token) {
-        try { (req as any).user = jwt.verify(token, JWT_SECRET); } catch {}
-      }
-      const user = (req as any).user;
-      if (user && user.role && user.role !== 'Admin') {
-        return res.status(403).json({ error: 'Access denied. Admin role required.' });
-      }
+      try {
+        let token = '';
+        const authHeader = req.headers['authorization'];
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          token = authHeader.split(' ')[1] || '';
+        } else if (authHeader) {
+          token = authHeader;
+        }
+        if (!token && req.headers.cookie) {
+          const cookieMatch = req.headers.cookie.match(/(?:^|;\s*)token=([^;]+)/);
+          if (cookieMatch && cookieMatch[1]) token = decodeURIComponent(cookieMatch[1]);
+        }
+        if (!token && req.body?.token) token = req.body.token;
+        if (!token && req.query?.token) token = String(req.query.token);
 
-      const { office_wifi_ip, office_wifi_name, wifi_auto_attendance_enabled, auto_checkout_timeout_minutes } = req.body;
-      if (office_wifi_ip !== undefined) {
-        await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['office_wifi_ip', String(office_wifi_ip).trim()]);
+        if (token) {
+          try { (req as any).user = jwt.verify(token, JWT_SECRET); } catch {}
+        }
+        const user = (req as any).user;
+        if (user && user.role && user.role !== 'Admin') {
+          return res.status(403).json({ error: 'Access denied. Admin role required.' });
+        }
+
+        const { office_wifi_ip, office_wifi_name, wifi_auto_attendance_enabled, auto_checkout_timeout_minutes } = req.body;
+        if (office_wifi_ip !== undefined) {
+          await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['office_wifi_ip', String(office_wifi_ip).trim()]);
+        }
+        if (office_wifi_name !== undefined) {
+          await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['office_wifi_name', String(office_wifi_name).trim()]);
+        }
+        if (wifi_auto_attendance_enabled !== undefined) {
+          await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['wifi_auto_attendance_enabled', String(wifi_auto_attendance_enabled)]);
+        }
+        if (auto_checkout_timeout_minutes !== undefined) {
+          await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['auto_checkout_timeout_minutes', String(auto_checkout_timeout_minutes)]);
+        }
+        res.json({ ok: true, message: 'Wi-Fi settings updated successfully.' });
+      } catch (err: any) {
+        console.error('Error saving wifi settings:', err);
+        res.status(500).json({ error: 'Failed to save settings: ' + (err?.message || 'DB Error') });
       }
-      if (office_wifi_name !== undefined) {
-        await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['office_wifi_name', String(office_wifi_name).trim()]);
-      }
-      if (wifi_auto_attendance_enabled !== undefined) {
-        await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['wifi_auto_attendance_enabled', String(wifi_auto_attendance_enabled)]);
-      }
-      if (auto_checkout_timeout_minutes !== undefined) {
-        await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['auto_checkout_timeout_minutes', String(auto_checkout_timeout_minutes)]);
-      }
-      res.json({ ok: true, message: 'Wi-Fi settings updated successfully.' });
     });
 
     // ── WI-FI ATTENDANCE PROBE & HEARTBEAT ───────────────────
