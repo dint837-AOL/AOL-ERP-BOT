@@ -242,8 +242,14 @@ async function initDB() {
     member_id INTEGER PRIMARY KEY,
     last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
     ip TEXT,
-    is_wifi INTEGER DEFAULT 1
+    is_wifi INTEGER DEFAULT 1,
+    hostname TEXT DEFAULT '',
+    os_name TEXT DEFAULT '',
+    device_type TEXT DEFAULT 'BROWSER'
   )`);
+  try { await db.exec(`ALTER TABLE active_sessions ADD COLUMN hostname TEXT DEFAULT ''`); } catch (e) {}
+  try { await db.exec(`ALTER TABLE active_sessions ADD COLUMN os_name TEXT DEFAULT ''`); } catch (e) {}
+  try { await db.exec(`ALTER TABLE active_sessions ADD COLUMN device_type TEXT DEFAULT 'BROWSER'`); } catch (e) {}
 
   // Seed default settings if missing
   const settingsRows = await db.all('SELECT key FROM settings') as any[];
@@ -339,7 +345,9 @@ export class OpenClaw {
       if (
         req.path.startsWith('/auth/login') ||
         req.path.startsWith('/attendance/wifi-webhook') ||
-        req.path.startsWith('/attendance/wifi-status')
+        req.path.startsWith('/attendance/wifi-status') ||
+        req.path.startsWith('/attendance/client-ping') ||
+        req.path.startsWith('/attendance/download-script')
       ) {
         return next();
       }
@@ -603,6 +611,298 @@ export class OpenClaw {
         await dbRun('DELETE FROM active_sessions WHERE member_id = ?', [member.id]);
         return res.json({ ok: true, action: 'OUT', member_name: member.name });
       }
+    });
+
+    // ── LAPTOP ZERO-BROWSER BACKGROUND AGENT PING ───────────
+    this.app.post('/api/attendance/client-ping', async (req, res) => {
+      const token = (req.headers.authorization?.replace(/^Bearer\s+/, '') || req.body.token || '') as string;
+      if (!token) {
+        return res.status(401).json({ error: 'Token required for laptop background agent' });
+      }
+
+      let user: any = null;
+      try {
+        user = jwt.verify(token, JWT_SECRET);
+      } catch {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+      }
+
+      const member = await dbGet('SELECT * FROM members WHERE id = ?', [user.id]) as any;
+      if (!member) {
+        return res.status(404).json({ error: 'Member not found' });
+      }
+
+      const action = req.body.action || 'PING'; // 'PING' or 'SHUTDOWN'
+      const hostname = String(req.body.hostname || '').slice(0, 100);
+      const os_name = String(req.body.os || req.body.os_name || 'Windows').slice(0, 50);
+      const clientIp = getCleanClientIp(req);
+
+      const rows = await dbAll('SELECT key, value FROM settings WHERE key IN ("office_wifi_ip","wifi_auto_attendance_enabled")') as any[];
+      const config: Record<string, string> = {};
+      rows.forEach(r => { config[r.key] = r.value; });
+
+      const isMatching = isIpMatching(clientIp, config['office_wifi_ip'] || '');
+      const isEnabled = config['wifi_auto_attendance_enabled'] !== 'false';
+      const todayDhaka = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+      const nowIso = new Date().toISOString();
+
+      if (action === 'SHUTDOWN') {
+        const existingIn = await dbGet(
+          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'IN'`,
+          [member.id, todayDhaka]
+        );
+        const existingOut = await dbGet(
+          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'OUT'`,
+          [member.id, todayDhaka]
+        );
+
+        let autoCheckedOut = false;
+        if (existingIn && !existingOut) {
+          await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'OUT', nowIso]);
+          autoCheckedOut = true;
+          console.log(`[LAPTOP SHUTDOWN] Member #${member.id} (${member.name}) checked out via laptop shutdown hook (${hostname || clientIp}).`);
+        }
+
+        await dbRun('DELETE FROM active_sessions WHERE member_id = ?', [member.id]);
+        return res.json({
+          success: true,
+          action: 'OUT',
+          auto_checked_out: autoCheckedOut,
+          member_name: member.name,
+          message: autoCheckedOut ? 'Checked out on laptop shutdown' : 'Session closed'
+        });
+      }
+
+      // Action is 'PING'
+      if (isMatching && isEnabled) {
+        const existingIn = await dbGet(
+          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'IN'`,
+          [member.id, todayDhaka]
+        );
+
+        let autoCheckedIn = false;
+        if (!existingIn) {
+          await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'IN', nowIso]);
+          autoCheckedIn = true;
+          console.log(`[LAPTOP AUTO-CHECKIN] Member #${member.id} (${member.name}) automatically checked in via Laptop Agent (${hostname || clientIp}).`);
+        }
+
+        await dbRun(
+          `INSERT INTO active_sessions (member_id, last_seen, ip, is_wifi, hostname, os_name, device_type)
+           VALUES (?, CURRENT_TIMESTAMP, ?, 1, ?, ?, 'LAPTOP')
+           ON CONFLICT(member_id) DO UPDATE SET 
+             last_seen = CURRENT_TIMESTAMP, 
+             ip = excluded.ip, 
+             is_wifi = 1,
+             hostname = excluded.hostname,
+             os_name = excluded.os_name,
+             device_type = 'LAPTOP'`,
+          [member.id, clientIp, hostname, os_name]
+        );
+
+        return res.json({
+          success: true,
+          is_office_wifi: true,
+          auto_checked_in: autoCheckedIn,
+          member_name: member.name,
+          message: autoCheckedIn ? 'Checked in automatically via Office Wi-Fi' : 'Presence active'
+        });
+      } else {
+        return res.json({
+          success: true,
+          is_office_wifi: false,
+          auto_checked_in: false,
+          member_name: member.name,
+          message: 'Connected to remote network'
+        });
+      }
+    });
+
+    // ── DOWNLOAD ZERO-BROWSER LAPTOP SCRIPT ──────────────────
+    this.app.get('/api/attendance/download-script', async (req, res) => {
+      const token = (req.query.token as string || req.headers.authorization?.replace(/^Bearer\s+/, '') || '') as string;
+      if (!token) return res.status(401).send('Authentication token required');
+
+      let user: any = null;
+      try {
+        user = jwt.verify(token, JWT_SECRET);
+      } catch {
+        return res.status(401).send('Invalid or expired token');
+      }
+
+      const member = await dbGet('SELECT * FROM members WHERE id = ?', [user.id]) as any;
+      if (!member) return res.status(404).send('Member not found');
+
+      const os = (req.query.os as string || 'windows').toLowerCase();
+      const protocol = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
+      const host = req.headers.host || 'localhost:3000';
+      const serverUrl = `${protocol}://${host}`;
+
+      if (os === 'windows' || os === 'bat') {
+        const psScriptRaw = `# AlliedOne ERP Background Attendance Service
+$serverUrl = "${serverUrl}"
+$token = "${token}"
+$employeeName = "${member.name}"
+$hostname = $env:COMPUTERNAME
+$os = "Windows"
+
+function Send-AttendancePing($action) {
+    try {
+        $body = @{ token = $token; action = $action; hostname = $hostname; os = $os } | ConvertTo-Json
+        $res = Invoke-RestMethod -Uri "$serverUrl/api/attendance/client-ping" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 10
+        return $res
+    } catch {
+        return $null
+    }
+}
+
+function Show-Notification($title, $msg) {
+    try {
+        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+        $template = "<toast><visual><binding template='ToastGeneric'><text>$title</text><text>$msg</text></binding></visual></toast>"
+        $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+        $xml.LoadXml($template)
+        $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("AlliedOne ERP").Show($toast)
+    } catch {}
+}
+
+# Register shutdown event hook
+Register-EngineEvent -SourceIdentifier ([System.Management.Automation.PsEngineEvent]::Exiting) -Action {
+    Send-AttendancePing "SHUTDOWN"
+} | Out-Null
+
+# Initial check-in on startup/wake
+$initResp = Send-AttendancePing "PING"
+if ($initResp -and $initResp.auto_checked_in) {
+    Show-Notification "AlliedOne ERP" "Good morning $employeeName! Automatically checked in via Office Wi-Fi."
+}
+
+# Main background presence loop
+while ($true) {
+    Start-Sleep -Seconds 60
+    $pResp = Send-AttendancePing "PING"
+    if ($pResp -and $pResp.auto_checked_in) {
+        Show-Notification "AlliedOne ERP" "Good morning $employeeName! Automatically checked in via Office Wi-Fi."
+    }
+}
+`;
+        const psScriptBase64 = Buffer.from(psScriptRaw, 'utf8').toString('base64');
+        const vbsScriptRaw = `Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & CreateObject("WScript.Shell").ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\\AlliedOneERP\\aol-attendance.ps1""", 0, False
+`;
+        const vbsScriptBase64 = Buffer.from(vbsScriptRaw, 'utf8').toString('base64');
+
+        const batContent = `@echo off
+title AlliedOne ERP - Zero-Browser Laptop Attendance Setup
+echo ==============================================================
+echo   AlliedOne ERP - Automated Laptop Attendance Setup
+echo   Employee: ${member.name}
+echo ==============================================================
+echo.
+
+set "TARGET_DIR=%LOCALAPPDATA%\\AlliedOneERP"
+if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
+
+set "PS_SCRIPT=%TARGET_DIR%\\aol-attendance.ps1"
+set "VBS_SCRIPT=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\AlliedOneAttendance.vbs"
+
+echo [1/3] Installing background presence service...
+powershell -NoProfile -Command "$b64='${psScriptBase64}'; [System.IO.File]::WriteAllBytes('%PS_SCRIPT%', [System.Convert]::FromBase64String($b64))"
+
+echo [2/3] Registering silent Windows startup service...
+powershell -NoProfile -Command "$b64='${vbsScriptBase64}'; [System.IO.File]::WriteAllBytes('%VBS_SCRIPT%', [System.Convert]::FromBase64String($b64))"
+
+echo [3/3] Starting background service now...
+wscript.exe "%VBS_SCRIPT%"
+
+echo.
+echo ==============================================================
+echo   SUCCESS! Automated Laptop Attendance is now active.
+echo   - When you turn on/open your laptop at the office: AUTO CHECK-IN
+echo   - When you turn off or shut down your laptop: AUTO CHECK-OUT
+echo   - Zero browser needed!
+echo ==============================================================
+echo.
+pause
+`;
+        res.setHeader('Content-Disposition', `attachment; filename="AlliedOne-Attendance-${member.name.replace(/[^a-zA-Z0-9]/g, '_')}.bat"`);
+        res.setHeader('Content-Type', 'application/x-bat');
+        return res.send(batContent);
+      } else {
+        // macOS / Linux script
+        const shContent = `#!/bin/bash
+# AlliedOne ERP - Zero-Browser Laptop Attendance Setup (macOS/Linux)
+# Employee: ${member.name} (${member.email})
+
+SERVER_URL="${serverUrl}"
+TOKEN="${token}"
+EMPLOYEE_NAME="${member.name}"
+HOSTNAME="$(hostname)"
+OS_NAME="$(uname -s)"
+
+AGENT_DIR="$HOME/.alliedone_erp"
+mkdir -p "$AGENT_DIR"
+SCRIPT_PATH="$AGENT_DIR/aol-attendance.sh"
+
+cat << 'EOF' > "$SCRIPT_PATH"
+#!/bin/bash
+SERVER_URL="${serverUrl}"
+TOKEN="${token}"
+EMPLOYEE_NAME="${member.name}"
+HOSTNAME="$(hostname)"
+OS_NAME="$(uname -s)"
+
+send_ping() {
+  ACTION="$1"
+  curl -s -X POST "$SERVER_URL/api/attendance/client-ping" \\
+    -H "Content-Type: application/json" \\
+    -d "{\\"token\\":\\"$TOKEN\\",\\"action\\":\\"$ACTION\\",\\"hostname\\":\\"$HOSTNAME\\",\\"os\\":\\"$OS_NAME\\"}"
+}
+
+trap 'send_ping "SHUTDOWN"' EXIT SIGTERM
+
+# Initial Ping
+RESP=$(send_ping "PING")
+if echo "$RESP" | grep -q '"auto_checked_in":true'; then
+  command -v osascript >/dev/null 2>&1 && osascript -e 'display notification "Automatically checked in via Office Wi-Fi" with title "AlliedOne ERP"'
+fi
+
+while true; do
+  sleep 60
+  RESP=$(send_ping "PING")
+  if echo "$RESP" | grep -q '"auto_checked_in":true'; then
+    command -v osascript >/dev/null 2>&1 && osascript -e 'display notification "Automatically checked in via Office Wi-Fi" with title "AlliedOne ERP"'
+  fi
+done
+EOF
+
+chmod +x "$SCRIPT_PATH"
+
+# Run in background
+nohup "$SCRIPT_PATH" >/dev/null 2>&1 &
+
+echo "=============================================================="
+echo "  AlliedOne ERP Background Attendance installed and running!"
+echo "=============================================================="
+`;
+        res.setHeader('Content-Disposition', `attachment; filename="AlliedOne-Attendance-${member.name.replace(/[^a-zA-Z0-9]/g, '_')}.sh"`);
+        res.setHeader('Content-Type', 'text/x-shellscript');
+        return res.send(shContent);
+      }
+    });
+
+    // ── ACTIVE LAPTOP DEVICES (Admin View) ───────────────────
+    this.app.get('/api/attendance/active-devices', requireRole('Admin'), async (_, res) => {
+      const rows = await dbAll(`
+        SELECT a.*, m.name as member_name, m.email, m.avatar_color
+        FROM active_sessions a
+        JOIN members m ON a.member_id = m.id
+        WHERE a.is_wifi = 1
+        ORDER BY a.last_seen DESC
+      `);
+      res.json(rows);
     });
 
     // ── LEAVE ────────────────────────────────────────────────

@@ -12,7 +12,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LogIn, LogOut, Plus, ChevronLeft, ChevronRight, X, Calendar, Download, BarChart2, Wifi } from 'lucide-react';
+import { LogIn, LogOut, Plus, ChevronLeft, ChevronRight, X, Calendar, Download, BarChart2, Wifi, Laptop } from 'lucide-react';
 import Topbar from '../components/Topbar';
 import { useAuth } from '../context/AuthContext';
 
@@ -539,6 +539,49 @@ export default function HRPage() {
                 You are checked in{alreadyCheckedOut ? ' and checked out' : ''} today
               </div>
             )}
+          </div>
+        )}
+
+        {/* Zero-Browser Laptop Auto-Attendance Setup Card */}
+        {!isAdmin && (
+          <div className="card" style={{ marginBottom: '20px', background: 'linear-gradient(145deg, rgba(79, 126, 255, 0.06), rgba(0, 0, 0, 0.25))', border: '1px solid rgba(79, 126, 255, 0.25)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', padding: '16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ padding: '10px', background: 'rgba(79, 126, 255, 0.15)', borderRadius: '10px', color: 'var(--primary)' }}>
+                  <Laptop size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '.95rem', fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    Zero-Browser Laptop Auto-Attendance
+                    <span style={{ fontSize: '.68rem', background: 'var(--gs)', color: 'var(--green)', padding: '2px 7px', borderRadius: '4px', fontWeight: 600 }}>
+                      RECOMMENDED
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '.78rem', color: 'var(--muted)', margin: '4px 0 0', maxWidth: '540px', lineHeight: 1.45 }}>
+                    Open your laptop at the office: <strong>Auto Check-In</strong>. Turn off your laptop: <strong>Auto Check-Out</strong>. No browser needed!
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <a
+                  href={`/api/attendance/download-script?os=windows&token=${token || ''}`}
+                  download={`AlliedOne-Attendance-${(user?.name || 'Employee').replace(/[^a-zA-Z0-9]/g, '_')}.bat`}
+                  className="btn btn-primary btn-sm"
+                  style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Download size={14} /> Download Windows Setup (.bat)
+                </a>
+                <a
+                  href={`/api/attendance/download-script?os=mac&token=${token || ''}`}
+                  download={`AlliedOne-Attendance-${(user?.name || 'Employee').replace(/[^a-zA-Z0-9]/g, '_')}.sh`}
+                  className="btn btn-ghost btn-sm"
+                  style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Download size={14} /> Mac / Linux (.sh)
+                </a>
+              </div>
+            </div>
           </div>
         )}
 

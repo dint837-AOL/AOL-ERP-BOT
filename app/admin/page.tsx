@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, X, Pencil, Trash2, Wifi, Radio, Globe, Shield, Save, Check } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, Wifi, Radio, Globe, Shield, Save, Check, Laptop } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
 export default function AdminPage() {
@@ -38,6 +38,7 @@ export default function AdminPage() {
     is_matching_office_wifi: false
   });
   const [savingWifi, setSavingWifi] = useState(false);
+  const [activeDevices, setActiveDevices] = useState<any[]>([]);
 
   const loadWifiSettings = async () => {
     try {
@@ -51,9 +52,26 @@ export default function AdminPage() {
     }
   };
 
+  const loadActiveDevices = async () => {
+    try {
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('/api/attendance/active-devices', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        setActiveDevices(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     loadMembers();
     loadWifiSettings();
+    loadActiveDevices();
+    const iv = setInterval(loadActiveDevices, 20000);
+    return () => clearInterval(iv);
   }, []);
 
   const saveWifiSettings = async () => {
@@ -305,6 +323,70 @@ export default function AdminPage() {
                   />
                   <span>Active (Auto Check-In on connection & Auto Check-Out on leave)</span>
                 </label>
+              </div>
+            </div>
+
+            {/* Active Laptop Devices Table */}
+            <div style={{ marginTop: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Laptop size={16} style={{ color: 'var(--primary)' }} />
+                  <h4 style={{ margin: 0, fontSize: '.9rem', fontWeight: 600 }}>Active Laptop Presence (Zero-Browser Agents)</h4>
+                </div>
+                <span style={{ fontSize: '.74rem', color: 'var(--muted)' }}>
+                  {activeDevices.length} device{activeDevices.length === 1 ? '' : 's'} online
+                </span>
+              </div>
+
+              <div className="table-scroll" style={{ border: '1px solid var(--border)', borderRadius: '8px' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th>Device / Hostname</th>
+                      <th>OS / Type</th>
+                      <th>IP Address</th>
+                      <th>Last Heartbeat</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeDevices.length === 0 ? (
+                      <tr className="empty-r">
+                        <td colSpan={6} style={{ textAlign: 'center', padding: '16px', color: 'var(--muted)', fontSize: '.8rem' }}>
+                          No laptop agents currently active. Employees can download the 1-click installer from the HR Attendance page.
+                        </td>
+                      </tr>
+                    ) : (
+                      activeDevices.map(d => (
+                        <tr key={d.member_id}>
+                          <td>
+                            <div className="av-cell">
+                              <div className="av" style={{ background: d.avatar_color || '#4f7eff', width: '24px', height: '24px', fontSize: '.7rem' }}>
+                                {d.member_name ? d.member_name[0].toUpperCase() : 'E'}
+                              </div>
+                              <div>
+                                <div style={{ fontWeight: 600 }}>{d.member_name}</div>
+                                <div style={{ fontSize: '.7rem', color: 'var(--muted)' }}>{d.email || ''}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ fontSize: '.8rem', fontFamily: 'monospace' }}>{d.hostname || 'Laptop'}</td>
+                          <td style={{ fontSize: '.78rem', color: 'var(--muted)' }}>{d.os_name || d.device_type || 'Windows'}</td>
+                          <td style={{ fontSize: '.78rem', fontFamily: 'monospace', color: 'var(--muted)' }}>{d.ip || '-'}</td>
+                          <td style={{ fontSize: '.76rem', color: 'var(--muted)' }}>
+                            {new Date(d.last_seen).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Dhaka' })}
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '.7rem', background: 'var(--gs)', color: 'var(--green)', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+                              🟢 Online
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 
