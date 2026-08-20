@@ -12,7 +12,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LogIn, LogOut, Plus, ChevronLeft, ChevronRight, X, Calendar, Download, BarChart2 } from 'lucide-react';
+import { LogIn, LogOut, Plus, ChevronLeft, ChevronRight, X, Calendar, Download, BarChart2, Wifi } from 'lucide-react';
 import Topbar from '../components/Topbar';
 import { useAuth } from '../context/AuthContext';
 
@@ -184,6 +184,19 @@ export default function HRPage() {
 
   const [toastMsg, setToastMsg] = useState('');
 
+  // Wi-Fi automated attendance state
+  const [wifiInfo, setWifiInfo] = useState<{
+    is_office_wifi: boolean;
+    office_wifi_name: string;
+    is_auto_enabled: boolean;
+    client_ip: string;
+  }>({
+    is_office_wifi: false,
+    office_wifi_name: 'AlliedOne Office Wi-Fi',
+    is_auto_enabled: true,
+    client_ip: ''
+  });
+
   function showToast(m: string) {
     setToastMsg(m);
     setTimeout(() => setToastMsg(''), 3200);
@@ -214,11 +227,51 @@ export default function HRPage() {
     } catch (e) { console.error(e); }
   }, [curDate, isAdmin, user?.id, authFetch]);
 
+  // Wi-Fi Heartbeat & Auto Check-in Engine
+  const sendWifiHeartbeat = useCallback(async () => {
+    if (!token || !user?.id) return;
+    try {
+      const res = await authFetch('/api/attendance/wifi-heartbeat', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setWifiInfo(prev => ({
+          ...prev,
+          is_office_wifi: data.is_office_wifi,
+          is_auto_enabled: data.is_auto_enabled ?? true
+        }));
+        if (data.auto_checked_in) {
+          showToast('Automatically Checked In via Office Wi-Fi');
+          await loadAll();
+        }
+      }
+    } catch (e) {
+      console.error('Wi-Fi heartbeat error:', e);
+    }
+  }, [token, user?.id, authFetch, loadAll]);
+
+  const checkWifiStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/attendance/wifi-status');
+      if (res.ok) {
+        const data = await res.json();
+        setWifiInfo(data);
+      }
+    } catch (e) {
+      console.error('Wi-Fi status error:', e);
+    }
+  }, []);
+
   useEffect(() => {
     loadAll();
+    checkWifiStatus();
+    sendWifiHeartbeat();
     const iv = setInterval(loadAll, 30000);
-    return () => clearInterval(iv);
-  }, [loadAll]);
+    const hb = setInterval(sendWifiHeartbeat, 60000); // Heartbeat every 1 minute
+    return () => {
+      clearInterval(iv);
+      clearInterval(hb);
+    };
+  }, [loadAll, checkWifiStatus, sendWifiHeartbeat]);
 
   const loadCalendar = useCallback(async () => {
     if (!reportMemberId || !isAdmin) return;
@@ -395,6 +448,26 @@ export default function HRPage() {
             </button>
           </div>
 
+          {/* Wi-Fi Network Status Pill */}
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: '20px',
+              background: wifiInfo.is_office_wifi ? 'rgba(38, 196, 134, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+              border: `1px solid ${wifiInfo.is_office_wifi ? 'rgba(38, 196, 134, 0.35)' : 'var(--border)'}`,
+              fontSize: '.74rem',
+              fontWeight: 600,
+              color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)',
+            }}
+            title={wifiInfo.is_office_wifi ? `Connected to ${wifiInfo.office_wifi_name} (Auto Check-In Active)` : 'Connected via Remote / Mobile Network'}
+          >
+            <Wifi size={13} style={{ color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)' }} />
+            <span>{wifiInfo.is_office_wifi ? (wifiInfo.office_wifi_name || 'Office Wi-Fi') : 'Remote Network'}</span>
+          </div>
+
           {/* Leave Request button - Employee only */}
           {!isAdmin && (
             <button className="btn btn-primary" onClick={() => setShowLeaveModal(true)}>
@@ -410,6 +483,34 @@ export default function HRPage() {
         {!isAdmin && (
           <div className="checkin-widget">
             <div className="cw-title">Mark Your Attendance</div>
+            
+            {/* Wi-Fi Presence Banner */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '8px',
+              marginBottom: 12,
+              padding: '8px 12px',
+              borderRadius: '8px',
+              background: wifiInfo.is_office_wifi ? 'rgba(38, 196, 134, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+              border: `1px solid ${wifiInfo.is_office_wifi ? 'rgba(38, 196, 134, 0.25)' : 'var(--border)'}`,
+              fontSize: '.78rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                <Wifi size={14} style={{ color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)' }} />
+                <span style={{ color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)', fontWeight: 600 }}>
+                  {wifiInfo.is_office_wifi ? `${wifiInfo.office_wifi_name || 'Office Wi-Fi'} Connected` : 'Remote Network (Manual Check-In)'}
+                </span>
+              </div>
+              {wifiInfo.is_office_wifi && wifiInfo.is_auto_enabled && (
+                <span style={{ fontSize: '.72rem', color: 'var(--green)', opacity: 0.9 }}>
+                  ⚡ Auto Check-In Active
+                </span>
+              )}
+            </div>
+
             <div style={{ marginBottom: 12, fontSize: '.83rem', color: 'var(--muted)' }}>
               Logged in as <strong style={{ color: 'var(--text)' }}>{user?.name}</strong>
               <span style={{ margin: '0 8px', opacity: 0.5 }}>|</span>

@@ -26,11 +26,39 @@ let db: Database;
 // Add default secret if not provided
 const JWT_SECRET = process.env.JWT_SECRET || 'alliedone_super_secret_key_123!';
 
+export function getCleanClientIp(req: express.Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  let rawIp = '';
+  if (typeof forwarded === 'string') {
+    rawIp = (forwarded.split(',')[0] || '').trim();
+  } else {
+    rawIp = req.socket.remoteAddress || '';
+  }
+  if (rawIp.startsWith('::ffff:')) {
+    rawIp = rawIp.substring(7);
+  }
+  return rawIp;
+}
+
+export function isIpMatching(clientIp: string, allowedIpsStr: string): boolean {
+  if (!clientIp || !allowedIpsStr) return false;
+  const list = allowedIpsStr.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const cleanClient = clientIp.toLowerCase();
+  for (const item of list) {
+    if (item === cleanClient) return true;
+    if ((item === '127.0.0.1' || item === '::1' || item === 'localhost') && (cleanClient === '127.0.0.1' || cleanClient === '::1')) return true;
+    if (item.endsWith('*') && cleanClient.startsWith(item.slice(0, -1))) return true;
+    if (item.endsWith('.') && cleanClient.startsWith(item)) return true;
+  }
+  return false;
+}
+
 async function initDB() {
   db = await open({
     filename: './openclaw.db',
     driver: sqlite3.Database
   });
+
 
   await db.exec(`CREATE TABLE IF NOT EXISTS members (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -202,6 +230,37 @@ async function initDB() {
     assigned_to INTEGER REFERENCES members(id),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // Settings table for Wi-Fi IP and system configs
+  await db.exec(`CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  )`);
+
+  // Active Wi-Fi presence sessions
+  await db.exec(`CREATE TABLE IF NOT EXISTS active_sessions (
+    member_id INTEGER PRIMARY KEY,
+    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+    ip TEXT,
+    is_wifi INTEGER DEFAULT 1
+  )`);
+
+  // Seed default settings if missing
+  const settingsRows = await db.all('SELECT key FROM settings') as any[];
+  const existingSettingsKeys = new Set(settingsRows.map(r => r.key));
+  if (!existingSettingsKeys.has('office_wifi_ip')) {
+    await db.run('INSERT INTO settings (key, value) VALUES (?, ?)', ['office_wifi_ip', '127.0.0.1,::1']);
+  }
+  if (!existingSettingsKeys.has('office_wifi_name')) {
+    await db.run('INSERT INTO settings (key, value) VALUES (?, ?)', ['office_wifi_name', 'AlliedOne Office Wi-Fi']);
+  }
+  if (!existingSettingsKeys.has('wifi_auto_attendance_enabled')) {
+    await db.run('INSERT INTO settings (key, value) VALUES (?, ?)', ['wifi_auto_attendance_enabled', 'true']);
+  }
+  if (!existingSettingsKeys.has('auto_checkout_timeout_minutes')) {
+    await db.run('INSERT INTO settings (key, value) VALUES (?, ?)', ['auto_checkout_timeout_minutes', '10']);
+  }
+
   console.log('Database initialized.');
 }
 
@@ -274,10 +333,16 @@ export class OpenClaw {
       }
     });
 
-    // ── MEMBERS ──────────────────────────────────────────────
-    // Protected by authenticateToken
+    // ── AUTH MIDDLEWARE FILTER ──────────────────────────────
+    // Protected by authenticateToken, bypassing login and public network probes
     this.app.use('/api', (req, res, next) => {
-      if (req.path.startsWith('/auth/login')) return next();
+      if (
+        req.path.startsWith('/auth/login') ||
+        req.path.startsWith('/attendance/wifi-webhook') ||
+        req.path.startsWith('/attendance/wifi-status')
+      ) {
+        return next();
+      }
       authenticateToken(req, res, next);
     });
 
@@ -375,6 +440,169 @@ export class OpenClaw {
       const nowIso = new Date().toISOString();
       const { lastID } = await dbRun('INSERT INTO attendance(member_id,action_type,timestamp) VALUES(?,?,?)', [member_id||null, action_type, nowIso]);
       res.status(201).json(await dbGet(`SELECT a.*,m.name as member_name FROM attendance a LEFT JOIN members m ON a.member_id=m.id WHERE a.id=?`, [lastID]));
+    });
+
+    // ── WI-FI SETTINGS ENDPOINTS ─────────────────────────────
+    this.app.get('/api/settings/wifi', async (req, res) => {
+      const rows = await dbAll('SELECT key, value FROM settings WHERE key IN ("office_wifi_ip","office_wifi_name","wifi_auto_attendance_enabled","auto_checkout_timeout_minutes")') as any[];
+      const config: Record<string, string> = {};
+      rows.forEach(r => { config[r.key] = r.value; });
+      const clientIp = getCleanClientIp(req);
+      res.json({
+        office_wifi_ip: config['office_wifi_ip'] || '',
+        office_wifi_name: config['office_wifi_name'] || 'AlliedOne Office Wi-Fi',
+        wifi_auto_attendance_enabled: config['wifi_auto_attendance_enabled'] !== 'false',
+        auto_checkout_timeout_minutes: parseInt(config['auto_checkout_timeout_minutes'] || '10', 10),
+        detected_client_ip: clientIp,
+        is_matching_office_wifi: isIpMatching(clientIp, config['office_wifi_ip'] || '')
+      });
+    });
+
+    this.app.post('/api/settings/wifi', requireRole('Admin'), async (req, res) => {
+      const { office_wifi_ip, office_wifi_name, wifi_auto_attendance_enabled, auto_checkout_timeout_minutes } = req.body;
+      if (office_wifi_ip !== undefined) {
+        await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['office_wifi_ip', String(office_wifi_ip).trim()]);
+      }
+      if (office_wifi_name !== undefined) {
+        await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['office_wifi_name', String(office_wifi_name).trim()]);
+      }
+      if (wifi_auto_attendance_enabled !== undefined) {
+        await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['wifi_auto_attendance_enabled', String(wifi_auto_attendance_enabled)]);
+      }
+      if (auto_checkout_timeout_minutes !== undefined) {
+        await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['auto_checkout_timeout_minutes', String(auto_checkout_timeout_minutes)]);
+      }
+      res.json({ ok: true, message: 'Wi-Fi settings updated successfully.' });
+    });
+
+    // ── WI-FI ATTENDANCE PROBE & HEARTBEAT ───────────────────
+    this.app.get('/api/attendance/wifi-status', async (req, res) => {
+      const clientIp = getCleanClientIp(req);
+      const rows = await dbAll('SELECT key, value FROM settings WHERE key IN ("office_wifi_ip","office_wifi_name","wifi_auto_attendance_enabled")') as any[];
+      const config: Record<string, string> = {};
+      rows.forEach(r => { config[r.key] = r.value; });
+
+      const isMatching = isIpMatching(clientIp, config['office_wifi_ip'] || '');
+      const isEnabled = config['wifi_auto_attendance_enabled'] !== 'false';
+
+      res.json({
+        client_ip: clientIp,
+        office_wifi_name: config['office_wifi_name'] || 'AlliedOne Office Wi-Fi',
+        is_office_wifi: isMatching,
+        is_auto_enabled: isEnabled,
+      });
+    });
+
+    this.app.post('/api/attendance/wifi-heartbeat', async (req, res) => {
+      const user = (req as any).user;
+      if (!user?.id) return res.status(401).json({ error: 'Authentication required' });
+
+      const clientIp = getCleanClientIp(req);
+      const rows = await dbAll('SELECT key, value FROM settings WHERE key IN ("office_wifi_ip","wifi_auto_attendance_enabled")') as any[];
+      const config: Record<string, string> = {};
+      rows.forEach(r => { config[r.key] = r.value; });
+
+      const isMatching = isIpMatching(clientIp, config['office_wifi_ip'] || '');
+      const isEnabled = config['wifi_auto_attendance_enabled'] !== 'false';
+
+      if (!isEnabled) {
+        return res.json({ is_office_wifi: isMatching, is_auto_enabled: false, auto_checked_in: false });
+      }
+
+      const todayDhaka = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+
+      if (isMatching) {
+        // Connected to Office Wi-Fi!
+        // 1. Check if user already checked in today
+        const existingIn = await dbGet(
+          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'IN'`,
+          [user.id, todayDhaka]
+        ) as any;
+
+        let autoCheckedIn = false;
+        if (!existingIn) {
+          const nowIso = new Date().toISOString();
+          await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [user.id, 'IN', nowIso]);
+          autoCheckedIn = true;
+          console.log(`[WIFI AUTO-CHECKIN] Member #${user.id} (${user.name}) automatically checked in via Office Wi-Fi (${clientIp}).`);
+        }
+
+        // 2. Upsert active presence session
+        await dbRun(
+          `INSERT INTO active_sessions (member_id, last_seen, ip, is_wifi)
+           VALUES (?, CURRENT_TIMESTAMP, ?, 1)
+           ON CONFLICT(member_id) DO UPDATE SET last_seen = CURRENT_TIMESTAMP, ip = excluded.ip, is_wifi = 1`,
+          [user.id, clientIp]
+        );
+
+        return res.json({
+          success: true,
+          is_office_wifi: true,
+          auto_checked_in: autoCheckedIn,
+          message: autoCheckedIn ? 'Checked in automatically via Office Wi-Fi' : 'Heartbeat active'
+        });
+      } else {
+        return res.json({
+          success: true,
+          is_office_wifi: false,
+          auto_checked_in: false
+        });
+      }
+    });
+
+    // ── ROUTER / DHCP WEBHOOK ───────────────────────────────
+    // Allows office router scripts (MikroTik / UniFi / OpenWrt) to notify connect/disconnect
+    this.app.post('/api/attendance/wifi-webhook', async (req, res) => {
+      const { member_id, email, phone_number, event, ip } = req.body;
+      if (!event || !['CONNECT', 'DISCONNECT'].includes(event)) {
+        return res.status(400).json({ error: 'event must be CONNECT or DISCONNECT' });
+      }
+
+      let member: any = null;
+      if (member_id) member = await dbGet('SELECT * FROM members WHERE id = ?', [member_id]);
+      else if (email) member = await dbGet('SELECT * FROM members WHERE LOWER(TRIM(email)) = LOWER(?)', [email]);
+      else if (phone_number) member = await dbGet('SELECT * FROM members WHERE phone_number = ?', [phone_number]);
+
+      if (!member) {
+        return res.status(404).json({ error: 'Member not found for provided identifier' });
+      }
+
+      const todayDhaka = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+      const nowIso = new Date().toISOString();
+
+      if (event === 'CONNECT') {
+        const existingIn = await dbGet(
+          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'IN'`,
+          [member.id, todayDhaka]
+        );
+        if (!existingIn) {
+          await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'IN', nowIso]);
+          console.log(`[ROUTER WEBHOOK] Auto checked in ${member.name} on Wi-Fi CONNECT`);
+        }
+        await dbRun(
+          `INSERT INTO active_sessions (member_id, last_seen, ip, is_wifi)
+           VALUES (?, CURRENT_TIMESTAMP, ?, 1)
+           ON CONFLICT(member_id) DO UPDATE SET last_seen = CURRENT_TIMESTAMP, ip = excluded.ip, is_wifi = 1`,
+          [member.id, ip || 'Router-Webhook']
+        );
+        return res.json({ ok: true, action: 'IN', member_name: member.name });
+      } else {
+        // DISCONNECT
+        const existingIn = await dbGet(
+          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'IN'`,
+          [member.id, todayDhaka]
+        );
+        const existingOut = await dbGet(
+          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'OUT'`,
+          [member.id, todayDhaka]
+        );
+        if (existingIn && !existingOut) {
+          await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'OUT', nowIso]);
+          console.log(`[ROUTER WEBHOOK] Auto checked out ${member.name} on Wi-Fi DISCONNECT`);
+        }
+        await dbRun('DELETE FROM active_sessions WHERE member_id = ?', [member.id]);
+        return res.json({ ok: true, action: 'OUT', member_name: member.name });
+      }
     });
 
     // ── LEAVE ────────────────────────────────────────────────
@@ -544,6 +772,40 @@ export class OpenClaw {
         if ([7, 3, 1].includes(diffDays)) {
           if (now.getMinutes() === 0) console.log(`[ALERT] Tender '${t.title}' submission is due in ${diffDays} day(s)!`);
         }
+      }
+
+      // 4. Wi-Fi Auto Check-Out Engine (runs every minute)
+      try {
+        const timeoutRow = await dbGet("SELECT value FROM settings WHERE key='auto_checkout_timeout_minutes'") as any;
+        const enabledRow = await dbGet("SELECT value FROM settings WHERE key='wifi_auto_attendance_enabled'") as any;
+        const isAutoEnabled = enabledRow?.value !== 'false';
+        const timeoutMinutes = parseInt(timeoutRow?.value || '10', 10);
+
+        if (isAutoEnabled) {
+          const expiredSessions = await dbAll(
+            `SELECT a.member_id, a.last_seen, m.name
+             FROM active_sessions a
+             JOIN members m ON a.member_id = m.id
+             WHERE a.is_wifi = 1
+               AND (strftime('%s', 'now') - strftime('%s', a.last_seen)) > ?`,
+            [timeoutMinutes * 60]
+          ) as any[];
+
+          for (const s of expiredSessions) {
+            const todayDhaka = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+            const hasIn = await dbGet(`SELECT id FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'IN'`, [s.member_id, todayDhaka]);
+            const hasOut = await dbGet(`SELECT id FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'OUT'`, [s.member_id, todayDhaka]);
+
+            if (hasIn && !hasOut) {
+              const nowIso = new Date().toISOString();
+              await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [s.member_id, 'OUT', nowIso]);
+              console.log(`[WIFI AUTO-CHECKOUT] Member #${s.member_id} (${s.name}) automatically checked out after ${timeoutMinutes}m Wi-Fi disconnection.`);
+            }
+            await dbRun('DELETE FROM active_sessions WHERE member_id = ?', [s.member_id]);
+          }
+        }
+      } catch (err) {
+        console.error('Error in Wi-Fi auto-checkout cron:', err);
       }
     };
     
