@@ -38,7 +38,27 @@ export default function AdminPage() {
     is_matching_office_wifi: false
   });
   const [savingWifi, setSavingWifi] = useState(false);
+  const [detectingIp, setDetectingIp] = useState(false);
   const [activeDevices, setActiveDevices] = useState<any[]>([]);
+
+  const detectIpDirectly = async (): Promise<string | null> => {
+    try {
+      const res = await fetch('https://api.ipify.org?format=json');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ip) return data.ip;
+      }
+    } catch {
+      try {
+        const res2 = await fetch('https://icanhazip.com');
+        if (res2.ok) {
+          const text = (await res2.text()).trim();
+          if (text) return text;
+        }
+      } catch {}
+    }
+    return null;
+  };
 
   const loadWifiSettings = async () => {
     try {
@@ -46,16 +66,33 @@ export default function AdminPage() {
       const res = await fetch('/api/settings/wifi', {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
+      let serverIp = '';
       if (res.ok) {
         const data = await res.json();
+        serverIp = data.detected_client_ip;
         setWifiSettings(prev => ({
           ...prev,
           ...data,
-          detected_client_ip: data.detected_client_ip || '127.0.0.1'
+          detected_client_ip: serverIp || prev.detected_client_ip
         }));
+      }
+      
+      // If server IP was localhost or empty, also check public IP
+      if (!serverIp || serverIp === '127.0.0.1' || serverIp === '::1') {
+        const directIp = await detectIpDirectly();
+        if (directIp) {
+          setWifiSettings(prev => ({
+            ...prev,
+            detected_client_ip: directIp
+          }));
+        }
       }
     } catch (e) {
       console.error(e);
+      const directIp = await detectIpDirectly();
+      if (directIp) {
+        setWifiSettings(prev => ({ ...prev, detected_client_ip: directIp }));
+      }
     }
   };
 
@@ -106,14 +143,32 @@ export default function AdminPage() {
     }
   };
 
-  const useCurrentIpAsOfficeWifi = () => {
-    if (!wifiSettings.detected_client_ip) return;
-    const currentIps = wifiSettings.office_wifi_ip ? wifiSettings.office_wifi_ip.split(',').map(s => s.trim()) : [];
-    if (!currentIps.includes(wifiSettings.detected_client_ip)) {
-      currentIps.push(wifiSettings.detected_client_ip);
+  const useCurrentIpAsOfficeWifi = async () => {
+    setDetectingIp(true);
+    let ip = wifiSettings.detected_client_ip;
+    if (!ip || ip === 'Detecting...') {
+      ip = (await detectIpDirectly()) || '';
     }
-    setWifiSettings({ ...wifiSettings, office_wifi_ip: currentIps.join(', ') });
-    showToast(`Added current IP (${wifiSettings.detected_client_ip}) to Office Wi-Fi.`);
+    setDetectingIp(false);
+
+    if (!ip) {
+      showToast('Could not auto-detect IP. Please type your office IP manually in the box.');
+      return;
+    }
+
+    const currentIps = wifiSettings.office_wifi_ip
+      ? wifiSettings.office_wifi_ip.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+    if (!currentIps.includes(ip)) {
+      currentIps.push(ip);
+    }
+
+    setWifiSettings(prev => ({
+      ...prev,
+      detected_client_ip: ip,
+      office_wifi_ip: currentIps.join(', ')
+    }));
+    showToast(`Added IP (${ip})! Click "Save Settings" to apply.`);
   };
 
   const openAddModal = () => {
@@ -271,9 +326,10 @@ export default function AdminPage() {
                 type="button"
                 className="btn btn-ghost btn-sm"
                 onClick={useCurrentIpAsOfficeWifi}
+                disabled={detectingIp}
                 style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}
               >
-                <Radio size={14} /> Add Current IP to Office Whitelist
+                <Radio size={14} /> {detectingIp ? 'Detecting IP...' : 'Add Current IP to Office Whitelist'}
               </button>
             </div>
 
