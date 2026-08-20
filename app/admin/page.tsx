@@ -1,10 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, X, Pencil, Trash2, Wifi, Radio, Globe, Shield, Save, Check, Laptop } from 'lucide-react';
 import Topbar from '../components/Topbar';
+import { useAuth } from '../context/AuthContext';
+import Cookies from 'js-cookie';
 
 export default function AdminPage() {
+  const { token: ctxToken } = useAuth();
+  const getAuthToken = useCallback(() => {
+    return ctxToken || Cookies.get('token') || (typeof window !== 'undefined' ? (localStorage.getItem('erp_token') || localStorage.getItem('token')) : '') || '';
+  }, [ctxToken]);
+
   const [members, setMembers] = useState<any[]>([]);
   
   // Modal States
@@ -22,7 +29,10 @@ export default function AdminPage() {
 
   const loadMembers = async () => {
     try {
-      const res = await fetch('/api/members');
+      const token = getAuthToken();
+      const res = await fetch('/api/members', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       setMembers(await res.json());
     } catch (e) {
       console.error(e);
@@ -62,7 +72,7 @@ export default function AdminPage() {
 
   const loadWifiSettings = async () => {
     try {
-      const token = localStorage.getItem('erp_token');
+      const token = getAuthToken();
       const res = await fetch('/api/settings/wifi', {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
@@ -98,7 +108,7 @@ export default function AdminPage() {
 
   const loadActiveDevices = async () => {
     try {
-      const token = localStorage.getItem('erp_token');
+      const token = getAuthToken();
       const res = await fetch('/api/attendance/active-devices', {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
@@ -121,7 +131,7 @@ export default function AdminPage() {
   const saveWifiSettings = async () => {
     setSavingWifi(true);
     try {
-      const token = localStorage.getItem('erp_token');
+      const token = getAuthToken();
       const res = await fetch('/api/settings/wifi', {
         method: 'POST',
         headers: {
@@ -134,7 +144,8 @@ export default function AdminPage() {
         showToast('Wi-Fi attendance settings saved successfully!');
         loadWifiSettings();
       } else {
-        showToast('Failed to save Wi-Fi settings.');
+        const errData = await res.json().catch(() => ({}));
+        showToast(errData.error || 'Failed to save Wi-Fi settings.');
       }
     } catch {
       showToast('Cannot reach server.');
@@ -191,17 +202,22 @@ export default function AdminPage() {
       return;
     }
     try {
+      const token = getAuthToken();
+      const authHeaders = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
       if (isEditing && editingId) {
         await fetch(`/api/members/${editingId}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify(memberData)
         });
         showToast('Member updated!');
       } else {
         await fetch('/api/members', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify(memberData)
         });
         showToast('Member added!');
@@ -216,7 +232,11 @@ export default function AdminPage() {
   const deleteMember = async (id: number, name: string) => {
     if (!confirm(`Are you sure you want to remove ${name}? Tasks assigned to them will be moved to Unassigned.`)) return;
     try {
-      await fetch(`/api/members/${id}`, { method: 'DELETE' });
+      const token = getAuthToken();
+      await fetch(`/api/members/${id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       showToast('Member removed.');
       loadMembers();
     } catch (e) {

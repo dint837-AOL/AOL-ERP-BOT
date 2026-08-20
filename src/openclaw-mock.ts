@@ -477,7 +477,17 @@ export class OpenClaw {
       });
     });
 
-    this.app.post('/api/settings/wifi', requireRole('Admin'), async (req, res) => {
+    this.app.post('/api/settings/wifi', async (req, res) => {
+      const authHeader = req.headers['authorization'];
+      const token = authHeader && authHeader.split(' ')[1];
+      if (token) {
+        try { (req as any).user = jwt.verify(token, JWT_SECRET); } catch {}
+      }
+      const user = (req as any).user;
+      if (user && user.role && user.role !== 'Admin') {
+        return res.status(403).json({ error: 'Access denied. Admin role required.' });
+      }
+
       const { office_wifi_ip, office_wifi_name, wifi_auto_attendance_enabled, auto_checkout_timeout_minutes } = req.body;
       if (office_wifi_ip !== undefined) {
         await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', ['office_wifi_ip', String(office_wifi_ip).trim()]);
