@@ -27,15 +27,20 @@ let db: Database;
 const JWT_SECRET = process.env.JWT_SECRET || 'alliedone_super_secret_key_123!';
 
 export function getCleanClientIp(req: express.Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
+  const forwarded = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.headers['cf-connecting-ip'];
   let rawIp = '';
   if (typeof forwarded === 'string') {
     rawIp = (forwarded.split(',')[0] || '').trim();
+  } else if (Array.isArray(forwarded) && forwarded.length > 0) {
+    rawIp = String(forwarded[0] || '').trim();
   } else {
-    rawIp = req.socket.remoteAddress || '';
+    rawIp = req.socket?.remoteAddress || '';
   }
   if (rawIp.startsWith('::ffff:')) {
     rawIp = rawIp.substring(7);
+  }
+  if (!rawIp || rawIp === '::1') {
+    rawIp = '127.0.0.1';
   }
   return rawIp;
 }
@@ -340,15 +345,21 @@ export class OpenClaw {
     });
 
     // ── AUTH MIDDLEWARE FILTER ──────────────────────────────
-    // Protected by authenticateToken, bypassing login and public network probes
+    // Protected by authenticateToken, bypassing login, public network probes and settings query
     this.app.use('/api', (req, res, next) => {
       if (
         req.path.startsWith('/auth/login') ||
         req.path.startsWith('/attendance/wifi-webhook') ||
         req.path.startsWith('/attendance/wifi-status') ||
         req.path.startsWith('/attendance/client-ping') ||
-        req.path.startsWith('/attendance/download-script')
+        req.path.startsWith('/attendance/download-script') ||
+        (req.path.startsWith('/settings/wifi') && req.method === 'GET')
       ) {
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
+        if (token) {
+          try { (req as any).user = jwt.verify(token, JWT_SECRET); } catch {}
+        }
         return next();
       }
       authenticateToken(req, res, next);

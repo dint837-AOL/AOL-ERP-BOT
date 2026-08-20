@@ -42,10 +42,17 @@ export default function AdminPage() {
 
   const loadWifiSettings = async () => {
     try {
-      const res = await fetch('/api/settings/wifi');
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('/api/settings/wifi', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (res.ok) {
         const data = await res.json();
-        setWifiSettings(data);
+        setWifiSettings(prev => ({
+          ...prev,
+          ...data,
+          detected_client_ip: data.detected_client_ip || '127.0.0.1'
+        }));
       }
     } catch (e) {
       console.error(e);
@@ -388,26 +395,6 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
-            </div>
-
-            {/* Router Hardware Webhook Integration info */}
-            <div style={{
-              marginTop: '20px',
-              padding: '14px 18px',
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px solid var(--border)',
-              borderRadius: '10px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: 'var(--text)', fontWeight: 600, fontSize: '.84rem' }}>
-                <Globe size={15} style={{ color: 'var(--primary)' }} />
-                <span>Optional: Router Hardware Webhook Integration (MikroTik / UniFi / OpenWrt)</span>
-              </div>
-              <p style={{ fontSize: '.76rem', color: 'var(--muted)', margin: '0 0 8px', lineHeight: 1.5 }}>
-                You can configure your office router or a local network script to trigger instant check-in/out even if employees close their browser. Send a POST request on device connect/disconnect:
-              </p>
-              <code style={{ display: 'block', padding: '8px 12px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', fontSize: '.74rem', color: 'var(--primary)', overflowX: 'auto' }}>
-                POST /api/attendance/wifi-webhook -d &#123; &quot;email&quot;: &quot;employee@alliedone.com&quot;, &quot;event&quot;: &quot;CONNECT&quot; &#125;
-              </code>
             </div>
           </div>
         </div>
