@@ -231,9 +231,9 @@ export class OpenClaw {
       const rows = await dbAll(
         `SELECT date(a.timestamp) as att_date, a.action_type, a.timestamp
          FROM attendance a
-         WHERE a.member_id=? AND strftime('%Y-%m', a.timestamp)=?
+         WHERE a.member_id=? AND CAST(a.timestamp AS TEXT) LIKE ?
          ORDER BY a.timestamp ASC`,
-        [member_id, month]
+        [member_id, month + '%']
       );
       res.json(rows);
     });
@@ -247,7 +247,7 @@ export class OpenClaw {
 
     // ── WI-FI SETTINGS ENDPOINTS ─────────────────────────────
     this.app.get('/api/settings/wifi', async (req, res) => {
-      const rows = await dbAll('SELECT key, value FROM settings WHERE key IN ("office_wifi_ip","office_wifi_name","wifi_auto_attendance_enabled","auto_checkout_timeout_minutes")') as any[];
+      const rows = await dbAll("SELECT key, value FROM settings WHERE key IN ('office_wifi_ip','office_wifi_name','wifi_auto_attendance_enabled','auto_checkout_timeout_minutes')") as any[];
       const config: Record<string, string> = {};
       rows.forEach(r => { config[r.key] = r.value; });
       const clientIp = getCleanClientIp(req);
@@ -308,7 +308,7 @@ export class OpenClaw {
     // ── WI-FI ATTENDANCE PROBE & HEARTBEAT ───────────────────
     this.app.get('/api/attendance/wifi-status', async (req, res) => {
       const clientIp = getCleanClientIp(req);
-      const rows = await dbAll('SELECT key, value FROM settings WHERE key IN ("office_wifi_ip","office_wifi_name","wifi_auto_attendance_enabled")') as any[];
+      const rows = await dbAll("SELECT key, value FROM settings WHERE key IN ('office_wifi_ip','office_wifi_name','wifi_auto_attendance_enabled')") as any[];
       const config: Record<string, string> = {};
       rows.forEach(r => { config[r.key] = r.value; });
 
@@ -328,7 +328,7 @@ export class OpenClaw {
       if (!user?.id) return res.status(401).json({ error: 'Authentication required' });
 
       const clientIp = getCleanClientIp(req);
-      const rows = await dbAll('SELECT key, value FROM settings WHERE key IN ("office_wifi_ip","wifi_auto_attendance_enabled")') as any[];
+      const rows = await dbAll("SELECT key, value FROM settings WHERE key IN ('office_wifi_ip','wifi_auto_attendance_enabled')") as any[];
       const config: Record<string, string> = {};
       rows.forEach(r => { config[r.key] = r.value; });
 
@@ -459,7 +459,7 @@ export class OpenClaw {
       const os_name = String(req.body.os || req.body.os_name || 'Windows').slice(0, 50);
       const clientIp = getCleanClientIp(req);
 
-      const rows = await dbAll('SELECT key, value FROM settings WHERE key IN ("office_wifi_ip","wifi_auto_attendance_enabled")') as any[];
+      const rows = await dbAll("SELECT key, value FROM settings WHERE key IN ('office_wifi_ip','wifi_auto_attendance_enabled')") as any[];
       const config: Record<string, string> = {};
       rows.forEach(r => { config[r.key] = r.value; });
 
@@ -762,12 +762,12 @@ echo "=============================================================="
         `SELECT * FROM leave_requests
          WHERE member_id=?
            AND (
-             strftime('%Y-%m', start_date)=? OR
-             strftime('%Y-%m', end_date)=? OR
+             start_date LIKE ? OR
+             end_date LIKE ? OR
              (start_date <= ? AND end_date >= ?)
            )
          ORDER BY start_date ASC`,
-        [member_id, month, month, month + '-01', month + '-31']
+        [member_id, month + '%', month + '%', month + '-01', month + '-31']
       );
       res.json(rows);
     });
@@ -921,13 +921,14 @@ echo "=============================================================="
         const timeoutMinutes = parseInt(timeoutRow?.value || '10', 10);
 
         if (isAutoEnabled) {
+          const cutoffIso = new Date(Date.now() - timeoutMinutes * 60 * 1000).toISOString();
           const expiredSessions = await dbAll(
             `SELECT a.member_id, a.last_seen, m.name
              FROM active_sessions a
              JOIN members m ON a.member_id = m.id
              WHERE a.is_wifi = 1
-               AND (strftime('%s', 'now') - strftime('%s', a.last_seen)) > ?`,
-            [timeoutMinutes * 60]
+               AND a.last_seen < ?`,
+            [cutoffIso]
           ) as any[];
 
           for (const s of expiredSessions) {
