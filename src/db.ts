@@ -395,10 +395,10 @@ export const dbRun = async (sql: string, p: any[] = []): Promise<{ lastID: numbe
     let finalSql = formatPgQuery(sql);
     const isInsert = /^\s*INSERT\s+INTO/i.test(finalSql);
     if (isInsert && !/RETURNING/i.test(finalSql)) {
-      finalSql += ' RETURNING id';
+      finalSql += ' RETURNING *';
     }
     const res = await pgPool.query(finalSql, cleanParams);
-    const lastID = res.rows[0]?.id ? Number(res.rows[0].id) : 0;
+    const lastID = res.rows && res.rows[0] && res.rows[0].id !== undefined ? Number(res.rows[0].id) : 0;
     return { lastID, rowCount: res.rowCount ?? 0 };
   }
   if (sqliteDb) {
