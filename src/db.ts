@@ -175,10 +175,13 @@ export async function initDB() {
         id SERIAL PRIMARY KEY,
         member_id INTEGER REFERENCES members(id) ON DELETE CASCADE,
         message TEXT NOT NULL,
+        link TEXT DEFAULT '',
         is_read BOOLEAN DEFAULT false,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    try { await pgPool.query("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link TEXT DEFAULT ''"); } catch (e) {}
 
   } else {
     isPg = false;
@@ -308,10 +311,13 @@ export async function initDB() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         member_id INTEGER REFERENCES members(id),
         message TEXT NOT NULL,
+        link TEXT DEFAULT '',
         is_read BOOLEAN DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    try { await sqliteDb.exec("ALTER TABLE notifications ADD COLUMN link TEXT DEFAULT ''"); } catch (e) {}
   }
 
   // Seed default admin and employee accounts

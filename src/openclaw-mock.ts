@@ -779,7 +779,7 @@ echo "=============================================================="
       const member = await dbGet(`SELECT name FROM members WHERE id=?`, [member_id]) as any;
       const admins = await dbAll(`SELECT id FROM members WHERE role='Admin'`) as any[];
       for (const admin of admins) {
-        await dbRun(`INSERT INTO notifications(member_id,message) VALUES(?,?)`, [admin.id, `${member?.name || 'An employee'} requested ${leave_type} leave.`]);
+        await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [admin.id, `${member?.name || 'An employee'} requested ${leave_type} leave.`, '/hr?tab=leave']);
       }
 
       res.status(201).json(await dbGet(`SELECT l.*,m.name as member_name FROM leave_requests l JOIN members m ON l.member_id=m.id WHERE l.id=?`, [lastID]));
@@ -789,7 +789,7 @@ echo "=============================================================="
       await dbRun(`UPDATE leave_requests SET status=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?`, [status, req.params.id]);
       const leaveRow = await dbGet('SELECT * FROM leave_requests WHERE id=?', [req.params.id]) as any;
       if (leaveRow) {
-        await dbRun(`INSERT INTO notifications(member_id,message) VALUES(?,?)`, [leaveRow.member_id, `Your ${leaveRow.leave_type} leave request has been ${status}.`]);
+        await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [leaveRow.member_id, `Your ${leaveRow.leave_type} leave request has been ${status}.`, '/hr?tab=leave']);
       }
       res.json(leaveRow);
     });
@@ -798,13 +798,17 @@ echo "=============================================================="
     this.app.get('/api/notifications', async (req, res) => {
       const memberId = req.query.member_id;
       if (!memberId) return res.json([]);
-      const notifs = await dbAll('SELECT * FROM notifications WHERE member_id=? ORDER BY created_at DESC LIMIT 50', [memberId]);
+      const notifs = await dbAll('SELECT * FROM notifications WHERE member_id=? ORDER BY created_at DESC LIMIT 50', [Number(memberId)]);
       res.json(notifs);
+    });
+    this.app.patch('/api/notifications/:id/read', async (req, res) => {
+      await dbRun('UPDATE notifications SET is_read=1 WHERE id=?', [Number(req.params.id)]);
+      res.json({ ok: true });
     });
     this.app.patch('/api/notifications/read-all', async (req, res) => {
       const { member_id } = req.body;
       if (!member_id) return res.status(400).json({ error: 'member_id required' });
-      await dbRun('UPDATE notifications SET is_read=1 WHERE member_id=?', [member_id]);
+      await dbRun('UPDATE notifications SET is_read=1 WHERE member_id=?', [Number(member_id)]);
       res.json({ ok: true });
     });
 

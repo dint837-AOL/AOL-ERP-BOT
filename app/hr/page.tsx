@@ -268,9 +268,27 @@ export default function HRPage() {
     sendWifiHeartbeat();
     const iv = setInterval(loadAll, 30000);
     const hb = setInterval(sendWifiHeartbeat, 60000); // Heartbeat every 1 minute
+
+    const handleTabSwitch = (e?: any) => {
+      const target = e?.detail || new URLSearchParams(window.location.search).get('tab');
+      if (target === 'leave' || target === 'leaves') {
+        setActiveTab('leave');
+      } else if (target === 'report') {
+        setActiveTab('report');
+      } else if (target === 'att') {
+        setActiveTab('att');
+      }
+    };
+
+    handleTabSwitch();
+    window.addEventListener('popstate', handleTabSwitch);
+    window.addEventListener('change-hr-tab', handleTabSwitch);
+
     return () => {
       clearInterval(iv);
       clearInterval(hb);
+      window.removeEventListener('popstate', handleTabSwitch);
+      window.removeEventListener('change-hr-tab', handleTabSwitch);
     };
   }, [loadAll, checkWifiStatus, sendWifiHeartbeat]);
 

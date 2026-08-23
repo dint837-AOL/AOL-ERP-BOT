@@ -7,7 +7,7 @@
  */
 'use client';
 import { Menu, Bell } from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import React, { useState, useEffect, useRef } from 'react';
 
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +15,7 @@ import Cookies from 'js-cookie';
 
 export default function Topbar({ title, children }: { title?: string, children?: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = useAuth();
   let defaultTitle = 'Dashboard';
   if (pathname === '/hr') defaultTitle = 'HR & Attendance';
@@ -46,7 +47,10 @@ export default function Topbar({ title, children }: { title?: string, children?:
     if (!memberId) return;
     try {
       const res = await fetch(`/api/notifications?member_id=${memberId}`);
-      if (res.ok) setNotifications(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(Array.isArray(data) ? data : []);
+      }
     } catch(e) {}
   };
 
@@ -70,14 +74,38 @@ export default function Topbar({ title, children }: { title?: string, children?:
     e.stopPropagation();
     const memberId = getMemberId();
     if (!memberId) return;
+    
+    // Immediate optimistic state update
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
+    
     try {
       await fetch('/api/notifications/read-all', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ member_id: memberId })
+        body: JSON.stringify({ member_id: Number(memberId) })
       });
       fetchNotifs();
     } catch(e) {}
+  };
+
+  const handleNotificationClick = async (n: any) => {
+    // 1. Immediate optimistic UI update
+    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, is_read: 1 } : item));
+    setShowDropdown(false);
+
+    // 2. Mark as read on backend
+    try {
+      fetch(`/api/notifications/${n.id}/read`, { method: 'PATCH' });
+    } catch (e) {}
+
+    // 3. Route to target page (e.g. Leave requests tab)
+    const targetLink = n.link || (n.message?.toLowerCase().includes('leave') ? '/hr?tab=leave' : '/dashboard');
+    if (pathname === '/hr' && targetLink.includes('/hr')) {
+      window.dispatchEvent(new CustomEvent('change-hr-tab', { detail: 'leave' }));
+      window.history.pushState({}, '', targetLink);
+    } else {
+      router.push(targetLink);
+    }
   };
 
   const openSide = () => {
@@ -90,7 +118,7 @@ export default function Topbar({ title, children }: { title?: string, children?:
     document.getElementById('side-overlay')?.classList.remove('show');
   };
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadCount = notifications.filter(n => !n.is_read || n.is_read === 0 || n.is_read === false || n.is_read === '0').length;
 
   return (
     <>
@@ -128,15 +156,42 @@ export default function Topbar({ title, children }: { title?: string, children?:
                   {notifications.length === 0 ? (
                     <div style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.85rem' }}>No notifications yet.</div>
                   ) : (
-                    notifications.map(n => (
-                      <div key={n.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: n.is_read ? 'transparent' : 'rgba(79,126,255,0.05)', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                        {!n.is_read && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', flexShrink: 0, marginTop: '6px' }}></div>}
-                        <div style={{ flex: 1, paddingLeft: n.is_read ? '20px' : '0' }}>
-                          <div style={{ fontSize: '0.85rem', color: n.is_read ? 'var(--muted)' : 'var(--text)', lineHeight: 1.4 }}>{n.message}</div>
-                          <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '6px' }}>{new Date(n.created_at).toLocaleString()}</div>
+                    notifications.map(n => {
+                      const isUnread = !n.is_read || n.is_read === 0 || n.is_read === false || n.is_read === '0';
+                      return (
+                        <div
+                          key={n.id}
+                          onClick={() => handleNotificationClick(n)}
+                          style={{
+                            padding: '12px 16px',
+                            borderBottom: '1px solid var(--border)',
+                            background: isUnread ? 'rgba(79,126,255,0.08)' : 'transparent',
+                            display: 'flex',
+                            gap: '12px',
+                            alignItems: 'flex-start',
+                            cursor: 'pointer',
+                            transition: 'background 0.15s ease'
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = isUnread ? 'rgba(79,126,255,0.08)' : 'transparent')}
+                        >
+                          {isUnread ? (
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', flexShrink: 0, marginTop: '6px' }} />
+                          ) : (
+                            <div style={{ width: '8px', height: '8px', flexShrink: 0, marginTop: '6px' }} />
+                          )}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '0.85rem', color: isUnread ? 'var(--text)' : 'var(--muted)', fontWeight: isUnread ? 600 : 400, lineHeight: 1.4 }}>
+                              {n.message}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>{new Date(n.created_at).toLocaleString()}</span>
+                              <span style={{ color: 'var(--primary)', fontSize: '0.68rem', fontWeight: 500 }}>View &rarr;</span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
