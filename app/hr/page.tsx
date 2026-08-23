@@ -12,9 +12,10 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LogIn, LogOut, Plus, ChevronLeft, ChevronRight, X, Calendar, Download, BarChart2, Wifi, Laptop } from 'lucide-react';
+import { LogIn, LogOut, Plus, ChevronLeft, ChevronRight, X, Calendar, Download, BarChart2, Wifi, Laptop, Image as ImageIcon } from 'lucide-react';
 import Topbar from '../components/Topbar';
 import { useAuth } from '../context/AuthContext';
+import html2canvas from 'html2canvas';
 
 // --- Helpers ---
 
@@ -169,7 +170,7 @@ export default function HRPage() {
   const [att, setAtt] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'att' | 'leave'>('att');
+  const [activeTab, setActiveTab] = useState<'att' | 'leave' | 'report'>('att');
   const [attLoading, setAttLoading] = useState(false);
 
   const [showLeaveModal, setShowLeaveModal] = useState(false);
@@ -377,34 +378,66 @@ export default function HRPage() {
     } catch { showToast('Cannot reach server.'); }
   };
 
-  const downloadReport = () => {
+  const reportRef = useRef<HTMLDivElement>(null);
+
+  const downloadImage = async () => {
+    if (!reportRef.current) return;
     const emp = members.find(m => String(m.id) === String(reportMemberId));
     const empName = emp?.name || 'Employee';
-    const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const header = ['Date', 'Day', 'Status', 'Check-In', 'Check-Out'];
-    const rows = calDays.map(d => {
-      const dow = new Date(d.date + 'T00:00:00').getDay();
-      const dayName = DAYS[dow] ?? '';
-      const status = d.isWeekend
-        ? 'Weekend'
-        : d.isPresent
-          ? 'Present'
-          : d.isLeave
-            ? `Leave (${d.leaveType}-${d.leaveStatus})`
-            : d.isAbsent
-              ? 'Absent'
-              : 'N/A';
-      return [`"=${d.date}"`, dayName, status, d.checkInTime || '', d.checkOutTime || ''];
-    });
-    const csv = [header, ...rows].map(r => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${empName.replace(/\s+/g, '_')}_${calYear}-${String(calMonth + 1).padStart(2, '0')}_Attendance.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('Report downloaded.');
+    try {
+      showToast('Generating picture...');
+      const canvas = await html2canvas(reportRef.current, { 
+        backgroundColor: '#ffffff',
+        onclone: (doc) => {
+          const el = doc.getElementById('monthly-calendar-report');
+          if (el) {
+            el.style.setProperty('--card', '#ffffff');
+            el.style.setProperty('--text', '#000000');
+            el.style.setProperty('--muted', '#555555');
+            el.style.setProperty('--border', '#dddddd');
+            el.style.setProperty('--gs', '#eeeeee');
+            el.style.color = '#000000';
+
+            // Increase opacity for calendar cells
+            el.querySelectorAll('.present').forEach(c => {
+              (c as HTMLElement).style.backgroundColor = 'rgba(38,196,134,0.3)';
+              (c as HTMLElement).style.borderColor = 'rgba(38,196,134,1)';
+            });
+            el.querySelectorAll('.absent').forEach(c => {
+              (c as HTMLElement).style.backgroundColor = 'rgba(242,92,122,0.3)';
+              (c as HTMLElement).style.borderColor = 'rgba(242,92,122,1)';
+            });
+            el.querySelectorAll('.on-leave').forEach(c => {
+              (c as HTMLElement).style.backgroundColor = 'rgba(245,166,35,0.3)';
+              (c as HTMLElement).style.borderColor = 'rgba(245,166,35,1)';
+            });
+
+            // Make dots solid and highly vibrant without box-shadow 
+            el.querySelectorAll('.green-dot').forEach(d => {
+              (d as HTMLElement).style.backgroundColor = '#00C853';
+              (d as HTMLElement).style.boxShadow = 'none';
+            });
+            el.querySelectorAll('.red-dot').forEach(d => {
+              (d as HTMLElement).style.backgroundColor = '#D50000';
+              (d as HTMLElement).style.boxShadow = 'none';
+            });
+            el.querySelectorAll('.yellow-dot').forEach(d => {
+              (d as HTMLElement).style.backgroundColor = '#FFD600';
+              (d as HTMLElement).style.boxShadow = 'none';
+            });
+          }
+        }
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = imgData;
+      a.download = `${empName.replace(/\s+/g, '_')}_${calYear}-${String(calMonth + 1).padStart(2, '0')}_Attendance.png`;
+      a.click();
+      showToast('Picture downloaded.');
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to generate picture.');
+    }
   };
 
   const presentCount = new Set(att.filter(a => a.action_type === 'IN').map((a: any) => a.member_id)).size;
@@ -598,6 +631,11 @@ export default function HRPage() {
               </span>
             )}
           </div>
+          {isAdmin && (
+            <div className={'tab ' + (activeTab === 'report' ? 'on' : '')} onClick={() => setActiveTab('report')}>
+              Monthly Report
+            </div>
+          )}
         </div>
 
         {/* Attendance log */}
@@ -730,16 +768,16 @@ export default function HRPage() {
         </div>
 
         {/* Monthly Report - Admin only */}
-        {isAdmin && (
-          <div className="card" style={{ marginTop: 8 }}>
+        {activeTab === 'report' && isAdmin && (
+          <div className="card">
             <div className="card-head">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <BarChart2 size={17} style={{ color: 'var(--primary)' }} />
                 <h3>Monthly Attendance Report</h3>
               </div>
               {reportMemberId && calDays.length > 0 && (
-                <button className="btn btn-primary btn-sm" onClick={downloadReport}>
-                  <Download size={13} /> Download CSV
+                <button className="btn btn-primary btn-sm" onClick={downloadImage}>
+                  <ImageIcon size={13} /> Export as Picture
                 </button>
               )}
             </div>
@@ -774,53 +812,55 @@ export default function HRPage() {
               </div>
             </div>
 
-            {/* Legend */}
-            <div style={{ padding: '10px 18px', display: 'flex', gap: 20, flexWrap: 'wrap', borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,.08)' }}>
-              {[
-                { cls: 'cal-dot green-dot', label: 'Present' },
-                { cls: 'cal-dot red-dot', label: 'Absent' },
-                { cls: 'cal-dot yellow-dot', label: 'On Leave' },
-              ].map(({ cls, label }) => (
-                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '.76rem', color: 'var(--muted)' }}>
-                  <span className={cls} style={{ flexShrink: 0 }} />{label}
+            {/* The exportable area */}
+            <div id="monthly-calendar-report" ref={reportRef} style={{ background: 'var(--card)' }}>
+              
+              {/* Employee info header for report */}
+              {reportMemberId && (
+                <div style={{ padding: '20px 18px 0', textAlign: 'center' }}>
+                  <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)' }}>
+                    {members.find(m => String(m.id) === String(reportMemberId))?.name || 'Employee'}
+                  </h2>
+                  <div style={{ fontSize: '.85rem', color: 'var(--muted)', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>
+                    {members.find(m => String(m.id) === String(reportMemberId))?.role || ''} • {monthLabel(calYear, calMonth)}
+                  </div>
                 </div>
-              ))}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '.76rem', color: 'var(--muted)' }}>
-                <span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(255,255,255,.035)', border: '1px solid var(--border)', display: 'inline-block', flexShrink: 0 }} />
-                Weekend (Fri/Sat)
-              </div>
-            </div>
+              )}
 
-            {/* Calendar grid */}
-            <div style={{ padding: '18px' }}>
-              {!reportMemberId ? (
-                <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)', fontSize: '.84rem' }}>
-                  Select an employee above to view their monthly attendance calendar.
+              {/* Calendar grid */}
+              <div style={{ padding: '18px' }}>
+                {!reportMemberId ? (
+                  <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)', fontSize: '.84rem' }}>
+                    Select an employee above to view their monthly attendance calendar.
+                  </div>
+                ) : calLoading ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: 'var(--muted)' }}>Loading calendar...</div>
+                ) : (
+                  <MonthCalendar year={calYear} month={calMonth} calDays={calDays} />
+                )}
+              </div>
+
+              {/* Month stats */}
+              {reportMemberId && calDays.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, padding: '0 18px 20px' }}
+                     className="cal-stats-grid">
+                  {[
+                    { label: 'Present', val: calDays.filter(d => d.isPresent).length, color: 'var(--green)', dotCls: 'cal-dot green-dot' },
+                    { label: 'Absent', val: calDays.filter(d => d.isAbsent).length, color: 'var(--red)', dotCls: 'cal-dot red-dot' },
+                    { label: 'On Leave', val: calDays.filter(d => d.isLeave).length, color: 'var(--orange)', dotCls: 'cal-dot yellow-dot' },
+                    { label: 'Weekends', val: calDays.filter(d => d.isWeekend).length, color: 'var(--muted)', dotCls: '' },
+                  ].map(({ label, val, color, dotCls }) => (
+                    <div key={label} className="s-card" style={{ textAlign: 'center' }}>
+                      <div className="s-lbl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        {dotCls ? <span className={dotCls} style={{ position: 'static' }} /> : <span style={{ width: 8, height: 8, borderRadius: 2, background: 'rgba(255,255,255,.1)', border: '1px solid var(--border)', display: 'inline-block' }} />}
+                        {label}
+                      </div>
+                      <div className="s-val" style={{ color, fontSize: '1.4rem' }}>{val}</div>
+                    </div>
+                  ))}
                 </div>
-              ) : calLoading ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--muted)' }}>Loading calendar...</div>
-              ) : (
-                <MonthCalendar year={calYear} month={calMonth} calDays={calDays} />
               )}
             </div>
-
-            {/* Month stats */}
-            {reportMemberId && calDays.length > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, padding: '0 18px 20px' }}
-                   className="cal-stats-grid">
-                {[
-                  { label: 'Present', val: calDays.filter(d => d.isPresent).length, color: 'var(--green)' },
-                  { label: 'Absent', val: calDays.filter(d => d.isAbsent).length, color: 'var(--red)' },
-                  { label: 'On Leave', val: calDays.filter(d => d.isLeave).length, color: 'var(--orange)' },
-                  { label: 'Weekends', val: calDays.filter(d => d.isWeekend).length, color: 'var(--muted)' },
-                ].map(({ label, val, color }) => (
-                  <div key={label} className="s-card" style={{ textAlign: 'center' }}>
-                    <div className="s-lbl">{label}</div>
-                    <div className="s-val" style={{ color, fontSize: '1.4rem' }}>{val}</div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
