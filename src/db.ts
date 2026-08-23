@@ -170,6 +170,14 @@ export async function initDB() {
         os_name TEXT DEFAULT '',
         device_type TEXT DEFAULT 'BROWSER'
       );
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        member_id INTEGER REFERENCES members(id) ON DELETE CASCADE,
+        message TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
   } else {
@@ -294,6 +302,14 @@ export async function initDB() {
         hostname TEXT DEFAULT '',
         os_name TEXT DEFAULT '',
         device_type TEXT DEFAULT 'BROWSER'
+      );
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id INTEGER REFERENCES members(id),
+        message TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
   }
