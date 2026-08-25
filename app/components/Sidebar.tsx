@@ -1,18 +1,19 @@
-/**
- * Sidebar Navigation Component
- * 
- * Renders the side navigation menu for the ERP system.
- * Handles active route highlighting and mobile responsive toggling.
- */
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Wallet, Bell, FileText, Phone, Map, MessageCircle, Zap, Key, Shield, LogOut } from 'lucide-react';
+import { Home, LayoutDashboard, Users, Wallet, FileText, Phone, Map, MessageCircle, Zap, Key, Shield, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  
+  const closeSide = () => {
+    if (typeof document !== 'undefined') {
+      document.getElementById('sidebar')?.classList.remove('open');
+      document.getElementById('side-overlay')?.classList.remove('show');
+    }
+  };
   
   return (
     <aside className="side" id="sidebar">
@@ -40,42 +41,47 @@ export default function Sidebar() {
 
       <nav className="nav" style={{ flex: 1, overflowY: 'auto' }}>
         <div className="nav-section">Workspace</div>
-        <Link href="/dashboard" className={pathname === '/dashboard' || pathname === '/' ? 'on' : ''}>
-          <LayoutDashboard size={18} />
-          Daily Tasks
+
+        {/* Home */}
+        <Link href="/" className={pathname === '/' ? 'on' : ''} onClick={closeSide}>
+          <Home size={18} /> Home
         </Link>
-        <Link href="/hr" className={pathname === '/hr' ? 'on' : ''}>
-          <Users size={18} />
-          HR & Attendance
+
+        {/* Alphabetical order */}
+        <Link href="/accounts" className={pathname === '/accounts' ? 'on' : ''} onClick={closeSide}>
+          <Wallet size={18} /> Accounts
         </Link>
-        <Link href="/accounts" className={pathname === '/accounts' ? 'on' : ''}>
-          <Wallet size={18} />
-          Accounts
+
+        <Link href="/credentials" className={pathname === '/credentials' ? 'on' : ''} onClick={closeSide}>
+          <Key size={18} /> Credentials
         </Link>
-        <Link href="/credentials" className={pathname === '/credentials' ? 'on' : ''}>
-          <Key size={18} />
-          Credentials
+
+        <Link href="/dashboard" className={pathname === '/dashboard' ? 'on' : ''} onClick={closeSide}>
+          <LayoutDashboard size={18} /> Daily Tasks
         </Link>
-        <Link href="/meetings" className={pathname === '/meetings' ? 'on' : ''}>
-          <Phone size={18} />
-          Meetings
+
+        <Link href="/hr" className={pathname === '/hr' ? 'on' : ''} onClick={closeSide}>
+          <Users size={18} /> HR & Attendance
         </Link>
-        
-        <Link href="/tenders" className={pathname === '/tenders' ? 'on' : ''}>
-          <FileText size={18} />
-          Tenders
+
+        <Link href="/meetings" className={pathname === '/meetings' ? 'on' : ''} onClick={closeSide}>
+          <Phone size={18} /> Meetings
         </Link>
-        
+
+        <Link href="/tenders" className={pathname === '/tenders' ? 'on' : ''} onClick={closeSide}>
+          <FileText size={18} /> Tenders
+        </Link>
+
         {user?.role === 'Admin' && (
-          <Link href="/admin" className={pathname === '/admin' ? 'on' : ''}>
-            <Shield size={18} />
-            Admin Section
+          <Link href="/admin" className={pathname === '/admin' ? 'on' : ''} onClick={closeSide}>
+            <Shield size={18} /> Admin Section
           </Link>
         )}
-        <a href="#"><Map size={18} /> Roadmap <span className="soon">Soon</span></a>
+
+        <a href="#" onClick={closeSide}><Map size={18} /> Roadmap <span className="soon">Soon</span></a>
         
         <div className="nav-section">Bot</div>
-        <a href="/chat.html"><MessageCircle size={18} /> ERP Chat</a>
+        <a href="/chat.html" onClick={closeSide}><MessageCircle size={18} /> ERP Chat</a>
       </nav>
 
       {user && (

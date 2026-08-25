@@ -58,7 +58,10 @@ function fmtDateLabel(dateStr: string): string {
   const dt = new Date(dateStr + 'T00:00:00');
   const t = new Date(today + 'T00:00:00');
   const diff = Math.round((dt.getTime() - t.getTime()) / 86400000);
-  const s = dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const yyyy = dt.getFullYear();
+  const s = `${dd}-${mm}-${yyyy}`;
   if (diff === 0) return 'Today, ' + s;
   if (diff === 1) return 'Tomorrow, ' + s;
   if (diff === -1) return 'Yesterday, ' + s;
@@ -174,7 +177,7 @@ export default function HRPage() {
   const [attLoading, setAttLoading] = useState(false);
 
   const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [leaveData, setLeaveData] = useState({ leave_type: 'SICK', start_date: '', end_date: '', reason: '' });
+  const [leaveData, setLeaveData] = useState({ member_id: '', leave_type: 'SICK', start_date: '', start_time: '', end_date: '', end_time: '', reason: '' });
 
   const [reportMemberId, setReportMemberId] = useState('');
   const nowJS = new Date();
@@ -376,10 +379,10 @@ export default function HRPage() {
     try {
       await authFetch('/api/leaves', {
         method: 'POST',
-        body: JSON.stringify({ ...leaveData, member_id: user?.id }),
+        body: JSON.stringify({ ...leaveData, member_id: leaveData.member_id || user?.id }),
       });
       setShowLeaveModal(false);
-      setLeaveData({ leave_type: 'SICK', start_date: '', end_date: '', reason: '' });
+      setLeaveData({ member_id: '', leave_type: 'SICK', start_date: '', start_time: '', end_date: '', end_time: '', reason: '' });
       showToast('Leave request submitted. Awaiting admin approval.');
       await loadAll();
     } catch { showToast('Cannot reach server.'); }
@@ -391,7 +394,7 @@ export default function HRPage() {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       });
-      showToast(status === 'APPROVED' ? 'Leave approved' : 'Leave rejected');
+      showToast(status === 'APPROVED' ? 'Leave approved' : 'Leave cancelled');
       await loadAll();
     } catch { showToast('Cannot reach server.'); }
   };
@@ -744,8 +747,8 @@ export default function HRPage() {
                         <td style={{ color: 'var(--muted)', fontSize: '.76rem' }}>{l.start_date} to {l.end_date}</td>
                         <td style={{ color: 'var(--muted)', fontSize: '.76rem', maxWidth: 130 }}>{l.reason || '-'}</td>
                         <td>
-                          <span className={'badge ' + (l.status === 'APPROVED' ? 'APPROVED' : l.status === 'REJECTED' ? 'REJECTED' : 'PENDING')}>
-                            {l.status}
+                          <span className={'badge ' + (l.status === 'APPROVED' ? 'APPROVED' : l.status === 'REJECTED' || l.status === 'CANCELLED' ? 'REJECTED' : 'PENDING')}>
+                            {l.status === 'REJECTED' ? 'CANCELLED' : l.status}
                           </span>
                         </td>
                         {isAdmin && (
@@ -753,7 +756,7 @@ export default function HRPage() {
                             {l.status === 'PENDING' ? (
                               <>
                                 <button className="btn btn-green btn-sm" style={{ marginRight: 4 }} onClick={() => reviewLeave(l.id, 'APPROVED')}>Approve</button>
-                                <button className="btn btn-red btn-sm" onClick={() => reviewLeave(l.id, 'REJECTED')}>Reject</button>
+                                <button className="btn btn-red btn-sm" onClick={() => reviewLeave(l.id, 'REJECTED')}>Cancel</button>
                               </>
                             ) : (
                               <span style={{ color: 'var(--muted)', fontSize: '.76rem' }}>Reviewed</span>
@@ -769,21 +772,7 @@ export default function HRPage() {
           </div>
         )}
 
-        {/* Summary cards - bottom */}
-        <div className="stats" style={{ marginTop: 4 }}>
-          <div className="s-card">
-            <div className="s-lbl">Present Today</div>
-            <div className="s-val" style={{ color: 'var(--green)' }}>{presentCount}</div>
-          </div>
-          <div className="s-card">
-            <div className="s-lbl">Pending Leaves</div>
-            <div className="s-val" style={{ color: 'var(--orange)' }}>{pendingLeaves}</div>
-          </div>
-          <div className="s-card">
-            <div className="s-lbl">Total Members</div>
-            <div className="s-val" style={{ color: 'var(--primary)' }}>{members.length}</div>
-          </div>
-        </div>
+        {/* Summary cards removed per user request */}
 
         {/* Monthly Report - Admin only */}
         {activeTab === 'report' && isAdmin && (
@@ -811,7 +800,7 @@ export default function HRPage() {
                   onChange={e => setReportMemberId(e.target.value)}
                 >
                   <option value="">Select employee...</option>
-                  {members.filter(m => m.role !== 'Admin').map(m => (
+                  {members.filter(m => m.role !== 'Admin').sort((a,b) => a.name.localeCompare(b.name)).map(m => (
                     <option key={m.id} value={m.id}>{m.name} - {m.role}</option>
                   ))}
                 </select>
@@ -892,30 +881,50 @@ export default function HRPage() {
               <h3>Leave Request</h3>
               <button className="xbtn" onClick={() => setShowLeaveModal(false)}><X size={16} /></button>
             </div>
-            <div style={{ marginBottom: 14, padding: '9px 12px', background: 'var(--card)', borderRadius: 8, fontSize: '.82rem', color: 'var(--muted)' }}>
-              Submitting as: <strong style={{ color: 'var(--text)' }}>{user?.name}</strong>
-            </div>
             <div className="fg">
-              <label>Leave Type</label>
-              <select value={leaveData.leave_type} onChange={e => setLeaveData({ ...leaveData, leave_type: e.target.value })}>
-                <option value="SICK">Sick Leave</option>
-                <option value="CASUAL">Casual Leave</option>
-                <option value="ANNUAL">Annual Leave</option>
-              </select>
-            </div>
-            <div className="drow">
-              <div className="fg">
-                <label>From</label>
-                <input type="date" value={leaveData.start_date} onChange={e => setLeaveData({ ...leaveData, start_date: e.target.value })} />
-              </div>
-              <div className="fg">
-                <label>To</label>
-                <input type="date" value={leaveData.end_date} min={leaveData.start_date} onChange={e => setLeaveData({ ...leaveData, end_date: e.target.value })} />
-              </div>
+              <label>Employee</label>
+              {isAdmin ? (
+                <select value={leaveData.member_id || user?.id || ''} onChange={e => setLeaveData({ ...leaveData, member_id: e.target.value })}>
+                  <option value={user?.id || ''}>{user?.name}</option>
+                  {[...members].sort((a,b) => a.name.localeCompare(b.name)).map(m => (
+                    m.id !== user?.id && <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <input type="text" value={user?.name || ''} disabled style={{ opacity: 0.7 }} />
+              )}
             </div>
             <div className="fg">
               <label>Reason</label>
-              <textarea placeholder="Optional reason..." value={leaveData.reason} onChange={e => setLeaveData({ ...leaveData, reason: e.target.value })} />
+              <select value={leaveData.leave_type} onChange={e => setLeaveData({ ...leaveData, leave_type: e.target.value })}>
+                <option value="SICK">Sick</option>
+                <option value="PERSONAL">Personal</option>
+                <option value="EXAM">Exam</option>
+              </select>
+            </div>
+            <div className="drow">
+              <div className="fg" style={{ flex: 1 }}>
+                <label>From Date</label>
+                <input type="date" value={leaveData.start_date} onChange={e => setLeaveData({ ...leaveData, start_date: e.target.value })} />
+              </div>
+              <div className="fg" style={{ flex: 1 }}>
+                <label>From Time</label>
+                <input type="time" value={leaveData.start_time} onChange={e => setLeaveData({ ...leaveData, start_time: e.target.value })} />
+              </div>
+            </div>
+            <div className="drow">
+              <div className="fg" style={{ flex: 1 }}>
+                <label>To Date</label>
+                <input type="date" value={leaveData.end_date} min={leaveData.start_date} onChange={e => setLeaveData({ ...leaveData, end_date: e.target.value })} />
+              </div>
+              <div className="fg" style={{ flex: 1 }}>
+                <label>To Time</label>
+                <input type="time" value={leaveData.end_time} onChange={e => setLeaveData({ ...leaveData, end_time: e.target.value })} />
+              </div>
+            </div>
+            <div className="fg">
+              <label>Notes</label>
+              <textarea placeholder="Optional notes..." value={leaveData.reason} onChange={e => setLeaveData({ ...leaveData, reason: e.target.value })} />
             </div>
             <div style={{ marginBottom: 8, padding: '8px 10px', borderRadius: 7, background: 'rgba(79,126,255,.08)', fontSize: '.76rem', color: 'var(--muted)' }}>
               Note: Your request will be sent to Admin for approval.

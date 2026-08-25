@@ -29,7 +29,9 @@ import {
   Archive,
   RotateCcw,
   X,
-  AlertTriangle
+  AlertTriangle,
+  FileText,
+  CreditCard
 } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
@@ -62,19 +64,24 @@ type Member = { id: number; name: string; avatar_color: string; role: string; };
 type ActionMeta = { icon: React.ReactNode; label: string };
 
 const ACTION_MAP: Record<string, ActionMeta> = {
-  ASSIGN:   { icon: <Users size={14} />,         label: 'Assign' },
-  SMS:      { icon: <MessageSquare size={14} />, label: 'SMS' },
-  CALL:     { icon: <Phone size={14} />,         label: 'Call' },
-  MAIL:     { icon: <Mail size={14} />,          label: 'Mail' },
-  MEETING:  { icon: <Calendar size={14} />,      label: 'Meeting' },
-  REMINDER: { icon: <Bell size={14} />,          label: 'Reminder' },
+  ASSIGN:    { icon: <Users size={14} />,        label: 'Assign' },
+  CALL:      { icon: <Phone size={14} />,        label: 'Call' },
+  DOC_SHARE: { icon: <FileText size={14} />,     label: 'Documents Sharing' },
+  MAIL:      { icon: <Mail size={14} />,         label: 'Mail' },
+  MEETING:   { icon: <Calendar size={14} />,     label: 'Meeting' },
+  PAYMENT:   { icon: <CreditCard size={14} />,   label: 'Payment' },
+  REMINDER:  { icon: <Bell size={14} />,         label: 'Reminder' },
+  SMS:       { icon: <MessageSquare size={14} />,label: 'SMS' },
 };
 
-const ACTION_KEYS = ['ASSIGN', 'SMS', 'CALL', 'MAIL', 'MEETING', 'REMINDER'] as const;
+// Alphabetical order
+const ACTION_KEYS = ['ASSIGN', 'CALL', 'DOC_SHARE', 'MAIL', 'MEETING', 'PAYMENT', 'REMINDER', 'SMS'] as const;
 
 function getActionMeta(key?: string): ActionMeta {
-  if (key && key in ACTION_MAP) return ACTION_MAP[key]!;
-  return ACTION_MAP.ASSIGN!;
+  if (key && key in ACTION_MAP) {
+    return ACTION_MAP[key]!;
+  }
+  return { icon: <Plus size={14} />, label: 'Select' };
 }
 
 function getStatusStyle(status?: string): { color: string; bg: string; dotGlow: string; label: string } {
@@ -102,7 +109,8 @@ function DeadlineEditor({ defaultValue, onSave }: { defaultValue: string; onSave
   );
 }
 
-const BLANK_ROW = { action_type: 'ASSIGN', title: '', recipient: '', assigned_to: '', status: 'DONE', deadline: '' };
+/* ─── Blank new-task row shape ─────────────────────── */
+const BLANK_ROW = { action_type: '', title: '', recipient: '', assigned_to: '', status: 'DONE', deadline: '' };
 
 /* ─── Shared inline field styles ─── */
 const fieldInputSt: React.CSSProperties = {
@@ -366,7 +374,13 @@ export default function DashboardPage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/tasks?date=${currentDate}`);
-      setTasks(await res.json());
+      const rawTasks = await res.json();
+      rawTasks.sort((a: Task, b: Task) => {
+        if (!a.deadline) return 1;
+        if (!b.deadline) return -1;
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      });
+      setTasks(rawTasks);
     } catch (e) {
       console.error('Failed to fetch tasks', e);
     } finally {
@@ -523,7 +537,7 @@ export default function DashboardPage() {
   /* ─── Board view for currentDate ─────────────── */
   const boardRows = [
     { id: null as number | null, name: 'Unassigned', avatar_color: '#64748b', role: '' },
-    ...members,
+    ...[...members].sort((a, b) => a.name.localeCompare(b.name)),
   ].map(m => {
     const mt = tasks.filter(t => t.assigned_to === m.id);
     return {
@@ -545,6 +559,7 @@ export default function DashboardPage() {
           onBlur={e => saveCell(task.id, 'action_type', e.target.value)}
           onChange={e => saveCell(task.id, 'action_type', e.target.value)}
           style={{ background: '#131722', border: '1px solid #4f7eff', borderRadius: '7px', color: '#f1f5f9', padding: '6px 10px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', minWidth: '120px' }}>
+          <option value="" disabled>Select</option>
           {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
         </select>
       );
@@ -582,7 +597,7 @@ export default function DashboardPage() {
           onChange={e => saveCell(task.id, 'assigned_to', e.target.value)}
           style={{ background: '#131722', border: '1px solid #4f7eff', borderRadius: '7px', color: '#f1f5f9', padding: '6px 10px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', minWidth: '150px' }}>
           <option value="">Unassigned</option>
-          {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          {[...members].sort((a, b) => a.name.localeCompare(b.name)).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
       );
       return (
@@ -784,12 +799,12 @@ export default function DashboardPage() {
                     <table style={{ width: '100%', minWidth: '920px', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
-                          <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action</th>
-                          <th style={{ minWidth: '200px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity Name</th>
-                          <th style={{ width: '170px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recipient</th>
                           <th style={{ width: '170px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Assignee</th>
-                          <th style={{ width: '125px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                          <th style={{ minWidth: '200px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity Name</th>
+                          <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action</th>
+                          <th style={{ width: '170px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recipient</th>
                           <th style={{ width: '180px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deadline</th>
+                          <th style={{ width: '125px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
                           <th style={{ width: '50px', padding: '12px 16px' }}></th>
                         </tr>
                       </thead>
@@ -801,12 +816,12 @@ export default function DashboardPage() {
                         {/* Existing task rows */}
                         {tasks.map(task => (
                           <tr key={task.id} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)', transition: 'background 0.15s' }}>
-                            <td style={{ padding: '12px 16px' }}>{renderCell(task, 'action_type')}</td>
-                            <td style={{ padding: '12px 16px' }}>{renderCell(task, 'title')}</td>
-                            <td style={{ padding: '12px 16px' }}>{renderCell(task, 'recipient')}</td>
                             <td style={{ padding: '12px 16px' }}>{renderCell(task, 'assigned_to')}</td>
-                            <td style={{ padding: '12px 16px' }}>{renderCell(task, 'status')}</td>
+                            <td style={{ padding: '12px 16px' }}>{renderCell(task, 'title')}</td>
+                            <td style={{ padding: '12px 16px' }}>{renderCell(task, 'action_type')}</td>
+                            <td style={{ padding: '12px 16px' }}>{renderCell(task, 'recipient')}</td>
                             <td style={{ padding: '12px 16px' }}>{renderCell(task, 'deadline')}</td>
+                            <td style={{ padding: '12px 16px' }}>{renderCell(task, 'status')}</td>
                             <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                               <button onClick={() => setTaskToDelete(task)}
                                 style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s' }}
@@ -822,9 +837,10 @@ export default function DashboardPage() {
                         {/* ── Add new task row (always visible at bottom) ── */}
                         <tr style={{ background: 'rgba(79,126,255,0.06)', borderTop: '2px solid rgba(79,126,255,0.2)' }}>
                           <td style={{ padding: '12px 16px' }}>
-                            <select value={newRow.action_type} onChange={e => setNewRow({ ...newRow, action_type: e.target.value })}
-                              style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: '#f1f5f9', padding: '8px 10px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', width: '100%', minWidth: '110px' }}>
-                              {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
+                            <select value={newRow.assigned_to} onChange={e => setNewRow({ ...newRow, assigned_to: e.target.value })}
+                              style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: '#f1f5f9', padding: '8px 10px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', width: '100%', minWidth: '140px' }}>
+                              <option value="">Select assignee...</option>
+                              {[...members].sort((a,b) => a.name.localeCompare(b.name)).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                             </select>
                           </td>
                           <td style={{ padding: '12px 16px' }}>
@@ -834,17 +850,43 @@ export default function DashboardPage() {
                               style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: '#f1f5f9', fontSize: '0.84rem', padding: '8px 12px', width: '100%', minWidth: '180px', outline: 'none', fontFamily: 'inherit' }} />
                           </td>
                           <td style={{ padding: '12px 16px' }}>
+                            <select value={newRow.action_type} onChange={e => setNewRow({ ...newRow, action_type: e.target.value })}
+                              style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: '#f1f5f9', padding: '8px 10px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', width: '100%', minWidth: '110px' }}>
+                              <option value="" disabled>Select</option>
+                              {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
+                            </select>
+                          </td>
+                          <td style={{ padding: '12px 16px' }}>
                             <input type="text" placeholder="Recipient / Contact..." value={newRow.recipient}
                               onChange={e => setNewRow({ ...newRow, recipient: e.target.value })}
                               onKeyDown={e => { if (e.key === 'Enter') submitNewRow(); }}
                               style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: '#f1f5f9', fontSize: '0.82rem', padding: '8px 12px', width: '100%', minWidth: '140px', outline: 'none', fontFamily: 'inherit' }} />
                           </td>
                           <td style={{ padding: '12px 16px' }}>
-                            <select value={newRow.assigned_to} onChange={e => setNewRow({ ...newRow, assigned_to: e.target.value })}
-                              style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: '#f1f5f9', padding: '8px 10px', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', width: '100%', minWidth: '140px' }}>
-                              <option value="">Select assignee...</option>
-                              {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                            </select>
+                            <input
+                              type="datetime-local"
+                              value={newRow.deadline}
+                              onClick={e => {
+                                try {
+                                  (e.target as HTMLInputElement).showPicker?.();
+                                } catch (err) {}
+                              }}
+                              onChange={e => setNewRow({ ...newRow, deadline: e.target.value })}
+                              style={{
+                                background: '#131722',
+                                border: '1px solid #2a3050',
+                                borderRadius: '7px',
+                                color: '#f1f5f9',
+                                padding: '7px 10px',
+                                fontSize: '0.8rem',
+                                fontFamily: 'inherit',
+                                outline: 'none',
+                                width: '100%',
+                                minWidth: '160px',
+                                colorScheme: 'dark',
+                                cursor: 'pointer'
+                              }}
+                            />
                           </td>
                           <td style={{ padding: '12px 16px' }}>
                             <select value={newRow.status} onChange={e => setNewRow({ ...newRow, status: e.target.value as any })}
@@ -854,15 +896,24 @@ export default function DashboardPage() {
                               <option value="PENDING">Pending</option>
                             </select>
                           </td>
-                          <td style={{ padding: '12px 16px' }}>
-                            <input type="datetime-local" value={newRow.deadline}
-                              onClick={e => { try { (e.target as HTMLInputElement).showPicker?.(); } catch (err) {} }}
-                              onChange={e => setNewRow({ ...newRow, deadline: e.target.value })}
-                              style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: '7px', color: '#f1f5f9', padding: '7px 10px', fontSize: '0.8rem', fontFamily: 'inherit', outline: 'none', width: '100%', minWidth: '160px', colorScheme: 'dark', cursor: 'pointer' }} />
-                          </td>
                           <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                             <button onClick={submitNewRow} disabled={savingNew}
-                              style={{ background: '#4f7eff', border: 'none', color: '#fff', cursor: 'pointer', padding: '8px 14px', borderRadius: '7px', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5, opacity: savingNew ? 0.5 : 1, transition: 'background 0.15s' }}>
+                              style={{
+                                background: '#4f7eff',
+                                border: 'none',
+                                color: '#fff',
+                                cursor: 'pointer',
+                                padding: '8px 14px',
+                                borderRadius: '7px',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                fontFamily: 'inherit',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 5,
+                                opacity: savingNew ? 0.5 : 1,
+                                transition: 'background 0.15s'
+                              }}>
                               <Plus size={14} /> <span>{savingNew ? '...' : 'Add'}</span>
                             </button>
                           </td>

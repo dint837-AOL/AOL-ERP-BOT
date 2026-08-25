@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 import { ShieldCheck, Mail, Lock, LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const { login } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -34,7 +36,8 @@ export default function LoginPage() {
         setError(data.error || "Login failed");
       } else {
         login(data.token, data.user);
-        window.location.href = "/dashboard";
+        // Small delay to ensure cookies are written before navigation
+        setTimeout(() => router.push("/"), 50);
       }
     } catch (err) {
       setError("Unable to connect to the server.");

@@ -55,7 +55,6 @@ export class OpenClaw {
     this.config = config; this.tools = config.tools || [];
     this.app = express();
     this.app.use(express.json());
-    this.app.get('/', (req, res) => res.redirect('/dashboard'));
     this.app.use(express.static(path.join(__dirname, '../public')));
   }
   setSystemPrompt(p: string) { this.systemPrompt = p; }

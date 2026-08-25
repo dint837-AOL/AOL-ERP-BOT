@@ -12,12 +12,15 @@ import React, { useState, useEffect, useRef } from 'react';
 
 import { useAuth } from '../context/AuthContext';
 import Cookies from 'js-cookie';
+import { useCallback } from 'react';
 
 export default function Topbar({ title, children }: { title?: string, children?: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useAuth();
-  let defaultTitle = 'Dashboard';
+  let defaultTitle = 'Home';
+  if (pathname === '/') defaultTitle = 'Home';
+  if (pathname === '/dashboard') defaultTitle = 'Daily Tasks';
   if (pathname === '/hr') defaultTitle = 'HR & Attendance';
   if (pathname === '/accounts') defaultTitle = 'Accounts & Expenses';
   if (pathname === '/credentials') defaultTitle = 'Credentials & Keys';
@@ -28,7 +31,9 @@ export default function Topbar({ title, children }: { title?: string, children?:
   
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [bellRect, setBellRect] = useState<{ top: number; right: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const bellRef = useRef<HTMLButtonElement>(null);
 
   const getMemberId = () => {
     if (user?.id) return user.id;
@@ -70,35 +75,43 @@ export default function Topbar({ title, children }: { title?: string, children?:
     };
   }, [user]);
 
+  const openDropdown = useCallback(() => {
+    if (bellRef.current) {
+      const rect = bellRef.current.getBoundingClientRect();
+      setBellRect({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+    }
+    setShowDropdown(v => !v);
+  }, []);
+
   const markAllRead = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const memberId = getMemberId();
     if (!memberId) return;
     
-    // Immediate optimistic state update
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
+    // 1. Immediately update local state so badge disappears right away
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     
+    // 2. Sync to backend
     try {
       await fetch('/api/notifications/read-all', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ member_id: Number(memberId) })
       });
-      fetchNotifs();
     } catch(e) {}
+    // 3. Refetch to confirm state from server (no rush)
+    setTimeout(fetchNotifs, 500);
   };
 
   const handleNotificationClick = async (n: any) => {
-    // 1. Immediate optimistic UI update
-    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, is_read: 1 } : item));
+    // 1. Immediately mark as read in local state
+    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, is_read: true } : item));
     setShowDropdown(false);
 
-    // 2. Mark as read on backend
-    try {
-      fetch(`/api/notifications/${n.id}/read`, { method: 'PATCH' });
-    } catch (e) {}
+    // 2. Mark as read on backend (fire and forget)
+    fetch(`/api/notifications/${n.id}/read`, { method: 'PATCH' }).catch(() => {});
 
-    // 3. Route to target page (e.g. Leave requests tab)
+    // 3. Navigate to target page
     const targetLink = n.link || (n.message?.toLowerCase().includes('leave') ? '/hr?tab=leave' : '/dashboard');
     if (pathname === '/hr' && targetLink.includes('/hr')) {
       window.dispatchEvent(new CustomEvent('change-hr-tab', { detail: 'leave' }));
@@ -118,7 +131,8 @@ export default function Topbar({ title, children }: { title?: string, children?:
     document.getElementById('side-overlay')?.classList.remove('show');
   };
 
-  const unreadCount = notifications.filter(n => !n.is_read || n.is_read === 0 || n.is_read === false || n.is_read === '0').length;
+  const isUnreadNotif = (n: any) => n.is_read === false || n.is_read === 0 || n.is_read === '0' || n.is_read === null || n.is_read === undefined;
+  const unreadCount = notifications.filter(isUnreadNotif).length;
 
   return (
     <>
@@ -131,11 +145,11 @@ export default function Topbar({ title, children }: { title?: string, children?:
           <span className="top-title">{displayTitle}</span>
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexShrink: 0 }}>
           {children}
           
           <div style={{ position: 'relative' }} ref={dropdownRef}>
-            <button className="btn btn-sec" style={{ position: 'relative', padding: '8px' }} onClick={() => setShowDropdown(!showDropdown)}>
+            <button ref={bellRef} className="btn btn-sec" style={{ position: 'relative', padding: '8px' }} onClick={openDropdown}>
               <Bell size={18} />
               {unreadCount > 0 && (
                 <span style={{ position: 'absolute', top: -3, right: -3, background: 'var(--red)', color: '#fff', fontSize: '10px', borderRadius: '50%', minWidth: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
@@ -144,8 +158,8 @@ export default function Topbar({ title, children }: { title?: string, children?:
               )}
             </button>
 
-            {showDropdown && (
-              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '10px', width: '320px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '8px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', zIndex: 1000, overflow: 'hidden' }}>
+            {showDropdown && bellRect && (
+              <div style={{ position: 'fixed', top: bellRect.top, right: bellRect.right, width: '320px', maxWidth: 'calc(100vw - 16px)', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '8px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', zIndex: 9999, overflow: 'hidden' }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.1)' }}>
                   <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Notifications</span>
                   {unreadCount > 0 && (
@@ -157,7 +171,7 @@ export default function Topbar({ title, children }: { title?: string, children?:
                     <div style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.85rem' }}>No notifications yet.</div>
                   ) : (
                     notifications.map(n => {
-                      const isUnread = !n.is_read || n.is_read === 0 || n.is_read === false || n.is_read === '0';
+                      const isUnread = isUnreadNotif(n);
                       return (
                         <div
                           key={n.id}
