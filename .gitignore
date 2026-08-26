@@ -6,3 +6,8 @@ openclaw.db-journal
 .WWebJS/
 session/
 .DS_Store
+
+# PWA files
+public/sw.js
+public/sw.js.map
+public/workbox-*.js

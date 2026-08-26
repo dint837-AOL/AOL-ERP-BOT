@@ -12,9 +12,25 @@ import AuthGuard from './components/AuthGuard';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const metadata = {
+import type { Metadata, Viewport } from 'next';
+
+export const metadata: Metadata = {
   title: 'AlliedOne ERP System',
   description: 'Internal ERP for AlliedOne',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'AOL ERP',
+  },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#0d0f18',
 };
 
 export default function RootLayout({

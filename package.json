@@ -28,6 +28,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@messagebird/sdk": "^0.28.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",

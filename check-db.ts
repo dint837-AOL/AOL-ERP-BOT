@@ -7,19 +7,44 @@ async function main() {
     driver: sqlite3.Database
   });
 
-  console.log("Connected to the mock SQLite database.");
+  console.log("Connected to SQLite database (./openclaw.db).");
 
-  try {
-    const rows = await db.all("SELECT * FROM attendance ORDER BY timestamp DESC LIMIT 5");
-    console.log("\n=== Last 5 Attendance Records ===");
-    if (rows.length === 0) {
-      console.log("No records found.");
-    } else {
-      console.table(rows);
+  const tables = [
+    'members',
+    'tasks',
+    'attendance',
+    'leave_requests',
+    'expense_categories',
+    'expenses',
+    'credentials',
+    'meetings',
+    'tenders',
+    'settings',
+    'active_sessions',
+    'notifications'
+  ];
+
+  for (const table of tables) {
+    try {
+      const countRes = await db.get(`SELECT COUNT(*) as c FROM ${table}`);
+      console.log(`\nTable '${table}': ${countRes?.c ?? 0} rows`);
+      if (table === 'members') {
+        const members = await db.all('SELECT id, name, email, role, avatar_color FROM members');
+        console.table(members);
+      }
+      if (table === 'expense_categories') {
+        const cats = await db.all('SELECT * FROM expense_categories');
+        console.table(cats);
+      }
+      if (table === 'settings') {
+        const settings = await db.all('SELECT * FROM settings');
+        console.table(settings);
+      }
+    } catch (err: any) {
+      console.log(`Table '${table}': ${err.message}`);
     }
-  } catch (err: any) {
-    console.error("Error querying attendance table:", err.message);
   }
 }
 
 main();
+
