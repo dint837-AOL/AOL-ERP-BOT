@@ -135,6 +135,14 @@ export default function Topbar({ title, children }: { title?: string, children?:
   const unreadCount = notifications.filter(isUnreadNotif).length;
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().catch(console.error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if ('setAppBadge' in navigator && 'clearAppBadge' in navigator) {
       if (unreadCount > 0) {
         navigator.setAppBadge(unreadCount).catch(console.error);
