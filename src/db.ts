@@ -64,6 +64,7 @@ export async function initDB() {
         password_hash TEXT DEFAULT '',
         role TEXT DEFAULT 'Employee',
         avatar_color TEXT DEFAULT '#4f7eff',
+        whatsapp_number TEXT DEFAULT '',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -182,6 +183,7 @@ export async function initDB() {
     `);
 
     try { await pgPool.query("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link TEXT DEFAULT ''"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE members ADD COLUMN IF NOT EXISTS whatsapp_number TEXT DEFAULT ''"); } catch (e) {}
 
   } else {
     isPg = false;
@@ -200,6 +202,7 @@ export async function initDB() {
         password_hash TEXT DEFAULT '',
         role TEXT DEFAULT 'Employee',
         avatar_color TEXT DEFAULT '#4f7eff',
+        whatsapp_number TEXT DEFAULT '',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
       
@@ -318,6 +321,7 @@ export async function initDB() {
     `);
 
     try { await sqliteDb.exec("ALTER TABLE notifications ADD COLUMN link TEXT DEFAULT ''"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE members ADD COLUMN whatsapp_number TEXT DEFAULT ''"); } catch (e) {}
   }
 
   // Seed default admin and employee accounts

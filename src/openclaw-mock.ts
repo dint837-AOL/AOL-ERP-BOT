@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { initDB, dbAll, dbGet, dbRun, isPostgres } from './db.js';
+import { sendWhatsAppMessage } from './whatsapp.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -13,6 +14,17 @@ export { initDB, dbAll, dbGet, dbRun, isPostgres };
 
 // Add default secret if not provided
 const JWT_SECRET = process.env.JWT_SECRET || 'alliedone_super_secret_key_123!';
+
+async function notifyMember(memberId: number, message: string, link: string = '') {
+  await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [memberId, message, link]);
+  
+  // WhatsApp Integration
+  const member = await dbGet('SELECT whatsapp_number FROM members WHERE id=?', [memberId]) as any;
+  if (member && member.whatsapp_number) {
+    // Fire and forget (don't block the API response)
+    sendWhatsAppMessage(member.whatsapp_number, message).catch(console.error);
+  }
+}
 
 export function getCleanClientIp(req: express.Request): string {
   const forwarded = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.headers['cf-connecting-ip'];
@@ -148,30 +160,30 @@ export class OpenClaw {
       authenticateToken(req, res, next);
     });
 
-    this.app.get('/api/members', async (_, res) => res.json(await dbAll('SELECT id, name, email, role, avatar_color, created_at FROM members ORDER BY name')));
+    this.app.get('/api/members', async (_, res) => res.json(await dbAll('SELECT id, name, email, role, avatar_color, whatsapp_number, created_at FROM members ORDER BY name')));
     
     // Only Admin can add members
     this.app.post('/api/members', requireRole('Admin'), async (req, res) => {
-      const { name, email, role, avatar_color, password } = req.body;
+      const { name, email, role, avatar_color, password, whatsapp_number } = req.body;
       if (!name) return res.status(400).json({ error: 'Name required' });
       const colors = ['#4f7eff','#2dd4a0','#ff4d6a','#ff9f40','#a78bfa','#f472b6'];
       const color = avatar_color || colors[Math.floor(Math.random() * colors.length)];
       
       const pwdHash = password ? await bcrypt.hash(password, 10) : await bcrypt.hash('password123', 10);
       
-      const { lastID } = await dbRun('INSERT INTO members(name,email,role,avatar_color,password_hash) VALUES(?,?,?,?,?)', [name, email||'', role||'Employee', color, pwdHash]);
+      const { lastID } = await dbRun('INSERT INTO members(name,email,role,avatar_color,password_hash,whatsapp_number) VALUES(?,?,?,?,?,?)', [name, email||'', role||'Employee', color, pwdHash, whatsapp_number||'']);
       res.json({ id: lastID });
     });
     // Only Admin can edit members
     this.app.put('/api/members/:id', requireRole('Admin'), async (req, res) => {
-      const { name, email, role, password } = req.body;
+      const { name, email, role, password, whatsapp_number } = req.body;
       if (!name) return res.status(400).json({ error: 'Name required' });
       
       if (password) {
         const pwdHash = await bcrypt.hash(password, 10);
-        await dbRun('UPDATE members SET name=?, email=?, role=?, password_hash=? WHERE id=?', [name, email || '', role || 'Employee', pwdHash, req.params.id]);
+        await dbRun('UPDATE members SET name=?, email=?, role=?, password_hash=?, whatsapp_number=? WHERE id=?', [name, email || '', role || 'Employee', pwdHash, whatsapp_number || '', req.params.id]);
       } else {
-        await dbRun('UPDATE members SET name=?, email=?, role=? WHERE id=?', [name, email || '', role || 'Employee', req.params.id]);
+        await dbRun('UPDATE members SET name=?, email=?, role=?, whatsapp_number=? WHERE id=?', [name, email || '', role || 'Employee', whatsapp_number || '', req.params.id]);
       }
       res.json({ success: true });
     });
@@ -778,7 +790,9 @@ echo "=============================================================="
       const member = await dbGet(`SELECT name FROM members WHERE id=?`, [member_id]) as any;
       const admins = await dbAll(`SELECT id FROM members WHERE role='Admin'`) as any[];
       for (const admin of admins) {
-        await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [admin.id, `${member?.name || 'An employee'} requested ${leave_type} leave.`, '/hr?tab=leave']);
+        if (admin) {
+          await notifyMember(admin.id, `${member?.name || 'An employee'} requested ${leave_type} leave.`, '/hr?tab=leave');
+        }
       }
 
       res.status(201).json(await dbGet(`SELECT l.*,m.name as member_name FROM leave_requests l JOIN members m ON l.member_id=m.id WHERE l.id=?`, [lastID]));
@@ -788,7 +802,7 @@ echo "=============================================================="
       await dbRun(`UPDATE leave_requests SET status=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?`, [status, req.params.id]);
       const leaveRow = await dbGet('SELECT * FROM leave_requests WHERE id=?', [req.params.id]) as any;
       if (leaveRow) {
-        await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [leaveRow.member_id, `Your ${leaveRow.leave_type} leave request has been ${status}.`, '/hr?tab=leave']);
+        await notifyMember(leaveRow.member_id, `Your ${leaveRow.leave_type} leave request has been ${status}.`, '/hr?tab=leave');
       }
       res.json(leaveRow);
     });
