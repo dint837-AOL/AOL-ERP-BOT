@@ -65,6 +65,7 @@ export async function initDB() {
         role TEXT DEFAULT 'Employee',
         avatar_color TEXT DEFAULT '#4f7eff',
         whatsapp_number TEXT DEFAULT '',
+        telegram_chat_id TEXT DEFAULT '',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -184,6 +185,7 @@ export async function initDB() {
 
     try { await pgPool.query("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link TEXT DEFAULT ''"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE members ADD COLUMN IF NOT EXISTS whatsapp_number TEXT DEFAULT ''"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE members ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT DEFAULT ''"); } catch (e) {}
 
   } else {
     isPg = false;
@@ -322,6 +324,7 @@ export async function initDB() {
 
     try { await sqliteDb.exec("ALTER TABLE notifications ADD COLUMN link TEXT DEFAULT ''"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE members ADD COLUMN whatsapp_number TEXT DEFAULT ''"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE members ADD COLUMN telegram_chat_id TEXT DEFAULT ''"); } catch (e) {}
   }
 
   // Seed default admin and employee accounts

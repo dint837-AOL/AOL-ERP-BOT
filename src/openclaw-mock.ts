@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { initDB, dbAll, dbGet, dbRun, isPostgres } from './db.js';
-import { sendWhatsAppMessage } from './whatsapp.js';
+import { sendTelegramMessage } from './telegram.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -18,11 +18,11 @@ const JWT_SECRET = process.env.JWT_SECRET || 'alliedone_super_secret_key_123!';
 async function notifyMember(memberId: number, message: string, link: string = '') {
   await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [memberId, message, link]);
   
-  // WhatsApp Integration
-  const member = await dbGet('SELECT whatsapp_number FROM members WHERE id=?', [memberId]) as any;
-  if (member && member.whatsapp_number) {
-    // Fire and forget (don't block the API response)
-    sendWhatsAppMessage(member.whatsapp_number, message).catch(console.error);
+  // Telegram Integration
+  const member = await dbGet('SELECT telegram_chat_id FROM members WHERE id=?', [memberId]) as any;
+  if (member && member.telegram_chat_id) {
+    // Fire and forget
+    sendTelegramMessage(member.telegram_chat_id, message).catch(console.error);
   }
 }
 
@@ -160,30 +160,30 @@ export class OpenClaw {
       authenticateToken(req, res, next);
     });
 
-    this.app.get('/api/members', async (_, res) => res.json(await dbAll('SELECT id, name, email, role, avatar_color, whatsapp_number, created_at FROM members ORDER BY name')));
+    this.app.get('/api/members', async (_, res) => res.json(await dbAll('SELECT id, name, email, role, avatar_color, whatsapp_number, telegram_chat_id, created_at FROM members ORDER BY name')));
     
     // Only Admin can add members
     this.app.post('/api/members', requireRole('Admin'), async (req, res) => {
-      const { name, email, role, avatar_color, password, whatsapp_number } = req.body;
+      const { name, email, role, avatar_color, password, whatsapp_number, telegram_chat_id } = req.body;
       if (!name) return res.status(400).json({ error: 'Name required' });
       const colors = ['#4f7eff','#2dd4a0','#ff4d6a','#ff9f40','#a78bfa','#f472b6'];
       const color = avatar_color || colors[Math.floor(Math.random() * colors.length)];
       
       const pwdHash = password ? await bcrypt.hash(password, 10) : await bcrypt.hash('password123', 10);
       
-      const { lastID } = await dbRun('INSERT INTO members(name,email,role,avatar_color,password_hash,whatsapp_number) VALUES(?,?,?,?,?,?)', [name, email||'', role||'Employee', color, pwdHash, whatsapp_number||'']);
+      const { lastID } = await dbRun('INSERT INTO members(name,email,role,avatar_color,password_hash,whatsapp_number,telegram_chat_id) VALUES(?,?,?,?,?,?,?)', [name, email||'', role||'Employee', color, pwdHash, whatsapp_number||'', telegram_chat_id||'']);
       res.json({ id: lastID });
     });
     // Only Admin can edit members
     this.app.put('/api/members/:id', requireRole('Admin'), async (req, res) => {
-      const { name, email, role, password, whatsapp_number } = req.body;
+      const { name, email, role, password, whatsapp_number, telegram_chat_id } = req.body;
       if (!name) return res.status(400).json({ error: 'Name required' });
       
       if (password) {
         const pwdHash = await bcrypt.hash(password, 10);
-        await dbRun('UPDATE members SET name=?, email=?, role=?, password_hash=?, whatsapp_number=? WHERE id=?', [name, email || '', role || 'Employee', pwdHash, whatsapp_number || '', req.params.id]);
+        await dbRun('UPDATE members SET name=?, email=?, role=?, password_hash=?, whatsapp_number=?, telegram_chat_id=? WHERE id=?', [name, email || '', role || 'Employee', pwdHash, whatsapp_number || '', telegram_chat_id || '', req.params.id]);
       } else {
-        await dbRun('UPDATE members SET name=?, email=?, role=?, whatsapp_number=? WHERE id=?', [name, email || '', role || 'Employee', whatsapp_number || '', req.params.id]);
+        await dbRun('UPDATE members SET name=?, email=?, role=?, whatsapp_number=?, telegram_chat_id=? WHERE id=?', [name, email || '', role || 'Employee', whatsapp_number || '', telegram_chat_id || '', req.params.id]);
       }
       res.json({ success: true });
     });

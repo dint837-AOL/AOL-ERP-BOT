@@ -18,7 +18,7 @@ export default function AdminPage() {
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [memberData, setMemberData] = useState({ name: '', email: '', role: 'Employee', whatsapp_number: '' });
+  const [memberData, setMemberData] = useState({ name: '', email: '', role: 'Employee', telegram_chat_id: '' });
 
   const [toastMsg, setToastMsg] = useState('');
 
@@ -188,14 +188,14 @@ export default function AdminPage() {
   const openAddModal = () => {
     setIsEditing(false);
     setEditingId(null);
-    setMemberData({ name: '', email: '', role: 'Employee', whatsapp_number: '' });
+    setMemberData({ name: '', email: '', role: 'Employee', telegram_chat_id: '' });
     setShowMemberModal(true);
   };
 
   const openEditModal = (m: any) => {
     setIsEditing(true);
     setEditingId(m.id);
-    setMemberData({ name: m.name, email: m.email || '', role: m.role, whatsapp_number: m.whatsapp_number || '' });
+    setMemberData({ name: m.name, email: m.email || '', role: m.role, telegram_chat_id: m.telegram_chat_id || '' });
     setShowMemberModal(true);
   };
 
@@ -499,8 +499,8 @@ export default function AdminPage() {
               <input type="email" placeholder="john@example.com" value={memberData.email} onChange={e => setMemberData({ ...memberData, email: e.target.value })} />
             </div>
             <div className="fg">
-              <label>WhatsApp Number</label>
-              <input type="text" placeholder="+8801700000000" value={memberData.whatsapp_number} onChange={e => setMemberData({ ...memberData, whatsapp_number: e.target.value })} />
+              <label>Telegram Chat ID</label>
+              <input type="text" placeholder="123456789" value={memberData.telegram_chat_id} onChange={e => setMemberData({ ...memberData, telegram_chat_id: e.target.value })} />
             </div>
             <div className="mfooter">
               <button className="btn btn-ghost" onClick={() => setShowMemberModal(false)}>Cancel</button>
