@@ -134,6 +134,16 @@ export default function Topbar({ title, children }: { title?: string, children?:
   const isUnreadNotif = (n: any) => n.is_read === false || n.is_read === 0 || n.is_read === '0' || n.is_read === null || n.is_read === undefined;
   const unreadCount = notifications.filter(isUnreadNotif).length;
 
+  useEffect(() => {
+    if ('setAppBadge' in navigator && 'clearAppBadge' in navigator) {
+      if (unreadCount > 0) {
+        navigator.setAppBadge(unreadCount).catch(console.error);
+      } else {
+        navigator.clearAppBadge().catch(console.error);
+      }
+    }
+  }, [unreadCount]);
+
   return (
     <>
       <div className="overlay-side" id="side-overlay" onClick={closeSide}></div>
