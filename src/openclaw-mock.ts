@@ -797,7 +797,7 @@ echo "=============================================================="
     this.app.get('/api/notifications', async (req, res) => {
       const memberId = req.query.member_id;
       if (!memberId) return res.json([]);
-      const notifs = await dbAll('SELECT * FROM notifications WHERE member_id=? ORDER BY created_at DESC LIMIT 50', [Number(memberId)]);
+      const notifs = await dbAll('SELECT * FROM notifications WHERE member_id=? AND (is_read=0 OR is_read IS NULL) ORDER BY created_at DESC LIMIT 50', [Number(memberId)]);
       res.json(notifs);
     });
     this.app.patch('/api/notifications/:id/read', async (req, res) => {

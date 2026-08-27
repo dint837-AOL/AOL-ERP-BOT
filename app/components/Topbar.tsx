@@ -89,7 +89,7 @@ export default function Topbar({ title, children }: { title?: string, children?:
     if (!memberId) return;
     
     // 1. Immediately update local state so badge disappears right away
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    setNotifications([]);
     
     // 2. Sync to backend
     try {
@@ -105,7 +105,7 @@ export default function Topbar({ title, children }: { title?: string, children?:
 
   const handleNotificationClick = async (n: any) => {
     // 1. Immediately mark as read in local state
-    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, is_read: true } : item));
+    setNotifications(prev => prev.filter(item => item.id !== n.id));
     setShowDropdown(false);
 
     // 2. Mark as read on backend (fire and forget)
