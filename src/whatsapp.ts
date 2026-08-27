@@ -23,14 +23,14 @@ export async function sendWhatsAppMessage(phoneNumber: string, message: string):
   }
 
   try {
-    // Example generic API request (can be adapted for Twilio/UltraMsg easily)
+    // Sending to UltraMsg API format (Standard for quick setups)
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiToken}`
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: JSON.stringify({
+      body: new URLSearchParams({
+        token: apiToken,
         to: cleanNumber,
         body: message
       })
