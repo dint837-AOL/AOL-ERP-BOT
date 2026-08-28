@@ -938,11 +938,15 @@ echo "=============================================================="
         if (!m.reminder_minutes_before) continue;
         const minutesToAlert = m.reminder_minutes_before.split(',').map((minuteStr: string) => parseInt(minuteStr.trim()));
         
-        const scheduledTime = new Date(m.scheduled_at);
-        const diffMinutes = Math.floor((scheduledTime.getTime() - now.getTime()) / (1000 * 60));
+        let schedStr = String(m.scheduled_at).trim();
+        if (!schedStr.includes('Z') && !/[+-]\d{2}(:?\d{2})?$/.test(schedStr)) {
+          if (schedStr.includes(' ') && !schedStr.includes('T')) schedStr = schedStr.replace(' ', 'T');
+          schedStr += '+06:00';
+        }
+        const scheduledTime = new Date(schedStr);
+        const diffMinutes = Math.round((scheduledTime.getTime() - now.getTime()) / (1000 * 60));
         
         if (minutesToAlert.includes(diffMinutes)) {
-          // Exact minute match!
           console.log(`[ALERT] Meeting '${m.title}' with ${m.contact_name} is in exactly ${diffMinutes} minutes!`);
         }
       }
@@ -993,24 +997,42 @@ echo "=============================================================="
         console.error('Error in Wi-Fi auto-checkout cron:', err);
       }
 
-      // 5. Check Tasks for REMINDER actions (30 mins before deadline)
+      // 5. Check Tasks for REMINDER actions (30 mins before deadline, Asia/Dhaka timezone aware)
       try {
         const tasks = await dbAll(`SELECT * FROM tasks WHERE action_type = 'REMINDER' AND status != 'DONE' AND deadline IS NOT NULL`) as any[];
         for (const t of tasks) {
-          if (!t.deadline || !t.assigned_to) continue;
-          const deadlineTime = new Date(t.deadline);
+          if (!t.deadline) continue;
+          let deadlineStr = String(t.deadline).trim();
+          if (!deadlineStr.includes('Z') && !/[+-]\d{2}(:?\d{2})?$/.test(deadlineStr)) {
+            if (deadlineStr.includes(' ') && !deadlineStr.includes('T')) deadlineStr = deadlineStr.replace(' ', 'T');
+            deadlineStr += '+06:00';
+          }
+          const deadlineTime = new Date(deadlineStr);
           if (isNaN(deadlineTime.getTime())) continue;
           
           const diffMinutes = Math.round((deadlineTime.getTime() - now.getTime()) / (1000 * 60));
-          if (diffMinutes === 30) {
-            const msg = `Reminder: The task "${t.title}" is due in exactly 30 minutes!`;
-            const existingNotif = await dbGet(
-              `SELECT id FROM notifications WHERE member_id=? AND message=?`,
-              [t.assigned_to, msg]
-            );
-            if (!existingNotif) {
-              await notifyMember(t.assigned_to, msg, '/dashboard');
-              console.log(`[ALERT] Task '${t.title}' reminder sent to member #${t.assigned_to}.`);
+          
+          // Trigger when 30 minutes or less remaining until deadline
+          if (diffMinutes <= 30 && diffMinutes >= 0) {
+            const targetIds = new Set<number>();
+            if (t.assigned_to) targetIds.add(Number(t.assigned_to));
+            
+            // Also notify admins so creator/admin can see the reminder
+            const admins = await dbAll(`SELECT id FROM members WHERE role='Admin'`) as any[];
+            for (const adm of admins) {
+              if (adm?.id) targetIds.add(Number(adm.id));
+            }
+
+            for (const memberId of targetIds) {
+              const existingNotif = await dbGet(
+                `SELECT id FROM notifications WHERE member_id=? AND message LIKE ?`,
+                [memberId, `%The task "${t.title}"%`]
+              );
+              if (!existingNotif) {
+                const msg = `Reminder: The task "${t.title}" is due in ${diffMinutes <= 1 ? 'less than a minute' : diffMinutes + ' minutes'}!`;
+                await notifyMember(memberId, msg, '/dashboard');
+                console.log(`[ALERT] Task '${t.title}' reminder sent to member #${memberId}.`);
+              }
             }
           }
         }
