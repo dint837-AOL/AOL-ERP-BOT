@@ -992,6 +992,24 @@ echo "=============================================================="
       } catch (err) {
         console.error('Error in Wi-Fi auto-checkout cron:', err);
       }
+
+      // 5. Check Tasks for REMINDER actions (30 mins before deadline)
+      try {
+        const tasks = await dbAll(`SELECT * FROM tasks WHERE action_type = 'REMINDER' AND status != 'DONE' AND deadline IS NOT NULL`) as any[];
+        for (const t of tasks) {
+          if (!t.deadline || !t.assigned_to) continue;
+          const deadlineTime = new Date(t.deadline);
+          if (isNaN(deadlineTime.getTime())) continue;
+          
+          const diffMinutes = Math.floor((deadlineTime.getTime() - now.getTime()) / (1000 * 60));
+          if (diffMinutes === 30) {
+            await notifyMember(t.assigned_to, `Reminder: The task "${t.title}" is due in exactly 30 minutes!`, '/dashboard');
+            console.log(`[ALERT] Task '${t.title}' reminder sent to member #${t.assigned_to}.`);
+          }
+        }
+      } catch (err) {
+        console.error('Error in Task reminders cron:', err);
+      }
     };
     
     // Run on startup then every 1 minute
