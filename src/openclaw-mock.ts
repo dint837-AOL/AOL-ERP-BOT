@@ -1013,26 +1013,16 @@ echo "=============================================================="
           const diffMinutes = Math.round((deadlineTime.getTime() - now.getTime()) / (1000 * 60));
           
           // Trigger when 30 minutes or less remaining until deadline
-          if (diffMinutes <= 30 && diffMinutes >= 0) {
-            const targetIds = new Set<number>();
-            if (t.assigned_to) targetIds.add(Number(t.assigned_to));
-            
-            // Also notify admins so creator/admin can see the reminder
-            const admins = await dbAll(`SELECT id FROM members WHERE role='Admin'`) as any[];
-            for (const adm of admins) {
-              if (adm?.id) targetIds.add(Number(adm.id));
-            }
-
-            for (const memberId of targetIds) {
-              const existingNotif = await dbGet(
-                `SELECT id FROM notifications WHERE member_id=? AND message LIKE ?`,
-                [memberId, `%The task "${t.title}"%`]
-              );
-              if (!existingNotif) {
-                const msg = `Reminder: The task "${t.title}" is due in ${diffMinutes <= 1 ? 'less than a minute' : diffMinutes + ' minutes'}!`;
-                await notifyMember(memberId, msg, '/dashboard');
-                console.log(`[ALERT] Task '${t.title}' reminder sent to member #${memberId}.`);
-              }
+          if (diffMinutes <= 30 && diffMinutes >= 0 && t.assigned_to) {
+            const memberId = Number(t.assigned_to);
+            const existingNotif = await dbGet(
+              `SELECT id FROM notifications WHERE member_id=? AND message LIKE ?`,
+              [memberId, `%The task "${t.title}"%`]
+            );
+            if (!existingNotif) {
+              const msg = `Reminder: The task "${t.title}" is due in ${diffMinutes <= 1 ? 'less than a minute' : diffMinutes + ' minutes'}!`;
+              await notifyMember(memberId, msg, '/dashboard');
+              console.log(`[ALERT] Task '${t.title}' reminder sent to assignee member #${memberId}.`);
             }
           }
         }
