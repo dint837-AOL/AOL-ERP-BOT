@@ -1001,10 +1001,17 @@ echo "=============================================================="
           const deadlineTime = new Date(t.deadline);
           if (isNaN(deadlineTime.getTime())) continue;
           
-          const diffMinutes = Math.floor((deadlineTime.getTime() - now.getTime()) / (1000 * 60));
+          const diffMinutes = Math.round((deadlineTime.getTime() - now.getTime()) / (1000 * 60));
           if (diffMinutes === 30) {
-            await notifyMember(t.assigned_to, `Reminder: The task "${t.title}" is due in exactly 30 minutes!`, '/dashboard');
-            console.log(`[ALERT] Task '${t.title}' reminder sent to member #${t.assigned_to}.`);
+            const msg = `Reminder: The task "${t.title}" is due in exactly 30 minutes!`;
+            const existingNotif = await dbGet(
+              `SELECT id FROM notifications WHERE member_id=? AND message=?`,
+              [t.assigned_to, msg]
+            );
+            if (!existingNotif) {
+              await notifyMember(t.assigned_to, msg, '/dashboard');
+              console.log(`[ALERT] Task '${t.title}' reminder sent to member #${t.assigned_to}.`);
+            }
           }
         }
       } catch (err) {
