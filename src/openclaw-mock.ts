@@ -811,17 +811,20 @@ echo "=============================================================="
     this.app.get('/api/notifications', async (req, res) => {
       const memberId = req.query.member_id;
       if (!memberId) return res.json([]);
-      const notifs = await dbAll('SELECT * FROM notifications WHERE member_id=? AND (is_read=0 OR is_read IS NULL) ORDER BY created_at DESC LIMIT 50', [Number(memberId)]);
+      const falseVal = isPostgres() ? 'false' : '0';
+      const notifs = await dbAll(`SELECT * FROM notifications WHERE member_id=? AND (is_read=${falseVal} OR is_read IS NULL) ORDER BY created_at DESC LIMIT 50`, [Number(memberId)]);
       res.json(notifs);
     });
     this.app.patch('/api/notifications/:id/read', async (req, res) => {
-      await dbRun('UPDATE notifications SET is_read=1 WHERE id=?', [Number(req.params.id)]);
+      const trueVal = isPostgres() ? 'true' : '1';
+      await dbRun(`UPDATE notifications SET is_read=${trueVal} WHERE id=?`, [Number(req.params.id)]);
       res.json({ ok: true });
     });
     this.app.patch('/api/notifications/read-all', async (req, res) => {
       const { member_id } = req.body;
       if (!member_id) return res.status(400).json({ error: 'member_id required' });
-      await dbRun('UPDATE notifications SET is_read=1 WHERE member_id=?', [Number(member_id)]);
+      const trueVal = isPostgres() ? 'true' : '1';
+      await dbRun(`UPDATE notifications SET is_read=${trueVal} WHERE member_id=?`, [Number(member_id)]);
       res.json({ ok: true });
     });
 
