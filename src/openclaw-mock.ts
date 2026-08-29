@@ -210,9 +210,18 @@ export class OpenClaw {
       const date = task_date || new Date().toISOString().split('T')[0];
       const { lastID } = await dbRun(`INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date,action_type,recipient,status) VALUES(?,?,?,?,?,?,?,?,?)`,
         [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'ASSIGN', recipient||'', status||'DONE']);
-      res.status(201).json(await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]));
+      
+      const newTask = await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]);
+      
+      if (assigned_to) {
+        await notifyMember(assigned_to, `You have been assigned a new task: "${title}"`, '/dashboard');
+      }
+
+      res.status(201).json(newTask);
     });
     this.app.patch('/api/tasks/:id', async (req, res) => {
+      const oldTask = await dbGet(`SELECT t.*, m.name as assignee_name FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [req.params.id]) as any;
+
       const allowed = ['status', 'priority', 'title', 'description', 'deadline', 'assigned_to', 'action_type', 'recipient', 'is_archived'];
       const updates: string[] = [];
       const values: any[] = [];
@@ -226,7 +235,29 @@ export class OpenClaw {
         values.push(req.params.id);
         await dbRun(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`, values);
       }
-      res.json(await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [req.params.id]));
+      
+      const updatedTask = await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [req.params.id]) as any;
+      
+      if (oldTask && updatedTask) {
+        const user = (req as any).user;
+        
+        // If status changed by an employee, notify admins
+        if (req.body.status && req.body.status !== oldTask.status) {
+          if (user && user.role !== 'Admin') {
+            const admins = await dbAll(`SELECT id FROM members WHERE role='Admin'`) as any[];
+            for (const admin of admins) {
+              await notifyMember(admin.id, `${user.name} changed task "${updatedTask.title}" status to ${req.body.status}.`, '/dashboard');
+            }
+          }
+        }
+        
+        // If task was re-assigned to someone else
+        if (req.body.assigned_to && req.body.assigned_to !== oldTask.assigned_to) {
+          await notifyMember(req.body.assigned_to, `You have been assigned a task: "${updatedTask.title}"`, '/dashboard');
+        }
+      }
+
+      res.json(updatedTask);
     });
     this.app.delete('/api/tasks/:id', async (req, res) => { await dbRun('DELETE FROM tasks WHERE id=?', [req.params.id]); res.json({ ok: true }); });
 
