@@ -192,7 +192,7 @@ export async function initDB() {
     console.log('[DB] No DATABASE_URL found. Falling back to local SQLite (./openclaw.db)...');
 
     sqliteDb = await open({
-      filename: './openclaw.db',
+      filename: process.env.SQLITE_DB_PATH || './openclaw.db',
       driver: sqlite3.Database,
     });
 
