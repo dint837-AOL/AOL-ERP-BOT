@@ -17,10 +17,9 @@ import type { Metadata, Viewport } from 'next';
 export const metadata: Metadata = {
   title: 'AlliedOne ERP System',
   description: 'Internal ERP for AlliedOne',
-  manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'AOL ERP',
   },
 };

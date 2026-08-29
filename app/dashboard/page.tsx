@@ -109,6 +109,29 @@ function DeadlineEditor({ defaultValue, onSave }: { defaultValue: string; onSave
   );
 }
 
+function CompactMobileTaskCard({ task, onClick }: { task: any; onClick: () => void }) {
+  const dl = task.deadline ? new Date(task.deadline) : null;
+  const shortName = task.assignee_name ? task.assignee_name.split(' ').map((n:string)=>n[0]).join('').substring(0,2).toUpperCase() : 'U';
+  const st = getStatusStyle(task.status);
+  
+  return (
+    <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#161926', border: '1px solid #2a3050', borderRadius: '10px', padding: '12px 14px', marginBottom: 10, cursor: 'pointer' }}>
+      <div style={{ width: 6, height: 6, borderRadius: '50%', background: st.color, boxShadow: st.dotGlow, flexShrink: 0 }} />
+      <div style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.9rem', color: '#f8fafc', fontWeight: 500 }}>
+        {task.title || 'Untitled Task'}
+      </div>
+      <div style={{ width: 22, height: 22, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+        {shortName}
+      </div>
+      {dl && (
+        <div style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+          {dl.toLocaleString('en-GB', { day: 'numeric', month: 'short' })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Blank new-task row shape ─────────────────────── */
 const BLANK_ROW = { action_type: '', title: '', recipient: '', assigned_to: '', status: 'DONE', deadline: '' };
 
@@ -120,135 +143,7 @@ const fieldInputSt: React.CSSProperties = {
 };
 const fieldSelectSt: React.CSSProperties = { ...fieldInputSt, cursor: 'pointer' };
 
-/* ─── Mobile Task Card ─── */
-function MobileTaskCard({ task, members, onDelete, onSaveField }: {
-  task: Task; members: Member[];
-  onDelete: (t: Task) => void;
-  onSaveField: (id: number, field: string, value: string) => void;
-}) {
-  const [editField, setEditField] = useState<string | null>(null);
-  const am = getActionMeta(task.action_type);
-  const st = getStatusStyle(task.status);
-  const dl = task.deadline ? new Date(task.deadline) : null;
 
-  return (
-    <div style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '14px', padding: '14px 15px', marginBottom: 10 }}>
-      {/* Top row: action + status + delete */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10, flexWrap: 'wrap' }}>
-        {editField === 'action_type' ? (
-          <select autoFocus defaultValue={task.action_type}
-            onChange={e => { onSaveField(task.id, 'action_type', e.target.value); setEditField(null); }}
-            onBlur={() => setEditField(null)}
-            style={{ ...fieldSelectSt, width: 'auto', fontSize: '0.78rem', padding: '4px 8px' }}>
-            {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
-          </select>
-        ) : (
-          <span onClick={() => setEditField('action_type')}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#e2e8f0', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', fontWeight: 600, fontSize: '0.74rem', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer' }}>
-            <span style={{ color: '#94a3b8' }}>{am.icon}</span>
-            <span>{am.label}</span>
-          </span>
-        )}
-
-        {editField === 'status' ? (
-          <select autoFocus defaultValue={task.status === 'DUE' ? 'WIP' : task.status}
-            onChange={e => { onSaveField(task.id, 'status', e.target.value); setEditField(null); }}
-            onBlur={() => setEditField(null)}
-            style={{ ...fieldSelectSt, width: 'auto', fontSize: '0.78rem', padding: '4px 8px' }}>
-            <option value="DONE">Done</option>
-            <option value="WIP">WIP</option>
-            <option value="PENDING">Pending</option>
-          </select>
-        ) : (
-          <span onClick={() => setEditField('status')}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 11px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', background: st.bg, color: st.color, border: `1px solid ${st.color}35` }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.color, boxShadow: st.dotGlow, flexShrink: 0 }} />
-            {st.label}
-          </span>
-        )}
-
-        <button onClick={() => onDelete(task)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center' }}
-          onTouchStart={e => (e.currentTarget.style.color = '#ef4444')}
-          onTouchEnd={e => (e.currentTarget.style.color = '#64748b')}
-          onMouseOver={e => (e.currentTarget.style.color = '#ef4444')}
-          onMouseOut={e => (e.currentTarget.style.color = '#64748b')}>
-          <Trash2 size={15} />
-        </button>
-      </div>
-
-      {/* Title */}
-      {editField === 'title' ? (
-        <input autoFocus type="text" defaultValue={task.title}
-          onBlur={e => { onSaveField(task.id, 'title', e.target.value); setEditField(null); }}
-          onKeyDown={e => { if (e.key === 'Enter') { onSaveField(task.id, 'title', (e.target as HTMLInputElement).value); setEditField(null); } }}
-          style={{ ...fieldInputSt, marginBottom: 10, fontSize: '0.92rem', fontWeight: 600 }}
-        />
-      ) : (
-        <div onClick={() => setEditField('title')}
-          style={{ fontSize: '0.93rem', fontWeight: 600, color: '#f8fafc', marginBottom: 10, cursor: 'text', lineHeight: 1.4 }}>
-          {task.title || <span style={{ fontStyle: 'italic', color: '#64748b' }}>Tap to enter activity name…</span>}
-        </div>
-      )}
-
-      {/* Recipient + Assignee grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, marginBottom: 9 }}>
-        <div>
-          <div style={{ fontSize: '0.62rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Recipient</div>
-          {editField === 'recipient' ? (
-            <input autoFocus type="text" defaultValue={task.recipient || ''} placeholder="Enter recipient…"
-              onBlur={e => { onSaveField(task.id, 'recipient', e.target.value); setEditField(null); }}
-              onKeyDown={e => { if (e.key === 'Enter') { onSaveField(task.id, 'recipient', (e.target as HTMLInputElement).value); setEditField(null); } }}
-              style={{ ...fieldInputSt, fontSize: '0.8rem', padding: '7px 9px' }}
-            />
-          ) : (
-            <div onClick={() => setEditField('recipient')}
-              style={{ fontSize: '0.8rem', color: task.recipient ? '#f1f5f9' : '#475569', cursor: 'pointer', padding: '7px 9px', background: '#131722', borderRadius: '8px', border: '1px solid #2a3050', minHeight: 34, display: 'flex', alignItems: 'center' }}>
-              {task.recipient || <span style={{ fontStyle: 'italic' }}>—</span>}
-            </div>
-          )}
-        </div>
-        <div>
-          <div style={{ fontSize: '0.62rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Assignee</div>
-          {editField === 'assigned_to' ? (
-            <select autoFocus defaultValue={task.assigned_to?.toString() || ''}
-              onChange={e => { onSaveField(task.id, 'assigned_to', e.target.value); setEditField(null); }}
-              onBlur={() => setEditField(null)}
-              style={{ ...fieldSelectSt, fontSize: '0.8rem', padding: '7px 9px' }}>
-              <option value="">Unassigned</option>
-              {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-          ) : (
-            <div onClick={() => setEditField('assigned_to')}
-              style={{ fontSize: '0.8rem', cursor: 'pointer', padding: '7px 9px', background: '#131722', borderRadius: '8px', border: '1px solid #2a3050', minHeight: 34, display: 'flex', alignItems: 'center', gap: 6 }}>
-              {task.assignee_name ? (
-                <>
-                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                    {(task.assignee_name[0] || 'U').toUpperCase()}
-                  </div>
-                  <span style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.78rem' }}>{task.assignee_name}</span>
-                </>
-              ) : <span style={{ color: '#475569', fontStyle: 'italic' }}>—</span>}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Deadline */}
-      <div>
-        <div style={{ fontSize: '0.62rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Deadline</div>
-        {editField === 'deadline' ? (
-          <DeadlineEditor defaultValue={task.deadline?.slice(0, 16) || ''} onSave={val => { onSaveField(task.id, 'deadline', val); setEditField(null); }} />
-        ) : (
-          <div onClick={() => setEditField('deadline')}
-            style={{ fontSize: '0.8rem', cursor: 'pointer', padding: '7px 9px', background: '#131722', borderRadius: '8px', border: '1px solid #2a3050', display: 'flex', alignItems: 'center', gap: 6, color: dl ? '#e2e8f0' : '#475569' }}>
-            <Calendar size={12} style={{ color: dl ? '#38bdf8' : '#475569', flexShrink: 0 }} />
-            <span>{dl ? dl.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Tap to set deadline'}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 /* ─── Mobile Add Task Bottom Sheet ─── */
 function MobileAddSheet({ newRow, setNewRow, members, onSubmit, saving, onClose }: {
@@ -485,6 +380,16 @@ export default function DashboardPage() {
     }
   };
 
+  const [selectedMobileTask, setSelectedMobileTask] = useState<any>(null);
+  const [mobileTaskContext, setMobileTaskContext] = useState<'admin'|'employee'>('admin');
+
+  // Helper for mobile clicks
+  const handleMobileClick = (task: any, ctx: 'admin'|'employee') => {
+    setSelectedMobileTask(task);
+    setMobileTaskContext(ctx);
+  };
+
+  /* ─── Add new task (inline row submit) ─────────── */
   /* ─── Add new task (inline row submit) ─────────── */
   const submitNewRow = async () => {
     if (!newRow.title.trim()) { showToast('Activity name is required.'); return; }
@@ -786,9 +691,10 @@ export default function DashboardPage() {
                       <div style={{ fontSize: '0.82rem' }}>Tap the <strong style={{ color: '#4f7eff' }}>+</strong> button below to add a task</div>
                     </div>
                   ) : tasks.map(task => (
-                    <MobileTaskCard key={task.id} task={task} members={members}
-                      onDelete={setTaskToDelete}
-                      onSaveField={saveCell}
+                    <CompactMobileTaskCard 
+                      key={task.id} 
+                      task={task} 
+                      onClick={() => handleMobileClick(task, 'admin')}
                     />
                   ))}
                 </div>
@@ -972,51 +878,7 @@ export default function DashboardPage() {
                       <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#94a3b8' }}>No tasks match selected filters</div>
                     </div>
                   ) : filteredTasks.map(task => {
-                    const am = getActionMeta(task.action_type);
-                    const dl = task.deadline ? new Date(task.deadline) : null;
-                    const st = getStatusStyle(task.status);
-                    return (
-                      <div key={task.id} style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '14px', padding: '14px 15px', marginBottom: 10 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, flexWrap: 'wrap' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#e2e8f0', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', fontWeight: 600, fontSize: '0.73rem', padding: '3px 9px', borderRadius: '5px' }}>
-                            <span style={{ color: '#94a3b8' }}>{am.icon}</span> {am.label}
-                          </span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700, background: st.bg, color: st.color, border: `1px solid ${st.color}35` }}>
-                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.color, boxShadow: st.dotGlow, flexShrink: 0 }} />
-                            {st.label}
-                          </span>
-                        </div>
-                        <div style={{ fontWeight: 600, fontSize: '0.92rem', color: '#f8fafc', marginBottom: 8, lineHeight: 1.4 }}>{task.title}</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: task.recipient && task.assignee_name ? '1fr 1fr' : '1fr', gap: 8, fontSize: '0.79rem' }}>
-                          {task.recipient && (
-                            <div>
-                              <div style={{ color: '#64748b', fontSize: '0.63rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>Recipient</div>
-                              <div style={{ color: '#f1f5f9' }}>{task.recipient}</div>
-                            </div>
-                          )}
-                          {task.assignee_name && (
-                            <div>
-                              <div style={{ color: '#64748b', fontSize: '0.63rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>Assignee</div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                <div style={{ width: 17, height: 17, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.58rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                                  {(task.assignee_name[0] || 'U').toUpperCase()}
-                                </div>
-                                <span style={{ color: '#f1f5f9' }}>{task.assignee_name}</span>
-                              </div>
-                            </div>
-                          )}
-                          {dl && (
-                            <div style={{ gridColumn: '1/-1' }}>
-                              <div style={{ color: '#64748b', fontSize: '0.63rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>Deadline</div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#e2e8f0' }}>
-                                <Calendar size={11} style={{ color: '#38bdf8', flexShrink: 0 }} />
-                                {dl.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
+                    return <CompactMobileTaskCard key={task.id} task={task} onClick={() => handleMobileClick(task, 'employee')} />;
                   })}
                 </div>
               ) : (
@@ -1210,6 +1072,141 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* ── Mobile Details Modal ── */}
+      {selectedMobileTask && (() => {
+        const activeTask = tasks.find(t => t.id === selectedMobileTask.id) || selectedMobileTask;
+        const isAdmin = mobileTaskContext === 'admin';
+        // helper for editing
+        const canEdit = isAdmin || mobileTaskContext === 'employee'; // Adjust if employee has restrictions. Actually employee can edit status.
+        
+        const renderEdit = (field: string, displayContent: React.ReactNode, inputContent: React.ReactNode, isEditable: boolean = isAdmin) => {
+          const isEditing = editCell?.id === activeTask.id && editCell?.field === field;
+          if (!isEditable) return displayContent;
+          if (isEditing) return inputContent;
+          return <div onClick={() => setEditCell({ id: activeTask.id, field })} style={{ cursor: 'pointer' }}>{displayContent}</div>;
+        };
+
+        const fieldInputSt = {
+          background: '#131722', border: '1px solid #4f7eff', borderRadius: '7px',
+          color: '#f1f5f9', fontSize: '0.9rem', padding: '6px 10px',
+          width: '100%', outline: 'none', fontFamily: 'inherit'
+        };
+
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
+            onClick={() => { setSelectedMobileTask(null); setEditCell(null); }}>
+            <div style={{ background: '#161926', borderTop: '1px solid #2a3050', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', padding: '24px 20px', paddingBottom: 'max(24px, env(safe-area-inset-bottom))', position: 'relative' }}
+              onClick={e => e.stopPropagation()}>
+              <button onClick={() => { setSelectedMobileTask(null); setEditCell(null); }} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#94a3b8', width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                ✕
+              </button>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, fontWeight: 700 }}>Task Details (Tap to Edit)</div>
+              
+              {/* Title */}
+              <div style={{ marginBottom: 20 }}>
+                {renderEdit('title', 
+                  <div style={{ fontSize: '1.2rem', fontWeight: 600, color: '#f8fafc', lineHeight: 1.3 }}>{activeTask.title || 'Untitled Task'}</div>,
+                  <input autoFocus type="text" defaultValue={activeTask.title}
+                    onBlur={e => saveCell(activeTask.id, 'title', e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveCell(activeTask.id, 'title', (e.target as HTMLInputElement).value); }}
+                    style={{ ...fieldInputSt, fontSize: '1.1rem', fontWeight: 600 }} />,
+                  isAdmin
+                )}
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                {/* Assignee */}
+                <div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Assignee</div>
+                  {renderEdit('assigned_to',
+                    <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem' }}>{activeTask.assignee_name || 'Unassigned'}</div>,
+                    <select autoFocus defaultValue={activeTask.assigned_to?.toString() || ''}
+                      onBlur={e => saveCell(activeTask.id, 'assigned_to', e.target.value)}
+                      onChange={e => saveCell(activeTask.id, 'assigned_to', e.target.value)}
+                      style={fieldInputSt}>
+                      <option value="">Unassigned</option>
+                      {[...members].sort((a,b) => a.name.localeCompare(b.name)).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>,
+                    isAdmin
+                  )}
+                </div>
+                {/* Recipient */}
+                <div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Recipient</div>
+                  {renderEdit('recipient',
+                    <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem' }}>{activeTask.recipient || '—'}</div>,
+                    <input autoFocus type="text" defaultValue={activeTask.recipient} placeholder="Recipient..."
+                      onBlur={e => saveCell(activeTask.id, 'recipient', e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') saveCell(activeTask.id, 'recipient', (e.target as HTMLInputElement).value); }}
+                      style={fieldInputSt} />,
+                    isAdmin
+                  )}
+                </div>
+                {/* Activity (Action Type) */}
+                <div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Activity</div>
+                  {renderEdit('action_type',
+                    <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {getActionMeta(activeTask.action_type).icon}
+                      {getActionMeta(activeTask.action_type).label}
+                    </div>,
+                    <select autoFocus defaultValue={activeTask.action_type}
+                      onBlur={e => saveCell(activeTask.id, 'action_type', e.target.value)}
+                      onChange={e => saveCell(activeTask.id, 'action_type', e.target.value)}
+                      style={fieldInputSt}>
+                      <option value="" disabled>Select</option>
+                      {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
+                    </select>,
+                    isAdmin
+                  )}
+                </div>
+                {/* Status */}
+                <div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Status</div>
+                  {renderEdit('status',
+                    <div style={{ color: getStatusStyle(activeTask.status).color, fontWeight: 600, fontSize: '0.9rem' }}>
+                      {getStatusStyle(activeTask.status).label}
+                    </div>,
+                    <select autoFocus defaultValue={activeTask.status === 'DUE' ? 'WIP' : activeTask.status}
+                      onBlur={e => saveCell(activeTask.id, 'status', e.target.value)}
+                      onChange={e => saveCell(activeTask.id, 'status', e.target.value)}
+                      style={fieldInputSt}>
+                      <option value="DONE">Done</option>
+                      <option value="WIP">WIP</option>
+                      <option value="PENDING">Pending</option>
+                    </select>,
+                    true // everyone can edit status
+                  )}
+                </div>
+              </div>
+
+              {/* Deadline */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Deadline</div>
+                {renderEdit('deadline',
+                  <div style={{ color: activeTask.deadline ? '#38bdf8' : '#94a3b8', fontWeight: 500, fontSize: '0.95rem' }}>
+                    {activeTask.deadline ? new Date(activeTask.deadline).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Set Deadline'}
+                  </div>,
+                  <DeadlineEditor defaultValue={activeTask.deadline?.slice(0, 16) || ''} onSave={val => saveCell(activeTask.id, 'deadline', val)} />,
+                  isAdmin
+                )}
+              </div>
+              
+              {isAdmin && (
+                <button 
+                  onClick={() => {
+                    setTaskToDelete(activeTask);
+                    setSelectedMobileTask(null);
+                  }}
+                  style={{ width: '100%', padding: '12px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '10px', fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer' }}>
+                  Delete Task
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Mobile FAB: floating + button (Admin View only) ── */}
       {isMobile && tab === 'admin' && (
