@@ -275,6 +275,28 @@ export default function AdminPage() {
     }
   };
 
+  const testEnv = async () => {
+    try {
+      const token = getAuthToken();
+      const res = await fetch('/api/debug-env', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      const data = await res.json();
+      if (data.hasToken) {
+        showToast('✅ TELEGRAM_BOT_TOKEN is present on the server!');
+      } else {
+        showToast('❌ Server CANNOT see TELEGRAM_BOT_TOKEN. Check Render.');
+      }
+      console.log('Server Env Keys:', data.keys);
+    } catch (e) {
+      showToast('Failed to check env.');
+    }
+  };
+
   return (
     <>
       <Topbar title="Admin Section" />
@@ -531,6 +553,7 @@ export default function AdminPage() {
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input style={{ flex: 1 }} type="text" placeholder="123456789" value={memberData.telegram_chat_id} onChange={e => setMemberData({ ...memberData, telegram_chat_id: e.target.value })} />
                 <button type="button" className="btn btn-primary" onClick={testTelegram} style={{ padding: '0 12px', whiteSpace: 'nowrap' }}>Test</button>
+                <button type="button" className="btn btn-ghost" onClick={testEnv} style={{ padding: '0 12px', whiteSpace: 'nowrap' }}>Debug Env</button>
               </div>
             </div>
             <div className="mfooter">

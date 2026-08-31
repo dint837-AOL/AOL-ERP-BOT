@@ -270,6 +270,10 @@ export class OpenClaw {
       res.json(result);
     });
 
+    this.app.post('/api/debug-env', requireRole('Admin'), async (req, res) => {
+      res.json({ keys: Object.keys(process.env), hasToken: !!process.env.TELEGRAM_BOT_TOKEN });
+    });
+
     // ── ATTENDANCE ───────────────────────────────────────────
     this.app.get('/api/attendance', async (req, res) => {
       const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
