@@ -11,13 +11,8 @@ export async function sendTelegramMessage(chatId: string, message: string): Prom
   const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
 
   if (!botToken) {
-    // Development/Fallback mode
-    console.log(`\n===========================================`);
-    console.log(`🚀 [Telegram Placeholder] Message to Chat ID: ${cleanChatId}`);
-    console.log(`💬 Message: ${message}`);
-    console.log(`ℹ️ Configure TELEGRAM_BOT_TOKEN to send real messages`);
-    console.log(`===========================================\n`);
-    return { success: true }; 
+    console.log(`🚀 [Telegram Placeholder] Message to Chat ID: ${cleanChatId}: ${message}`);
+    return { success: false, error: 'TELEGRAM_BOT_TOKEN is missing in Render Environment Variables. Please add it and deploy again.' }; 
   }
 
   try {
