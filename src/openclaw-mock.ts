@@ -261,6 +261,15 @@ export class OpenClaw {
     });
     this.app.delete('/api/tasks/:id', async (req, res) => { await dbRun('DELETE FROM tasks WHERE id=?', [req.params.id]); res.json({ ok: true }); });
 
+    // ── TELEGRAM TEST ─────────────────────────────────────────
+    this.app.post('/api/test-telegram', requireRole('Admin'), async (req, res) => {
+      const { chat_id } = req.body;
+      if (!chat_id) return res.status(400).json({ error: 'chat_id is required' });
+      
+      const result = await sendTelegramMessage(chat_id, '🔔 Test message from AOL ERP Bot! If you receive this, notifications are working.');
+      res.json(result);
+    });
+
     // ── ATTENDANCE ───────────────────────────────────────────
     this.app.get('/api/attendance', async (req, res) => {
       const date = (req.query.date as string) || new Date().toISOString().split('T')[0];

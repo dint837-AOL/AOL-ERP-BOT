@@ -4,11 +4,11 @@
  * To activate, set TELEGRAM_BOT_TOKEN in your environment.
  */
 
-export async function sendTelegramMessage(chatId: string, message: string): Promise<boolean> {
+export async function sendTelegramMessage(chatId: string, message: string): Promise<{ success: boolean, error?: string }> {
   const cleanChatId = chatId.trim();
-  if (!cleanChatId) return false;
+  if (!cleanChatId) return { success: false, error: 'No Chat ID provided' };
 
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
 
   if (!botToken) {
     // Development/Fallback mode
@@ -17,7 +17,7 @@ export async function sendTelegramMessage(chatId: string, message: string): Prom
     console.log(`💬 Message: ${message}`);
     console.log(`ℹ️ Configure TELEGRAM_BOT_TOKEN to send real messages`);
     console.log(`===========================================\n`);
-    return true; 
+    return { success: true }; 
   }
 
   try {
@@ -36,13 +36,14 @@ export async function sendTelegramMessage(chatId: string, message: string): Prom
 
     if (response.ok) {
       console.log(`[Telegram] Successfully sent message to ${cleanChatId}`);
-      return true;
+      return { success: true };
     } else {
-      console.error(`[Telegram] Failed to send to ${cleanChatId}:`, await response.text());
-      return false;
+      const errText = await response.text();
+      console.error(`[Telegram] Failed to send to ${cleanChatId}:`, errText);
+      return { success: false, error: errText };
     }
   } catch (err: any) {
     console.error(`[Telegram] Error sending message:`, err.message);
-    return false;
+    return { success: false, error: err.message };
   }
 }

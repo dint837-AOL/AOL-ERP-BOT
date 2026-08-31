@@ -247,6 +247,34 @@ export default function AdminPage() {
     }
   };
 
+  const testTelegram = async () => {
+    if (!memberData.telegram_chat_id) {
+      showToast('Please enter a Chat ID first.');
+      return;
+    }
+    showToast('Sending test message...');
+    try {
+      const token = getAuthToken();
+      const res = await fetch('/api/test-telegram', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ chat_id: memberData.telegram_chat_id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('✅ Test message sent successfully!');
+      } else {
+        showToast('❌ Failed: ' + (data.error || 'Unknown error'));
+        console.error('Telegram Error:', data.error);
+      }
+    } catch (e) {
+      showToast('Failed to reach server.');
+    }
+  };
+
   return (
     <>
       <Topbar title="Admin Section" />
@@ -500,7 +528,10 @@ export default function AdminPage() {
             </div>
             <div className="fg">
               <label>Telegram Chat ID</label>
-              <input type="text" placeholder="123456789" value={memberData.telegram_chat_id} onChange={e => setMemberData({ ...memberData, telegram_chat_id: e.target.value })} />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input style={{ flex: 1 }} type="text" placeholder="123456789" value={memberData.telegram_chat_id} onChange={e => setMemberData({ ...memberData, telegram_chat_id: e.target.value })} />
+                <button type="button" className="btn btn-primary" onClick={testTelegram} style={{ padding: '0 12px', whiteSpace: 'nowrap' }}>Test</button>
+              </div>
             </div>
             <div className="mfooter">
               <button className="btn btn-ghost" onClick={() => setShowMemberModal(false)}>Cancel</button>
