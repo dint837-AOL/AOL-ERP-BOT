@@ -210,9 +210,8 @@ function MobileAddSheet({ newRow, setNewRow, members, onSubmit, saving, onClose 
           </div>
           {/* Submit */}
           <button onClick={onSubmit} disabled={saving}
-            style={{ background: 'linear-gradient(135deg,#4f7eff,#6c4fe3)', border: 'none', color: '#fff', borderRadius: '12px', padding: '14px', fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: saving ? 0.6 : 1, marginTop: 4, transition: 'opacity 0.15s' }}>
-            <Plus size={18} />
-            {saving ? 'Adding…' : 'Add Task'}
+            style={{ background: 'linear-gradient(135deg,#4f7eff,#6c4fe3)', border: 'none', color: '#fff', borderRadius: '12px', padding: '14px', fontSize: '1rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: saving ? 0.6 : 1, marginTop: 4, transition: 'opacity 0.15s', boxShadow: '0 4px 15px rgba(79,126,255,0.3)' }}>
+            {saving ? 'Saving...' : 'Save'}
           </button>
         </div>
       </div>
@@ -1118,14 +1117,14 @@ export default function DashboardPage() {
               
               {/* Header Actions */}
               <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 10 }}>
-                {isAdmin && !mobileEditMode && (
-                  <button onClick={() => { setTaskToDelete(activeTask); setSelectedMobileTask(null); }} style={{ background: 'rgba(239,68,68,0.1)', border: 'none', color: '#ef4444', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <Trash2 size={16} />
-                  </button>
-                )}
                 {canEdit && !mobileEditMode && (
                   <button onClick={() => setMobileEditMode(true)} style={{ background: 'rgba(79,126,255,0.1)', border: 'none', color: '#4f7eff', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                     <Pencil size={16} />
+                  </button>
+                )}
+                {isAdmin && !mobileEditMode && (
+                  <button onClick={() => { setTaskToDelete(activeTask); setSelectedMobileTask(null); }} style={{ background: 'rgba(239,68,68,0.1)', border: 'none', color: '#ef4444', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <Trash2 size={16} />
                   </button>
                 )}
                 <button onClick={() => { setSelectedMobileTask(null); setMobileEditMode(false); }} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#94a3b8', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
