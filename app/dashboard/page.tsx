@@ -26,6 +26,7 @@ import {
   Calendar,
   Bell,
   Plus,
+  Pencil,
   Archive,
   RotateCcw,
   X,
@@ -382,11 +383,15 @@ export default function DashboardPage() {
 
   const [selectedMobileTask, setSelectedMobileTask] = useState<any>(null);
   const [mobileTaskContext, setMobileTaskContext] = useState<'admin'|'employee'>('admin');
+  const [mobileEditMode, setMobileEditMode] = useState(false);
+  const [mobileDraft, setMobileDraft] = useState<Partial<Task>>({});
 
   // Helper for mobile clicks
   const handleMobileClick = (task: any, ctx: 'admin'|'employee') => {
     setSelectedMobileTask(task);
     setMobileTaskContext(ctx);
+    setMobileEditMode(false);
+    setMobileDraft(task);
   };
 
   /* ─── Add new task (inline row submit) ─────────── */
@@ -1077,14 +1082,26 @@ export default function DashboardPage() {
       {selectedMobileTask && (() => {
         const activeTask = tasks.find(t => t.id === selectedMobileTask.id) || selectedMobileTask;
         const isAdmin = mobileTaskContext === 'admin';
-        // helper for editing
-        const canEdit = isAdmin || mobileTaskContext === 'employee'; // Adjust if employee has restrictions. Actually employee can edit status.
-        
-        const renderEdit = (field: string, displayContent: React.ReactNode, inputContent: React.ReactNode, isEditable: boolean = isAdmin) => {
-          const isEditing = editCell?.id === activeTask.id && editCell?.field === field;
-          if (!isEditable) return displayContent;
-          if (isEditing) return inputContent;
-          return <div onClick={() => setEditCell({ id: activeTask.id, field })} style={{ cursor: 'pointer' }}>{displayContent}</div>;
+        const canEdit = isAdmin || mobileTaskContext === 'employee';
+
+        const handleDraftChange = (field: string, val: any) => {
+          setMobileDraft((prev: any) => ({ ...prev, [field]: val }));
+        };
+
+        const saveMobileDraft = async () => {
+          try {
+            await authFetch(`/api/tasks/${activeTask.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(mobileDraft)
+            });
+            showToast('Task updated!');
+            setMobileEditMode(false);
+            fetchTasks();
+            setSelectedMobileTask({ ...activeTask, ...mobileDraft });
+          } catch (e) {
+            showToast('Failed to update task.');
+          }
         };
 
         const fieldInputSt = {
@@ -1095,112 +1112,131 @@ export default function DashboardPage() {
 
         return (
           <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
-            onClick={() => { setSelectedMobileTask(null); setEditCell(null); }}>
-            <div style={{ background: '#161926', borderTop: '1px solid #2a3050', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', padding: '24px 20px', paddingBottom: 'max(24px, env(safe-area-inset-bottom))', position: 'relative' }}
+            onClick={() => { setSelectedMobileTask(null); setMobileEditMode(false); }}>
+            <div style={{ background: '#161926', borderTop: '1px solid #2a3050', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', padding: '24px 20px', paddingBottom: 'max(24px, env(safe-area-inset-bottom))', position: 'relative', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}
               onClick={e => e.stopPropagation()}>
-              <button onClick={() => { setSelectedMobileTask(null); setEditCell(null); }} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#94a3b8', width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                ✕
-              </button>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, fontWeight: 700 }}>Task Details (Tap to Edit)</div>
               
-              {/* Title */}
-              <div style={{ marginBottom: 20 }}>
-                {renderEdit('title', 
-                  <div style={{ fontSize: '1.2rem', fontWeight: 600, color: '#f8fafc', lineHeight: 1.3 }}>{activeTask.title || 'Untitled Task'}</div>,
-                  <input autoFocus type="text" defaultValue={activeTask.title}
-                    onBlur={e => saveCell(activeTask.id, 'title', e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') saveCell(activeTask.id, 'title', (e.target as HTMLInputElement).value); }}
-                    style={{ ...fieldInputSt, fontSize: '1.1rem', fontWeight: 600 }} />,
-                  isAdmin
+              {/* Header Actions */}
+              <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 10 }}>
+                {isAdmin && !mobileEditMode && (
+                  <button onClick={() => setTaskToDelete(activeTask)} style={{ background: 'rgba(239,68,68,0.1)', border: 'none', color: '#ef4444', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <Trash2 size={16} />
+                  </button>
                 )}
+                {canEdit && !mobileEditMode && (
+                  <button onClick={() => setMobileEditMode(true)} style={{ background: 'rgba(79,126,255,0.1)', border: 'none', color: '#4f7eff', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <Pencil size={16} />
+                  </button>
+                )}
+                <button onClick={() => { setSelectedMobileTask(null); setMobileEditMode(false); }} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#94a3b8', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12, fontWeight: 700 }}>
+                {mobileEditMode ? 'Edit Task Details' : 'Task Details'}
               </div>
               
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-                {/* Assignee */}
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Assignee</div>
-                  {renderEdit('assigned_to',
-                    <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem' }}>{activeTask.assignee_name || 'Unassigned'}</div>,
-                    <select autoFocus defaultValue={activeTask.assigned_to?.toString() || ''}
-                      onBlur={e => saveCell(activeTask.id, 'assigned_to', e.target.value)}
-                      onChange={e => saveCell(activeTask.id, 'assigned_to', e.target.value)}
-                      style={fieldInputSt}>
-                      <option value="">Unassigned</option>
-                      {[...members].sort((a,b) => a.name.localeCompare(b.name)).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>,
-                    isAdmin
+              <div style={{ overflowY: 'auto', paddingRight: 4 }}>
+                {/* Title */}
+                <div style={{ marginBottom: 20 }}>
+                  {mobileEditMode ? (
+                    <input autoFocus type="text" value={mobileDraft.title ?? activeTask.title}
+                      onChange={e => handleDraftChange('title', e.target.value)}
+                      style={{ ...fieldInputSt, fontSize: '1.1rem', fontWeight: 600 }} />
+                  ) : (
+                    <div style={{ fontSize: '1.2rem', fontWeight: 600, color: '#f8fafc', lineHeight: 1.3, paddingRight: 100 }}>{activeTask.title || 'Untitled Task'}</div>
                   )}
                 </div>
-                {/* Recipient */}
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Recipient</div>
-                  {renderEdit('recipient',
-                    <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem' }}>{activeTask.recipient || '—'}</div>,
-                    <input autoFocus type="text" defaultValue={activeTask.recipient} placeholder="Recipient..."
-                      onBlur={e => saveCell(activeTask.id, 'recipient', e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') saveCell(activeTask.id, 'recipient', (e.target as HTMLInputElement).value); }}
-                      style={fieldInputSt} />,
-                    isAdmin
-                  )}
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                  {/* Assignee */}
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Assignee</div>
+                    {mobileEditMode && isAdmin ? (
+                      <select value={mobileDraft.assigned_to ?? activeTask.assigned_to ?? ''}
+                        onChange={e => handleDraftChange('assigned_to', e.target.value)}
+                        style={fieldInputSt}>
+                        <option value="">Unassigned</option>
+                        {[...members].sort((a,b) => a.name.localeCompare(b.name)).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
+                    ) : (
+                      <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem' }}>
+                        {(mobileDraft.assigned_to ?? activeTask.assigned_to) ? members.find(m => m.id == (mobileDraft.assigned_to ?? activeTask.assigned_to))?.name || 'Unassigned' : 'Unassigned'}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Recipient */}
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Recipient</div>
+                    {mobileEditMode && isAdmin ? (
+                      <input type="text" value={mobileDraft.recipient ?? activeTask.recipient ?? ''} placeholder="Recipient..."
+                        onChange={e => handleDraftChange('recipient', e.target.value)}
+                        style={fieldInputSt} />
+                    ) : (
+                      <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem' }}>{mobileDraft.recipient ?? activeTask.recipient || '—'}</div>
+                    )}
+                  </div>
+
+                  {/* Activity */}
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Activity</div>
+                    {mobileEditMode && isAdmin ? (
+                      <select value={mobileDraft.action_type ?? activeTask.action_type}
+                        onChange={e => handleDraftChange('action_type', e.target.value)}
+                        style={fieldInputSt}>
+                        <option value="" disabled>Select</option>
+                        {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
+                      </select>
+                    ) : (
+                      <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {getActionMeta(mobileDraft.action_type ?? activeTask.action_type).icon}
+                        {getActionMeta(mobileDraft.action_type ?? activeTask.action_type).label}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Status</div>
+                    {mobileEditMode ? (
+                      <select value={mobileDraft.status ?? activeTask.status}
+                        onChange={e => handleDraftChange('status', e.target.value)}
+                        style={fieldInputSt}>
+                        <option value="DONE">Done</option>
+                        <option value="WIP">WIP</option>
+                        <option value="PENDING">Pending</option>
+                      </select>
+                    ) : (
+                      <div style={{ color: getStatusStyle(mobileDraft.status ?? activeTask.status).color, fontWeight: 600, fontSize: '0.9rem' }}>
+                        {getStatusStyle(mobileDraft.status ?? activeTask.status).label}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {/* Activity (Action Type) */}
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Activity</div>
-                  {renderEdit('action_type',
-                    <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {getActionMeta(activeTask.action_type).icon}
-                      {getActionMeta(activeTask.action_type).label}
-                    </div>,
-                    <select autoFocus defaultValue={activeTask.action_type}
-                      onBlur={e => saveCell(activeTask.id, 'action_type', e.target.value)}
-                      onChange={e => saveCell(activeTask.id, 'action_type', e.target.value)}
-                      style={fieldInputSt}>
-                      <option value="" disabled>Select</option>
-                      {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
-                    </select>,
-                    isAdmin
-                  )}
-                </div>
-                {/* Status */}
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Status</div>
-                  {renderEdit('status',
-                    <div style={{ color: getStatusStyle(activeTask.status).color, fontWeight: 600, fontSize: '0.9rem' }}>
-                      {getStatusStyle(activeTask.status).label}
-                    </div>,
-                    <select autoFocus defaultValue={activeTask.status === 'DUE' ? 'WIP' : activeTask.status}
-                      onBlur={e => saveCell(activeTask.id, 'status', e.target.value)}
-                      onChange={e => saveCell(activeTask.id, 'status', e.target.value)}
-                      style={fieldInputSt}>
-                      <option value="DONE">Done</option>
-                      <option value="WIP">WIP</option>
-                      <option value="PENDING">Pending</option>
-                    </select>,
-                    true // everyone can edit status
+
+                {/* Deadline */}
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Deadline</div>
+                  {mobileEditMode && isAdmin ? (
+                    <input type="datetime-local" value={(mobileDraft.deadline ?? activeTask.deadline)?.slice(0, 16) || ''}
+                      onClick={e => { try { (e.target as HTMLInputElement).showPicker?.(); } catch {} }}
+                      onChange={e => handleDraftChange('deadline', e.target.value)}
+                      style={{ ...fieldInputSt, colorScheme: 'dark' }} />
+                  ) : (
+                    <div style={{ color: (mobileDraft.deadline ?? activeTask.deadline) ? '#38bdf8' : '#94a3b8', fontWeight: 500, fontSize: '0.95rem' }}>
+                      {(mobileDraft.deadline ?? activeTask.deadline) ? new Date(mobileDraft.deadline ?? activeTask.deadline).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'No Deadline'}
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Deadline */}
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Deadline</div>
-                {renderEdit('deadline',
-                  <div style={{ color: activeTask.deadline ? '#38bdf8' : '#94a3b8', fontWeight: 500, fontSize: '0.95rem' }}>
-                    {activeTask.deadline ? new Date(activeTask.deadline).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Set Deadline'}
-                  </div>,
-                  <DeadlineEditor defaultValue={activeTask.deadline?.slice(0, 16) || ''} onSave={val => saveCell(activeTask.id, 'deadline', val)} />,
-                  isAdmin
-                )}
-              </div>
-              
-              {isAdmin && (
+              {mobileEditMode && (
                 <button 
-                  onClick={() => {
-                    setTaskToDelete(activeTask);
-                    setSelectedMobileTask(null);
-                  }}
-                  style={{ width: '100%', padding: '12px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '10px', fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer' }}>
-                  Delete Task
+                  onClick={saveMobileDraft}
+                  style={{ width: '100%', padding: '14px', marginTop: 10, background: 'linear-gradient(135deg, #4f7eff, #6c4fe3)', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', boxShadow: '0 4px 15px rgba(79,126,255,0.3)' }}>
+                  Save Changes
                 </button>
               )}
             </div>
