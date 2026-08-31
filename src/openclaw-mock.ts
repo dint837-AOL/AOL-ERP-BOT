@@ -209,7 +209,7 @@ export class OpenClaw {
       if (!title) return res.status(400).json({ error: 'Title required' });
       const date = task_date || new Date().toISOString().split('T')[0];
       const { lastID } = await dbRun(`INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date,action_type,recipient,status) VALUES(?,?,?,?,?,?,?,?,?)`,
-        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'ASSIGN', recipient||'', status||'DONE']);
+        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'STUDY', recipient||'', status||'DONE']);
       
       const newTask = await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]);
       

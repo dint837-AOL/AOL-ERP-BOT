@@ -32,7 +32,9 @@ import {
   X,
   AlertTriangle,
   FileText,
-  CreditCard
+  CreditCard,
+  BookOpen,
+  Briefcase
 } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
@@ -49,7 +51,7 @@ type Task = {
   id: number;
   title: string;
   description: string;
-  action_type: 'ASSIGN' | 'SMS' | 'CALL' | 'MAIL' | 'MEETING' | 'REMINDER';
+  action_type: 'STUDY' | 'CASE' | 'SMS' | 'CALL' | 'MAIL' | 'MEETING' | 'REMINDER' | 'DOC_SHARE' | 'PAYMENT';
   recipient?: string;
   priority: 'GREEN' | 'ORANGE' | 'RED';
   status: 'DONE' | 'WIP' | 'PENDING' | 'DUE';
@@ -65,7 +67,8 @@ type Member = { id: number; name: string; avatar_color: string; role: string; };
 type ActionMeta = { icon: React.ReactNode; label: string };
 
 const ACTION_MAP: Record<string, ActionMeta> = {
-  ASSIGN:    { icon: <Users size={14} />,        label: 'Assign' },
+  STUDY:     { icon: <BookOpen size={14} />,     label: 'Study' },
+  CASE:      { icon: <Briefcase size={14} />,    label: 'Case' },
   CALL:      { icon: <Phone size={14} />,        label: 'Call' },
   DOC_SHARE: { icon: <FileText size={14} />,     label: 'Documents Sharing' },
   MAIL:      { icon: <Mail size={14} />,         label: 'Mail' },
@@ -76,7 +79,7 @@ const ACTION_MAP: Record<string, ActionMeta> = {
 };
 
 // Alphabetical order
-const ACTION_KEYS = ['ASSIGN', 'CALL', 'DOC_SHARE', 'MAIL', 'MEETING', 'PAYMENT', 'REMINDER', 'SMS'] as const;
+const ACTION_KEYS = ['CALL', 'CASE', 'DOC_SHARE', 'MAIL', 'MEETING', 'PAYMENT', 'REMINDER', 'SMS', 'STUDY'] as const;
 
 function getActionMeta(key?: string): ActionMeta {
   if (key && key in ACTION_MAP) {
