@@ -1119,7 +1119,7 @@ export default function DashboardPage() {
               {/* Header Actions */}
               <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 10 }}>
                 {isAdmin && !mobileEditMode && (
-                  <button onClick={() => setTaskToDelete(activeTask)} style={{ background: 'rgba(239,68,68,0.1)', border: 'none', color: '#ef4444', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                  <button onClick={() => { setTaskToDelete(activeTask); setSelectedMobileTask(null); }} style={{ background: 'rgba(239,68,68,0.1)', border: 'none', color: '#ef4444', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                     <Trash2 size={16} />
                   </button>
                 )}
