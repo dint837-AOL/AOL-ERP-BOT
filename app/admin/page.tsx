@@ -286,10 +286,15 @@ export default function AdminPage() {
         }
       });
       const data = await res.json();
+      const telegramKeys = data.keys.filter((k: string) => k.toUpperCase().includes('TELEGRAM'));
       if (data.hasToken) {
         showToast('✅ TELEGRAM_BOT_TOKEN is present on the server!');
       } else {
-        showToast('❌ Server CANNOT see TELEGRAM_BOT_TOKEN. Check Render.');
+        if (telegramKeys.length > 0) {
+          showToast(`❌ Found weird token keys: ${telegramKeys.join(', ')}`);
+        } else {
+          showToast('❌ Server CANNOT see TELEGRAM_BOT_TOKEN completely.');
+        }
       }
       console.log('Server Env Keys:', data.keys);
     } catch (e) {
