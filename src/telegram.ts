@@ -8,7 +8,8 @@ export async function sendTelegramMessage(chatId: string, message: string): Prom
   const cleanChatId = chatId.trim();
   if (!cleanChatId) return { success: false, error: 'No Chat ID provided' };
 
-  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  // Fallback to the exact token provided by the user if Render env fails to load it
+  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim() || '8903234180:AAHCLBPu8xpqgI_1etFuiHYz5rW5QipxKYE';
 
   if (!botToken) {
     console.log(`🚀 [Telegram Placeholder] Message to Chat ID: ${cleanChatId}: ${message}`);
