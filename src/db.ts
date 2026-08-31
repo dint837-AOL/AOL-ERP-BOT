@@ -115,6 +115,9 @@ export async function initDB() {
         id SERIAL PRIMARY KEY,
         category_id INTEGER REFERENCES expense_categories(id) ON DELETE SET NULL,
         amount NUMERIC NOT NULL,
+        company_name TEXT DEFAULT '',
+        expense_head TEXT DEFAULT '',
+        payment_method TEXT DEFAULT 'Cash',
         description TEXT DEFAULT '',
         entered_by INTEGER REFERENCES members(id) ON DELETE SET NULL,
         expense_date TEXT NOT NULL,
@@ -187,6 +190,11 @@ export async function initDB() {
     try { await pgPool.query("ALTER TABLE members ADD COLUMN IF NOT EXISTS whatsapp_number TEXT DEFAULT ''"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE members ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT DEFAULT ''"); } catch (e) {}
 
+    // Add new accounting columns
+    try { await pgPool.query("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS company_name TEXT DEFAULT ''"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS expense_head TEXT DEFAULT ''"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'Cash'"); } catch (e) {}
+
   } else {
     isPg = false;
     console.log('[DB] No DATABASE_URL found. Falling back to local SQLite (./openclaw.db)...');
@@ -254,6 +262,9 @@ export async function initDB() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         category_id INTEGER REFERENCES expense_categories(id),
         amount REAL NOT NULL,
+        company_name TEXT DEFAULT '',
+        expense_head TEXT DEFAULT '',
+        payment_method TEXT DEFAULT 'Cash',
         description TEXT DEFAULT '',
         entered_by INTEGER REFERENCES members(id),
         expense_date TEXT NOT NULL,
@@ -325,6 +336,11 @@ export async function initDB() {
     try { await sqliteDb.exec("ALTER TABLE notifications ADD COLUMN link TEXT DEFAULT ''"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE members ADD COLUMN whatsapp_number TEXT DEFAULT ''"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE members ADD COLUMN telegram_chat_id TEXT DEFAULT ''"); } catch (e) {}
+
+    // Add new accounting columns
+    try { await sqliteDb.exec("ALTER TABLE expenses ADD COLUMN company_name TEXT DEFAULT ''"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE expenses ADD COLUMN expense_head TEXT DEFAULT ''"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE expenses ADD COLUMN payment_method TEXT DEFAULT 'Cash'"); } catch (e) {}
   }
 
   // Seed default admin and employee accounts

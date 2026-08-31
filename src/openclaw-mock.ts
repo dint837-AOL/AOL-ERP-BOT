@@ -883,10 +883,13 @@ echo "=============================================================="
       res.json(await dbAll(`SELECT c.id,c.name,c.color,c.budget_limit,COALESCE(SUM(e.amount),0) as total FROM expense_categories c LEFT JOIN expenses e ON e.category_id=c.id AND e.expense_date LIKE ? GROUP BY c.id ORDER BY total DESC`, [month+'%']));
     });
     this.app.post('/api/expenses', async (req, res) => {
-      const { category_id, amount, description, entered_by, expense_date } = req.body;
-      if (!amount || !category_id) return res.status(400).json({ error: 'amount and category_id required' });
+      const { category_id, amount, description, entered_by, expense_date, company_name, expense_head, payment_method } = req.body;
+      if (amount === undefined || amount === null) return res.status(400).json({ error: 'amount required' });
       const date = expense_date || new Date().toISOString().split('T')[0];
-      const { lastID } = await dbRun(`INSERT INTO expenses(category_id,amount,description,entered_by,expense_date) VALUES(?,?,?,?,?)`, [category_id, amount, description||'', entered_by||null, date]);
+      const { lastID } = await dbRun(
+        `INSERT INTO expenses(category_id,amount,description,entered_by,expense_date,company_name,expense_head,payment_method) VALUES(?,?,?,?,?,?,?,?)`,
+        [category_id||null, amount, description||'', entered_by||null, date, company_name||'', expense_head||'', payment_method||'Cash']
+      );
       res.status(201).json(await dbGet('SELECT e.*,c.name as category_name FROM expenses e LEFT JOIN expense_categories c ON e.category_id=c.id WHERE e.id=?', [lastID]));
     });
     this.app.delete('/api/expenses/:id', async (req, res) => { await dbRun('DELETE FROM expenses WHERE id=?', [req.params.id]); res.json({ ok: true }); });
