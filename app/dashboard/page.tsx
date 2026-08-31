@@ -1090,7 +1090,7 @@ export default function DashboardPage() {
 
         const saveMobileDraft = async () => {
           try {
-            await authFetch(`/api/tasks/${activeTask.id}`, {
+            await fetch(`/api/tasks/${activeTask.id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(mobileDraft)
@@ -1175,7 +1175,7 @@ export default function DashboardPage() {
                         onChange={e => handleDraftChange('recipient', e.target.value)}
                         style={fieldInputSt} />
                     ) : (
-                      <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem' }}>{mobileDraft.recipient ?? activeTask.recipient || '—'}</div>
+                      <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem' }}>{(mobileDraft.recipient ?? activeTask.recipient) || '—'}</div>
                     )}
                   </div>
 
