@@ -96,6 +96,15 @@ function getWorkingDaysInMonth(year: number, month: number): number {
   return count;
 }
 
+function getInitials(name: string): string {
+  if (!name) return '??';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return (parts[0] || '').slice(0, 2).toUpperCase();
+  const first = parts[0] || '';
+  const last = parts[parts.length - 1] || '';
+  return ((first[0] || '') + (last[0] || '')).toUpperCase();
+}
+
 // --- Monthly Calendar Component ---
 
 interface CalDay {
@@ -873,51 +882,80 @@ export default function HRPage() {
                     <div style={{ overflowX: 'hidden' }}>
                       <table style={{ width: '100%', fontSize: '.75rem', tableLayout: 'fixed' }}>
                         <colgroup>
-                          <col style={{ width: '42%' }} />
-                          <col style={{ width: '35%' }} />
-                          <col style={{ width: '23%' }} />
+                          <col style={{ width: '18%' }} />
+                          <col style={{ width: '31%' }} />
+                          <col style={{ width: '27%' }} />
+                          <col style={{ width: '24%' }} />
                         </colgroup>
                         <thead>
                           <tr>
-                            <th style={{ padding: '6px 4px', textAlign: 'left', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Name</th>
-                            <th style={{ padding: '6px 4px', textAlign: 'left', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Hrs / Days</th>
-                            <th style={{ padding: '6px 4px', textAlign: 'left', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Leave</th>
+                            <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Emp</th>
+                            <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Hours</th>
+                            <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Day</th>
+                            <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Leave</th>
                           </tr>
                         </thead>
                         <tbody>
                           {list.length === 0 ? (
-                            <tr className="empty-r"><td colSpan={3}>No records for this date.</td></tr>
+                            <tr className="empty-r"><td colSpan={4}>No records for this date.</td></tr>
                           ) : (
                             list.map((l, idx) => {
                               const stats = monthlyStats.get(l.member_id) || { daysPresent: 0, totalHours: 0 };
                               return (
                                 <tr key={idx}>
-                                  {/* Name + avatar */}
-                                  <td style={{ padding: '6px 4px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                      <div className="av" style={{ background: l.color || '#4f7eff', width: '22px', height: '22px', fontSize: '.68rem', flexShrink: 0 }}>
-                                        {l.name[0].toUpperCase()}
-                                      </div>
-                                      <div style={{ fontWeight: 600, fontSize: '.72rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</div>
+                                  {/* Emp Initials Avatar */}
+                                  <td style={{ padding: '6px 2px', textAlign: 'center' }}>
+                                    <div
+                                      style={{
+                                        background: l.color || '#4f7eff',
+                                        width: '26px',
+                                        height: '26px',
+                                        borderRadius: '6px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '.7rem',
+                                        fontWeight: 700,
+                                        color: '#fff',
+                                        letterSpacing: '0.5px',
+                                        boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+                                        cursor: 'default',
+                                      }}
+                                      title={l.name}
+                                    >
+                                      {getInitials(l.name)}
                                     </div>
                                   </td>
-                                  {/* Hours & Days stacked */}
-                                  <td style={{ padding: '6px 4px' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                      <div style={{ fontSize: '.7rem' }}>
-                                        <span style={{ fontWeight: 700, color: 'var(--text)' }}>{stats.totalHours.toFixed(1)}</span>
-                                        <span style={{ color: 'var(--muted)', fontSize: '.65rem' }}>/{totalRequiredHours}h</span>
-                                      </div>
-                                      <div style={{ fontSize: '.7rem' }}>
-                                        <span style={{ fontWeight: 700, color: 'var(--text)' }}>{stats.daysPresent}</span>
-                                        <span style={{ color: 'var(--muted)', fontSize: '.65rem' }}>/{totalWorkingDays}d</span>
-                                      </div>
-                                    </div>
+                                  {/* Hours X/Y */}
+                                  <td style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
+                                    <span style={{ fontWeight: 700, color: 'var(--text)' }}>
+                                      {stats.totalHours.toFixed(1)}
+                                    </span>
+                                    <span style={{ color: 'var(--muted)', fontSize: '.64rem' }}>/{totalRequiredHours}h</span>
+                                  </td>
+                                  {/* Day X/Y */}
+                                  <td style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
+                                    <span style={{ fontWeight: 700, color: 'var(--text)' }}>
+                                      {stats.daysPresent}
+                                    </span>
+                                    <span style={{ color: 'var(--muted)', fontSize: '.64rem' }}>/{totalWorkingDays}d</span>
                                   </td>
                                   {/* Leave badge */}
-                                  <td style={{ padding: '6px 4px' }}>
+                                  <td style={{ padding: '6px 2px', textAlign: 'center' }}>
                                     {l.leave ? (
-                                      <span className="badge" style={{ background: l.leave.includes('APPROVED') ? 'rgba(38,196,134,0.15)' : 'rgba(255,140,0,0.15)', color: l.leave.includes('APPROVED') ? 'var(--green)' : '#FF8C00', border: `1px solid ${l.leave.includes('APPROVED') ? 'rgba(38,196,134,0.3)' : 'rgba(255,140,0,0.3)'}`, fontSize: '.6rem', padding: '2px 5px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
+                                      <span
+                                        className="badge"
+                                        style={{
+                                          background: l.leave.includes('APPROVED') ? 'rgba(38,196,134,0.15)' : 'rgba(255,140,0,0.15)',
+                                          color: l.leave.includes('APPROVED') ? 'var(--green)' : '#FF8C00',
+                                          border: `1px solid ${l.leave.includes('APPROVED') ? 'rgba(38,196,134,0.3)' : 'rgba(255,140,0,0.3)'}`,
+                                          fontSize: '.62rem',
+                                          padding: '2px 4px',
+                                          borderRadius: '4px',
+                                          whiteSpace: 'nowrap',
+                                          display: 'inline-block'
+                                        }}
+                                      >
                                         {l.leave.split(' ')[0]}
                                       </span>
                                     ) : (
