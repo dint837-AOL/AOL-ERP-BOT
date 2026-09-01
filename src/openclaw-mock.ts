@@ -276,21 +276,40 @@ export class OpenClaw {
 
     // ── ATTENDANCE ───────────────────────────────────────────
     this.app.get('/api/attendance', async (req, res) => {
-      const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
-      res.json(await dbAll(`SELECT a.*,m.name as member_name,m.avatar_color FROM attendance a LEFT JOIN members m ON a.member_id=m.id WHERE date(a.timestamp)=? ORDER BY a.timestamp DESC`, [date]));
+      const targetDate = (req.query.date as string) || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+      const rows = await dbAll(
+        `SELECT a.*, m.name as member_name, m.avatar_color 
+         FROM attendance a 
+         LEFT JOIN members m ON a.member_id=m.id 
+         ORDER BY a.timestamp DESC`
+      ) as any[];
+      const filtered = rows.filter(r => {
+        const dt = new Date(r.timestamp);
+        const dStr = dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+        return dStr === targetDate;
+      });
+      res.json(filtered);
     });
     // Monthly attendance for a specific member (used by HR calendar)
     this.app.get('/api/attendance/monthly', async (req, res) => {
       const { member_id, month } = req.query as { member_id: string; month: string };
       if (!member_id || !month) return res.status(400).json({ error: 'member_id and month (YYYY-MM) required' });
       const rows = await dbAll(
-        `SELECT date(a.timestamp) as att_date, a.action_type, a.timestamp
+        `SELECT a.id, a.member_id, a.action_type, a.timestamp
          FROM attendance a
-         WHERE a.member_id=? AND CAST(a.timestamp AS TEXT) LIKE ?
+         WHERE a.member_id=?
          ORDER BY a.timestamp ASC`,
-        [member_id, month + '%']
-      );
-      res.json(rows);
+        [member_id]
+      ) as any[];
+      const filtered = rows.filter(r => {
+        const dt = new Date(r.timestamp);
+        const dStr = dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+        return dStr.startsWith(month);
+      }).map(r => ({
+        ...r,
+        att_date: new Date(r.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' })
+      }));
+      res.json(filtered);
     });
     
     // Monthly summary for all members
@@ -298,13 +317,19 @@ export class OpenClaw {
       const { month } = req.query as { month: string };
       if (!month) return res.status(400).json({ error: 'month (YYYY-MM) required' });
       const rows = await dbAll(
-        `SELECT a.member_id, date(a.timestamp) as att_date, a.action_type, a.timestamp
+        `SELECT a.id, a.member_id, a.action_type, a.timestamp
          FROM attendance a
-         WHERE CAST(a.timestamp AS TEXT) LIKE ?
-         ORDER BY a.timestamp ASC`,
-        [month + '%']
-      );
-      res.json(rows);
+         ORDER BY a.timestamp ASC`
+      ) as any[];
+      const filtered = rows.filter(r => {
+        const dt = new Date(r.timestamp);
+        const dStr = dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+        return dStr.startsWith(month);
+      }).map(r => ({
+        ...r,
+        att_date: new Date(r.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' })
+      }));
+      res.json(filtered);
     });
     this.app.post('/api/attendance', async (req, res) => {
       const { member_id, action_type } = req.body;

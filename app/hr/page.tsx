@@ -283,6 +283,13 @@ export default function HRPage() {
         authFetch('/api/attendance/summary?month=' + curMonthStr).then(r => r.json()),
       ]);
       setMembers(Array.isArray(mRes) ? mRes : []);
+      if (Array.isArray(mRes) && mRes.length > 0) {
+        setReportMemberId(prev => {
+          if (prev) return prev;
+          const emp = mRes.find((m: any) => m.role !== 'Admin') || mRes[0];
+          return emp ? String(emp.id) : '';
+        });
+      }
       setAtt(Array.isArray(aRes) ? aRes : []);
       setLeaves(Array.isArray(lRes) ? lRes : []);
       setMonthSum(Array.isArray(sumRes) ? sumRes : []);
@@ -367,12 +374,13 @@ export default function HRPage() {
 
       const attMap = new Map<string, { hasIn: boolean; hasOut: boolean; inTime: string; outTime: string, inDate?: Date, outDate?: Date }>();
       attRows.forEach((r: any) => {
-        const d = r.att_date as string;
+        const rawTs = r.timestamp;
+        const dt = typeof rawTs === 'string' ? parseTimestamp(rawTs) : new Date(rawTs);
+        const d = dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
         const ex = attMap.get(d) || { hasIn: false, hasOut: false, inTime: '', outTime: '' };
-        const t = formatTime(r.timestamp);
-        const dt = parseTimestamp(r.timestamp);
+        const t = formatTime(rawTs);
         if (r.action_type === 'IN') { ex.hasIn = true; ex.inTime = t; ex.inDate = dt; }
-        if (r.action_type === 'OUT') { ex.hasOut = true; ex.outTime = t; ex.outDate = dt; }
+        if (r.action_type === 'OUT') { ex.hasOut = true; ex.outDate = dt; }
         attMap.set(d, ex);
       });
 
@@ -815,9 +823,11 @@ export default function HRPage() {
                 const mGroups = new Map<string, any>();
                 monthSum.forEach(m => {
                    if (!isAdmin && String(m.member_id) !== String(user?.id)) return;
-                   const key = `${m.member_id}_${m.att_date}`;
+                   const rawTs = m.timestamp;
+                   const dt = typeof rawTs === 'string' ? parseTimestamp(rawTs) : new Date(rawTs);
+                   const d = dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+                   const key = `${m.member_id}_${d}`;
                    const ex = mGroups.get(key) || { inRaw: null, outRaw: null };
-                   const dt = parseTimestamp(m.timestamp);
                    if (m.action_type === 'IN') ex.inRaw = dt;
                    if (m.action_type === 'OUT') ex.outRaw = dt;
                    mGroups.set(key, ex);
