@@ -1,8 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import Topbar from '../components/Topbar';
-import { getAuthToken, getCurrentUser } from '../utils/auth';
-import { showToast } from '../components/Toast';
+import { useAuth } from '../context/AuthContext';
+import Cookies from 'js-cookie';
 
 const EXPENSE_HEADS = [
   "Office Rent", "Utilities (Electricity, Gas, Water)", "Internet & Telephone", "Office Supplies/Stationery",
@@ -18,7 +18,14 @@ const EXPENSE_HEADS = [
 ];
 
 export default function AccountsPage() {
+  const { user, token: ctxToken } = useAuth();
+  const getAuthToken = useCallback(() => {
+    return ctxToken || Cookies.get('token') || (typeof window !== 'undefined' ? (localStorage.getItem('erp_token') || localStorage.getItem('token')) : '') || '';
+  }, [ctxToken]);
+
   const [loading, setLoading] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+  
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     company_name: 'AOD',
@@ -27,6 +34,11 @@ export default function AccountsPage() {
     description: '',
     payment_method: 'Cash'
   });
+
+  function showToast(m: string) {
+    setToastMsg(m);
+    setTimeout(() => setToastMsg(''), 2500);
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -41,7 +53,6 @@ export default function AccountsPage() {
     
     setLoading(true);
     try {
-      const user = getCurrentUser();
       const token = getAuthToken();
       const payload = {
         amount: Number(formData.amount),
@@ -84,6 +95,11 @@ export default function AccountsPage() {
   return (
     <>
       <Topbar title="Accounts (Quick Entry)" />
+      {toastMsg && (
+        <div className="toast-notification">
+          {toastMsg}
+        </div>
+      )}
       <div className="layout-content">
         <div className="card" style={{ maxWidth: '600px', margin: '0 auto' }}>
           <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>Quick Entry</h2>
