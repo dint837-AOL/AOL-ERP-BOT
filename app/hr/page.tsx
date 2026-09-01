@@ -6,7 +6,7 @@
  *  - Admin: sees full attendance log, all leave requests with approve/reject, monthly attendance calendar
  *
  * Check-in/out is system-recorded (accurate UTC timestamp converted to local time).
- * Monthly calendar uses traffic-light coloring: Green=Present, Red=Absent, Yellow=On Leave.
+ * Monthly calendar uses 4-colour coding: Green=Present, Red=Absent, Orange=Late (<4h), Blue=Approved Leave.
  * Fridays and Saturdays are shaded as weekends/holidays.
  */
 'use client';
@@ -173,8 +173,8 @@ function MonthCalendar({ year, month, calDays }: MonthCalendarProps) {
             <div key={cell.date} className={cls} title={tip}>
               <span className="cal-day-num">{dayNum}</span>
               {cell.isPresent && <span className="cal-dot green-dot" />}
-              {cell.isIncomplete && <span className="cal-dot yellow-dot" style={{ background: '#FFD600', boxShadow: '0 0 5px rgba(255, 214, 0, 0.5)' }} />}
-              {isApprovedLeave && <span className="cal-dot blue-dot" style={{ background: '#2979FF', boxShadow: '0 0 5px rgba(41, 121, 255, 0.5)', marginTop: 2 }} />}
+              {cell.isIncomplete && <span className="cal-dot" style={{ background: '#FF8C00', boxShadow: '0 0 5px rgba(255, 140, 0, 0.6)' }} />}
+              {isApprovedLeave && <span className="cal-dot" style={{ background: '#2979FF', boxShadow: '0 0 5px rgba(41, 121, 255, 0.5)', marginTop: 2 }} />}
               {cell.isAbsent && <span className="cal-dot red-dot" />}
             </div>
           );
@@ -192,12 +192,12 @@ function MonthCalendar({ year, month, calDays }: MonthCalendarProps) {
           <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text)' }}>{totalHoursWorked} <span style={{fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal'}}>/ {getWorkingDaysInMonth(year, month) * 5}</span></div>
         </div>
         <div style={{ flex: '1 1 45%', minWidth: '120px' }}>
-          <div style={{ fontSize: '.75rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Short Shifts (&lt;4h)</div>
-          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text)' }}>{totalIncomplete} <span style={{fontSize: '.85rem', fontWeight: 'normal'}}>times</span></div>
+          <div style={{ fontSize: '.75rem', color: '#FF8C00', textTransform: 'uppercase', fontWeight: 600 }}>Late (&lt;4h)</div>
+          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#FF8C00' }}>{totalIncomplete} <span style={{fontSize: '.85rem', fontWeight: 'normal', color: 'var(--muted)'}}>times</span></div>
         </div>
         <div style={{ flex: '1 1 45%', minWidth: '120px' }}>
-          <div style={{ fontSize: '.75rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Approved Leaves</div>
-          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text)' }}>{totalLeaves} <span style={{fontSize: '.85rem', fontWeight: 'normal'}}>days</span></div>
+          <div style={{ fontSize: '.75rem', color: '#2979FF', textTransform: 'uppercase', fontWeight: 600 }}>Approved Leave</div>
+          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#2979FF' }}>{totalLeaves} <span style={{fontSize: '.85rem', fontWeight: 'normal', color: 'var(--muted)'}}>days</span></div>
         </div>
       </div>
     </div>
@@ -1081,14 +1081,14 @@ export default function HRPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, padding: '0 18px 20px' }}
                      className="cal-stats-grid">
                   {[
-                    { label: 'Present', val: calDays.filter(d => d.isPresent).length, color: 'var(--green)', dotCls: 'cal-dot green-dot' },
-                    { label: 'Absent', val: calDays.filter(d => d.isAbsent).length, color: 'var(--red)', dotCls: 'cal-dot red-dot' },
-                    { label: 'On Leave', val: calDays.filter(d => d.isLeave).length, color: 'var(--orange)', dotCls: 'cal-dot yellow-dot' },
-                    { label: 'Weekends', val: calDays.filter(d => d.isWeekend).length, color: 'var(--muted)', dotCls: '' },
-                  ].map(({ label, val, color, dotCls }) => (
+                    { label: 'Present',        val: calDays.filter(d => d.isPresent).length,                       color: 'var(--green)', dot: { background: 'var(--green)', boxShadow: '0 0 5px rgba(38,196,134,0.5)' } },
+                    { label: 'Absent',         val: calDays.filter(d => d.isAbsent).length,                        color: 'var(--red)',   dot: { background: 'var(--red)',   boxShadow: '0 0 5px rgba(255,77,79,0.5)' } },
+                    { label: 'Late',           val: calDays.filter(d => d.isIncomplete).length,                    color: '#FF8C00',      dot: { background: '#FF8C00',      boxShadow: '0 0 5px rgba(255,140,0,0.6)' } },
+                    { label: 'Appr. Leave',    val: calDays.filter(d => d.isLeave && d.leaveStatus === 'APPROVED').length, color: '#2979FF', dot: { background: '#2979FF', boxShadow: '0 0 5px rgba(41,121,255,0.5)' } },
+                  ].map(({ label, val, color, dot }) => (
                     <div key={label} className="s-card" style={{ textAlign: 'center' }}>
                       <div className="s-lbl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                        {dotCls ? <span className={dotCls} style={{ position: 'static' }} /> : <span style={{ width: 8, height: 8, borderRadius: 2, background: 'rgba(255,255,255,.1)', border: '1px solid var(--border)', display: 'inline-block' }} />}
+                        <span className="cal-dot" style={{ position: 'static', ...dot }} />
                         {label}
                       </div>
                       <div className="s-val" style={{ color, fontSize: '1.4rem' }}>{val}</div>
