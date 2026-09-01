@@ -624,61 +624,146 @@ export class OpenClaw {
       const member = await dbGet('SELECT * FROM members WHERE id = ?', [user.id]) as any;
       if (!member) return res.status(404).send('Member not found');
 
+      // ── Resolve the canonical server URL (always points to production) ──
+      // Priority: RENDER_EXTERNAL_HOSTNAME env (Render provides this automatically)
+      //           → x-forwarded-proto + host header (works for any reverse-proxy)
+      //           → fallback to request host
+      const renderHostname = process.env.RENDER_EXTERNAL_HOSTNAME;
+      let serverUrl: string;
+      if (renderHostname) {
+        serverUrl = `https://${renderHostname}`;
+      } else {
+        const protocol = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
+        const host = req.headers.host || 'localhost:3000';
+        serverUrl = `${protocol}://${host}`;
+      }
+
+      // Issue a long-lived (1 year) script token so it never needs re-download for expiry
+      const scriptToken = jwt.sign(
+        { id: member.id, email: member.email, role: member.role, name: member.name, script: true },
+        JWT_SECRET,
+        { expiresIn: '365d' }
+      );
+
       const os = (req.query.os as string || 'windows').toLowerCase();
-      const protocol = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
-      const host = req.headers.host || 'localhost:3000';
-      const serverUrl = `${protocol}://${host}`;
 
-      if (os === 'windows' || os === 'bat') {
-        const psScriptRaw = `# AlliedOne ERP Background Attendance Service
-$serverUrl = "${serverUrl}"
-$token = "${token}"
+      // Raw PS1 endpoint used by self-update
+      if (os === 'ps1') {
+        const psScriptRaw = `# AlliedOne ERP - Automated Attendance Agent (self-updating)
+$serverUrl    = "${serverUrl}"
+$token        = "${scriptToken}"
 $employeeName = "${member.name}"
-$hostname = $env:COMPUTERNAME
-$os = "Windows"
+$scriptPath   = "$PSScriptRoot\\aol-attendance.ps1"
+$hostname_val = $env:COMPUTERNAME
+$os_val       = "Windows"
 
-function Send-AttendancePing($action) {
+function Send-Ping($action) {
     try {
-        $body = @{ token = $token; action = $action; hostname = $hostname; os = $os } | ConvertTo-Json
-        $res = Invoke-RestMethod -Uri "$serverUrl/api/attendance/client-ping" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 10
-        return $res
-    } catch {
-        return $null
-    }
+        $body = @{ token = $token; action = $action; hostname = $hostname_val; os = $os_val } | ConvertTo-Json
+        return Invoke-RestMethod -Uri "$serverUrl/api/attendance/client-ping" \`
+            -Method Post -Body $body -ContentType "application/json" -TimeoutSec 15
+    } catch { return $null }
 }
 
-function Show-Notification($title, $msg) {
+function Show-Toast($title, $msg) {
     try {
         [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
         [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
-        $template = "<toast><visual><binding template='ToastGeneric'><text>$title</text><text>$msg</text></binding></visual></toast>"
         $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-        $xml.LoadXml($template)
-        $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
-        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("AlliedOne ERP").Show($toast)
+        $xml.LoadXml("<toast><visual><binding template='ToastGeneric'><text>$title</text><text>$msg</text></binding></visual></toast>")
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("AlliedOne ERP").Show([Windows.UI.Notifications.ToastNotification]::new($xml))
     } catch {}
 }
 
-# Register shutdown event hook
 Register-EngineEvent -SourceIdentifier ([System.Management.Automation.PsEngineEvent]::Exiting) -Action {
-    Send-AttendancePing "SHUTDOWN"
+    Send-Ping "SHUTDOWN"
 } | Out-Null
 
-# Initial check-in on startup/wake
-$initResp = Send-AttendancePing "PING"
+$initResp = Send-Ping "PING"
 if ($initResp -and $initResp.auto_checked_in) {
-    Show-Notification "AlliedOne ERP" "Good morning $employeeName! Automatically checked in via Office Wi-Fi."
+    Show-Toast "AlliedOne ERP" "Good morning $employeeName! Automatically checked in."
 }
 
-# Main background presence loop
 while ($true) {
     Start-Sleep -Seconds 60
-    $pResp = Send-AttendancePing "PING"
-    if ($pResp -and $pResp.auto_checked_in) {
-        Show-Notification "AlliedOne ERP" "Good morning $employeeName! Automatically checked in via Office Wi-Fi."
+    $resp = Send-Ping "PING"
+    if ($resp -and $resp.auto_checked_in) {
+        Show-Toast "AlliedOne ERP" "Good morning $employeeName! Automatically checked in."
     }
 }
 `;
+        res.setHeader('Content-Type', 'text/plain');
+        return res.send(psScriptRaw);
+      }
+
+      if (os === 'windows' || os === 'bat') {
+        // ── PowerShell background agent (self-updating) ──
+        const psScriptRaw = `# AlliedOne ERP - Automated Attendance Agent
+# Self-updating: fetches a fresh copy of this script on every startup.
+
+$serverUrl    = "${serverUrl}"
+$token        = "${scriptToken}"
+$employeeName = "${member.name}"
+$scriptPath   = "$PSScriptRoot\\aol-attendance.ps1"
+$hostname_val = $env:COMPUTERNAME
+$os_val       = "Windows"
+
+function Send-Ping($action) {
+    try {
+        $body = @{ token = $token; action = $action; hostname = $hostname_val; os = $os_val } | ConvertTo-Json
+        return Invoke-RestMethod -Uri "$serverUrl/api/attendance/client-ping" \`
+            -Method Post -Body $body -ContentType "application/json" -TimeoutSec 15
+    } catch { return $null }
+}
+
+function Show-Toast($title, $msg) {
+    try {
+        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+        $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+        $xml.LoadXml("<toast><visual><binding template='ToastGeneric'><text>$title</text><text>$msg</text></binding></visual></toast>")
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("AlliedOne ERP").Show(
+            [Windows.UI.Notifications.ToastNotification]::new($xml)
+        )
+    } catch {}
+}
+
+function Self-Update {
+    try {
+        $newScript = Invoke-RestMethod -Uri "$serverUrl/api/attendance/download-script?token=$token&os=ps1" \`
+            -Method Get -TimeoutSec 20
+        if ($newScript -and $newScript.Length -gt 100) {
+            [System.IO.File]::WriteAllText($scriptPath, $newScript, [System.Text.Encoding]::UTF8)
+        }
+    } catch {}
+}
+
+# Self-update on startup (silently replaces this file with the latest from server)
+Self-Update
+
+# Register shutdown hook
+Register-EngineEvent -SourceIdentifier ([System.Management.Automation.PsEngineEvent]::Exiting) -Action {
+    Send-Ping "SHUTDOWN"
+} | Out-Null
+
+# Initial check-in ping
+$initResp = Send-Ping "PING"
+if ($initResp -and $initResp.auto_checked_in) {
+    Show-Toast "AlliedOne ERP" "Good morning $employeeName! Automatically checked in."
+}
+
+# Background presence loop (ping every 60 seconds)
+while ($true) {
+    Start-Sleep -Seconds 60
+    $resp = Send-Ping "PING"
+    if ($resp -and $resp.auto_checked_in) {
+        Show-Toast "AlliedOne ERP" "Good morning $employeeName! Automatically checked in."
+    }
+}
+`;
+
+        // Remove the ps1 sub-branch; it is handled above
+
         const psScriptBase64 = Buffer.from(psScriptRaw, 'utf8').toString('base64');
         const vbsScriptRaw = `Set WshShell = CreateObject("WScript.Shell")
 WshShell.Run "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & CreateObject("WScript.Shell").ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\\AlliedOneERP\\aol-attendance.ps1""", 0, False
@@ -686,10 +771,11 @@ WshShell.Run "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File "
         const vbsScriptBase64 = Buffer.from(vbsScriptRaw, 'utf8').toString('base64');
 
         const batContent = `@echo off
-title AlliedOne ERP - Zero-Browser Laptop Attendance Setup
+title AlliedOne ERP - Laptop Attendance Setup
 echo ==============================================================
-echo   AlliedOne ERP - Automated Laptop Attendance Setup
+echo   AlliedOne ERP - Automated Laptop Attendance
 echo   Employee: ${member.name}
+echo   Server:   ${serverUrl}
 echo ==============================================================
 echo.
 
@@ -699,21 +785,21 @@ if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
 set "PS_SCRIPT=%TARGET_DIR%\\aol-attendance.ps1"
 set "VBS_SCRIPT=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\AlliedOneAttendance.vbs"
 
-echo [1/3] Installing background presence service...
+echo [1/3] Installing self-updating background agent...
 powershell -NoProfile -Command "$b64='${psScriptBase64}'; [System.IO.File]::WriteAllBytes('%PS_SCRIPT%', [System.Convert]::FromBase64String($b64))"
 
-echo [2/3] Registering silent Windows startup service...
+echo [2/3] Registering silent Windows startup launcher...
 powershell -NoProfile -Command "$b64='${vbsScriptBase64}'; [System.IO.File]::WriteAllBytes('%VBS_SCRIPT%', [System.Convert]::FromBase64String($b64))"
 
-echo [3/3] Starting background service now...
+echo [3/3] Starting background agent now...
 wscript.exe "%VBS_SCRIPT%"
 
 echo.
 echo ==============================================================
-echo   SUCCESS! Automated Laptop Attendance is now active.
-echo   - When you turn on/open your laptop at the office: AUTO CHECK-IN
-echo   - When you turn off or shut down your laptop: AUTO CHECK-OUT
-echo   - Zero browser needed!
+echo   SUCCESS! Automated Attendance is now active.
+echo   - Laptop opens at office  =>  AUTO CHECK-IN
+echo   - Laptop shuts down       =>  AUTO CHECK-OUT
+echo   - Agent auto-updates itself on every startup. No reinstall needed!
 echo ==============================================================
 echo.
 pause
@@ -721,40 +807,46 @@ pause
         res.setHeader('Content-Disposition', `attachment; filename="AlliedOne-Attendance-${member.name.replace(/[^a-zA-Z0-9]/g, '_')}.bat"`);
         res.setHeader('Content-Type', 'application/x-bat');
         return res.send(batContent);
+
       } else {
-        // macOS / Linux script
+        // macOS / Linux
         const shContent = `#!/bin/bash
-# AlliedOne ERP - Zero-Browser Laptop Attendance Setup (macOS/Linux)
-# Employee: ${member.name} (${member.email})
+# AlliedOne ERP - Zero-Browser Laptop Attendance (macOS/Linux)
+# Self-updating agent for: ${member.name}
 
 SERVER_URL="${serverUrl}"
-TOKEN="${token}"
+TOKEN="${scriptToken}"
 EMPLOYEE_NAME="${member.name}"
-HOSTNAME="$(hostname)"
+HOSTNAME_VAL="$(hostname)"
 OS_NAME="$(uname -s)"
 
 AGENT_DIR="$HOME/.alliedone_erp"
 mkdir -p "$AGENT_DIR"
 SCRIPT_PATH="$AGENT_DIR/aol-attendance.sh"
 
-cat << 'EOF' > "$SCRIPT_PATH"
+# Self-update: fetch latest script from server
+NEW_SCRIPT=$(curl -sf --max-time 20 "$SERVER_URL/api/attendance/download-script?token=$TOKEN&os=sh_agent" 2>/dev/null)
+NEW_LEN=$(echo -n "$NEW_SCRIPT" | wc -c)
+if [ -n "$NEW_SCRIPT" ] && [ "$NEW_LEN" -gt 50 ]; then
+  echo "$NEW_SCRIPT" > "$SCRIPT_PATH"
+fi
+
+cat << 'AGENT_EOF' > "$SCRIPT_PATH"
 #!/bin/bash
 SERVER_URL="${serverUrl}"
-TOKEN="${token}"
+TOKEN="${scriptToken}"
 EMPLOYEE_NAME="${member.name}"
-HOSTNAME="$(hostname)"
+HOSTNAME_VAL="$(hostname)"
 OS_NAME="$(uname -s)"
 
 send_ping() {
-  ACTION="$1"
   curl -s -X POST "$SERVER_URL/api/attendance/client-ping" \\
     -H "Content-Type: application/json" \\
-    -d "{\\"token\\":\\"$TOKEN\\",\\"action\\":\\"$ACTION\\",\\"hostname\\":\\"$HOSTNAME\\",\\"os\\":\\"$OS_NAME\\"}"
+    -d "{\\"token\\":\\"$TOKEN\\",\\"action\\":\\"$1\\",\\"hostname\\":\\"$HOSTNAME_VAL\\",\\"os\\":\\"$OS_NAME\\"}" 2>/dev/null
 }
 
 trap 'send_ping "SHUTDOWN"' EXIT SIGTERM
 
-# Initial Ping
 RESP=$(send_ping "PING")
 if echo "$RESP" | grep -q '"auto_checked_in":true'; then
   command -v osascript >/dev/null 2>&1 && osascript -e 'display notification "Automatically checked in via Office Wi-Fi" with title "AlliedOne ERP"'
@@ -762,22 +854,42 @@ fi
 
 while true; do
   sleep 60
-  RESP=$(send_ping "PING")
-  if echo "$RESP" | grep -q '"auto_checked_in":true'; then
-    command -v osascript >/dev/null 2>&1 && osascript -e 'display notification "Automatically checked in via Office Wi-Fi" with title "AlliedOne ERP"'
-  fi
+  send_ping "PING" > /dev/null
 done
-EOF
+AGENT_EOF
 
 chmod +x "$SCRIPT_PATH"
 
-# Run in background
-nohup "$SCRIPT_PATH" >/dev/null 2>&1 &
+# Register as login item (macOS)
+if [ "$(uname)" = "Darwin" ]; then
+  PLIST="$HOME/Library/LaunchAgents/com.alliedone.erp.plist"
+  cat > "$PLIST" << PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.alliedone.erp</string>
+  <key>ProgramArguments</key><array><string>$SCRIPT_PATH</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+</dict>
+</plist>
+PLIST_EOF
+  launchctl load "$PLIST" 2>/dev/null
+fi
 
-echo "=============================================================="
-echo "  AlliedOne ERP Background Attendance installed and running!"
-echo "=============================================================="
+nohup "$SCRIPT_PATH" > /dev/null 2>&1 &
+
+echo "======================================================"
+echo "  AlliedOne ERP Agent installed and running!"
+echo "  Employee: ${member.name}"
+echo "  Auto-updates on each startup. No reinstall needed!"
+echo "======================================================"
 `;
+        if (os === 'sh_agent') {
+          res.setHeader('Content-Type', 'text/plain');
+          return res.send(shContent);
+        }
         res.setHeader('Content-Disposition', `attachment; filename="AlliedOne-Attendance-${member.name.replace(/[^a-zA-Z0-9]/g, '_')}.sh"`);
         res.setHeader('Content-Type', 'text/x-shellscript');
         return res.send(shContent);
