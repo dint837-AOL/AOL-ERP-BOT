@@ -96,7 +96,9 @@ a{text-decoration:none;color:inherit}
 .card-head h3{font-size:.88rem;font-weight:600}
 /* Make tables scrollable on mobile devices */
 .table-scroll{overflow-x:auto;width:100%}
-table{width:100%;border-collapse:collapse;min-width:600px}
+.table-scroll table{min-width:600px}
+table{width:100%;border-collapse:collapse}
+.hr-compact-table{min-width:0!important;width:100%!important;table-layout:fixed!important}
 th{padding:9px 16px;text-align:left;font-size:.68rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);background:rgba(0,0,0,.12)}
 td{padding:11px 16px;font-size:.83rem;border-bottom:1px solid var(--border)}
 tr:last-child td{border:none}tr:hover td{background:rgba(255,255,255,.015)}

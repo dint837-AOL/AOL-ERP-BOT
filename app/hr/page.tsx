@@ -867,7 +867,12 @@ export default function HRPage() {
                   }
                 });
 
-                const list = Array.from(agg.values()).filter(i => members.find(m => String(m.id) === String(i.member_id))?.role !== 'Admin');
+                const list = Array.from(agg.values()).filter(i => {
+                  const memberObj = members.find(m => String(m.id) === String(i.member_id));
+                  if (memberObj) return memberObj.role !== 'Admin';
+                  if (i.name && i.name.toLowerCase().includes('ahsan')) return false;
+                  return true;
+                });
                 const totalHours = list.reduce((s, i) => s + i.hours, 0);
                 const totalLeaves = list.filter(i => i.leave).length;
                 const totalPresent = list.filter(i => i.inRaw).length;
@@ -889,8 +894,8 @@ export default function HRPage() {
                       </div>
                     </div>
 
-                    <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-                      <table style={{ width: '100%', minWidth: '100%', fontSize: '.75rem', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
+                    <div style={{ width: '100%', overflowX: 'hidden' }}>
+                      <table className="hr-compact-table" style={{ width: '100%', minWidth: '0px', maxWidth: '100%', fontSize: '.75rem', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
                         <colgroup>
                           <col style={{ width: '16%' }} />
                           <col style={{ width: '32%' }} />
