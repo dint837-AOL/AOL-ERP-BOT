@@ -867,7 +867,7 @@ export default function HRPage() {
                   }
                 });
 
-                const list = Array.from(agg.values());
+                const list = Array.from(agg.values()).filter(i => members.find(m => String(m.id) === String(i.member_id))?.role !== 'Admin');
                 const totalHours = list.reduce((s, i) => s + i.hours, 0);
                 const totalLeaves = list.filter(i => i.leave).length;
                 const totalPresent = list.filter(i => i.inRaw).length;
@@ -889,16 +889,16 @@ export default function HRPage() {
                       </div>
                     </div>
 
-                    <div style={{ overflowX: 'hidden' }}>
-                      <table style={{ width: '100%', fontSize: '.75rem', tableLayout: 'fixed' }}>
+                    <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                      <table style={{ width: '100%', minWidth: '100%', fontSize: '.75rem', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
                         <colgroup>
-                          <col style={{ width: '18%' }} />
-                          <col style={{ width: '31%' }} />
-                          <col style={{ width: '27%' }} />
+                          <col style={{ width: '16%' }} />
+                          <col style={{ width: '32%' }} />
+                          <col style={{ width: '28%' }} />
                           <col style={{ width: '24%' }} />
                         </colgroup>
                         <thead>
-                          <tr>
+                          <tr style={{ borderBottom: '1px solid var(--border)' }}>
                             <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Emp</th>
                             <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Hours</th>
                             <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Day</th>
@@ -1059,18 +1059,6 @@ export default function HRPage() {
         {/* Monthly Report - Admin only */}
         {activeTab === 'report' && isAdmin && (
           <div className="card">
-            <div className="card-head">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <BarChart2 size={17} style={{ color: 'var(--primary)' }} />
-                <h3>Monthly Attendance Report</h3>
-              </div>
-              {reportMemberId && calDays.length > 0 && (
-                <button className="btn btn-primary btn-sm" onClick={downloadImage}>
-                  <ImageIcon size={13} /> Export as Picture
-                </button>
-              )}
-            </div>
-
             {/* Controls row */}
             <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
               <div>
@@ -1150,6 +1138,19 @@ export default function HRPage() {
                 </div>
               )}
             </div>
+
+            {/* Export as Picture button at the bottom */}
+            {reportMemberId && calDays.length > 0 && (
+              <div style={{ padding: '10px 18px 20px', display: 'flex', justifyContent: 'center' }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={downloadImage}
+                  style={{ width: '100%', maxWidth: '360px', justifyContent: 'center', gap: 8, padding: '12px 18px', fontSize: '.88rem' }}
+                >
+                  <ImageIcon size={15} /> Export as Picture (PNG)
+                </button>
+              </div>
+            )}
           </div>
         )}
 
