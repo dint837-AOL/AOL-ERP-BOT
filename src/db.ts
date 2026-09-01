@@ -348,8 +348,7 @@ export async function initDB() {
   const employeeHash = await bcrypt.hash('Employee@123', 10);
 
   const defaultAccounts = [
-    { name: 'System Admin', email: 'admin@alliedone.com', role: 'Admin', color: '#ff4d4f', hash: adminHash },
-    { name: 'Ahsan Kabir', email: 'ahsankabir@alliedone.com', role: 'Employee', color: '#a78bfa', hash: employeeHash },
+    { name: 'Ahsan Kabir', email: 'admin@alliedone.com', role: 'Admin', color: '#ff4d4f', hash: adminHash },
     { name: 'Tajimur Rafi', email: 'rafi@alliedone.com', role: 'Employee', color: '#4f7eff', hash: employeeHash },
     { name: 'Orko', email: 'orko@alliedone.com', role: 'Employee', color: '#26c486', hash: employeeHash },
     { name: 'Kamrul Islam', email: 'kamrul@alliedone.com', role: 'Employee', color: '#f5a623', hash: employeeHash },

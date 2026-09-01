@@ -292,6 +292,20 @@ export class OpenClaw {
       );
       res.json(rows);
     });
+    
+    // Monthly summary for all members
+    this.app.get('/api/attendance/summary', async (req, res) => {
+      const { month } = req.query as { month: string };
+      if (!month) return res.status(400).json({ error: 'month (YYYY-MM) required' });
+      const rows = await dbAll(
+        `SELECT a.member_id, date(a.timestamp) as att_date, a.action_type, a.timestamp
+         FROM attendance a
+         WHERE CAST(a.timestamp AS TEXT) LIKE ?
+         ORDER BY a.timestamp ASC`,
+        [month + '%']
+      );
+      res.json(rows);
+    });
     this.app.post('/api/attendance', async (req, res) => {
       const { member_id, action_type } = req.body;
       if (!action_type || !['IN','OUT'].includes(action_type)) return res.status(400).json({ error: 'action_type must be IN or OUT' });

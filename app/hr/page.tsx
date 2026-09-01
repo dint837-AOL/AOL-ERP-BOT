@@ -86,6 +86,16 @@ function firstDayOfWeek(year: number, month: number): number {
   return new Date(year, month, 1).getDay();
 }
 
+function getWorkingDaysInMonth(year: number, month: number): number {
+  const totalDays = daysInMonth(year, month);
+  let count = 0;
+  for (let i = 1; i <= totalDays; i++) {
+    const dow = new Date(year, month, i).getDay();
+    if (dow !== 5 && dow !== 6) count++;
+  }
+  return count;
+}
+
 // --- Monthly Calendar Component ---
 
 interface CalDay {
@@ -98,6 +108,8 @@ interface CalDay {
   checkOutTime: string | undefined;
   leaveType: string | undefined;
   leaveStatus: string | undefined;
+  isIncomplete: boolean;
+  hoursWorked: number;
 }
 
 interface MonthCalendarProps {
@@ -121,41 +133,73 @@ function MonthCalendar({ year, month, calDays }: MonthCalendarProps) {
 
   const today = todayDhaka();
 
+  // Calculate summary metrics
+  const totalDaysWorked = calDays.filter(d => d.isPresent).length;
+  const totalHoursWorked = calDays.reduce((sum, d) => sum + (d.hoursWorked || 0), 0).toFixed(1);
+  const totalIncomplete = calDays.filter(d => d.isIncomplete).length;
+  const totalLeaves = calDays.filter(d => d.isLeave && d.leaveStatus === 'APPROVED').length;
+
   return (
-    <div className="hr-cal-grid">
-      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(dn => (
-        <div key={dn} className={'hr-cal-hdr' + (['Fri', 'Sat'].includes(dn) ? ' weekend' : '')}>{dn}</div>
-      ))}
-      {cells.map((cell, idx) => {
-        const col = idx % 7;
-        const isWeekendCol = col === 5 || col === 6;
-        if (cell === 'empty' || cell === null) {
-          return <div key={idx} className={'hr-cal-cell empty' + (isWeekendCol ? ' weekend' : '')} />;
-        }
-        const isToday = cell.date === today;
-        let cls = 'hr-cal-cell';
-        if (cell.isWeekend) cls += ' weekend';
-        else if (cell.isPresent) cls += ' present';
-        else if (cell.isLeave) cls += ' on-leave';
-        else if (cell.isAbsent) cls += ' absent';
-        if (isToday) cls += ' cal-today';
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-        const dayNum = parseInt(cell.date.split('-')[2] || '0');
-        const tip = cell.isPresent
-          ? `Present - In: ${cell.checkInTime || '-'}  Out: ${cell.checkOutTime || '-'}`
-          : cell.isLeave
-            ? `Leave: ${cell.leaveType} (${cell.leaveStatus})`
-            : cell.isWeekend ? 'Weekend' : cell.isAbsent ? 'Absent' : '';
+      <div className="hr-cal-grid">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(dn => (
+          <div key={dn} className={'hr-cal-hdr' + (['Fri', 'Sat'].includes(dn) ? ' weekend' : '')}>{dn}</div>
+        ))}
+        {cells.map((cell, idx) => {
+          const col = idx % 7;
+          const isWeekendCol = col === 5 || col === 6;
+          if (cell === 'empty' || cell === null) {
+            return <div key={idx} className={'hr-cal-cell empty' + (isWeekendCol ? ' weekend' : '')} />;
+          }
+          const isToday = cell.date === today;
+          let cls = 'hr-cal-cell';
+          if (cell.isWeekend) cls += ' weekend';
+          else if (cell.isPresent) cls += ' present';
+          else if (cell.isLeave) cls += ' on-leave';
+          else if (cell.isAbsent) cls += ' absent';
+          if (isToday) cls += ' cal-today';
+          if (cell.isIncomplete) cls += ' late-arrival';
 
-        return (
-          <div key={cell.date} className={cls} title={tip}>
-            <span className="cal-day-num">{dayNum}</span>
-            {cell.isPresent && <span className="cal-dot green-dot" />}
-            {cell.isLeave && <span className="cal-dot yellow-dot" />}
-            {cell.isAbsent && <span className="cal-dot red-dot" />}
-          </div>
-        );
-      })}
+          const dayNum = parseInt(cell.date.split('-')[2] || '0');
+          let tip = '';
+          if (cell.isPresent) tip = `In: ${cell.checkInTime || '-'} Out: ${cell.checkOutTime || '-'}\nHours: ${cell.hoursWorked.toFixed(1)}`;
+          else if (cell.isLeave) tip = `Leave: ${cell.leaveType} (${cell.leaveStatus})`;
+          else tip = cell.isWeekend ? 'Weekend' : cell.isAbsent ? 'Absent' : '';
+
+          const isApprovedLeave = cell.isLeave && cell.leaveStatus === 'APPROVED';
+
+          return (
+            <div key={cell.date} className={cls} title={tip}>
+              <span className="cal-day-num">{dayNum}</span>
+              {cell.isPresent && <span className="cal-dot green-dot" />}
+              {cell.isIncomplete && <span className="cal-dot yellow-dot" style={{ background: '#FFD600', boxShadow: '0 0 5px rgba(255, 214, 0, 0.5)' }} />}
+              {isApprovedLeave && <span className="cal-dot blue-dot" style={{ background: '#2979FF', boxShadow: '0 0 5px rgba(41, 121, 255, 0.5)', marginTop: 2 }} />}
+              {cell.isAbsent && <span className="cal-dot red-dot" />}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Metrics Summary Row */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'space-between', padding: '12px', background: 'rgba(79, 126, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(79, 126, 255, 0.15)' }}>
+        <div style={{ flex: '1 1 45%', minWidth: '120px' }}>
+          <div style={{ fontSize: '.75rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Days</div>
+          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text)' }}>{totalDaysWorked} <span style={{fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal'}}>/ {getWorkingDaysInMonth(year, month)}</span></div>
+        </div>
+        <div style={{ flex: '1 1 45%', minWidth: '120px' }}>
+          <div style={{ fontSize: '.75rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Hours</div>
+          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text)' }}>{totalHoursWorked} <span style={{fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal'}}>/ {getWorkingDaysInMonth(year, month) * 5}</span></div>
+        </div>
+        <div style={{ flex: '1 1 45%', minWidth: '120px' }}>
+          <div style={{ fontSize: '.75rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Short Shifts (&lt;4h)</div>
+          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text)' }}>{totalIncomplete} <span style={{fontSize: '.85rem', fontWeight: 'normal'}}>times</span></div>
+        </div>
+        <div style={{ flex: '1 1 45%', minWidth: '120px' }}>
+          <div style={{ fontSize: '.75rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Approved Leaves</div>
+          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text)' }}>{totalLeaves} <span style={{fontSize: '.85rem', fontWeight: 'normal'}}>days</span></div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -172,6 +216,7 @@ export default function HRPage() {
   const [members, setMembers] = useState<any[]>([]);
   const [att, setAtt] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
+  const [monthSum, setMonthSum] = useState<any[]>([]);
 
   const [activeTab, setActiveTab] = useState<'att' | 'leave' | 'report'>('att');
   const [attLoading, setAttLoading] = useState(false);
@@ -220,14 +265,17 @@ export default function HRPage() {
   const loadAll = useCallback(async () => {
     try {
       const leavesUrl = isAdmin ? '/api/leaves' : `/api/leaves?member_id=${user?.id}`;
-      const [mRes, aRes, lRes] = await Promise.all([
+      const curMonthStr = curDate.substring(0, 7);
+      const [mRes, aRes, lRes, sumRes] = await Promise.all([
         authFetch('/api/members').then(r => r.json()),
         authFetch('/api/attendance?date=' + curDate).then(r => r.json()),
         authFetch(leavesUrl).then(r => r.json()),
+        authFetch('/api/attendance/summary?month=' + curMonthStr).then(r => r.json()),
       ]);
       setMembers(Array.isArray(mRes) ? mRes : []);
       setAtt(Array.isArray(aRes) ? aRes : []);
       setLeaves(Array.isArray(lRes) ? lRes : []);
+      setMonthSum(Array.isArray(sumRes) ? sumRes : []);
     } catch (e) { console.error(e); }
   }, [curDate, isAdmin, user?.id, authFetch]);
 
@@ -307,13 +355,14 @@ export default function HRPage() {
       const attRows: any[] = Array.isArray(attRes) ? attRes : [];
       const leaveRows: any[] = Array.isArray(leaveRes) ? leaveRes : [];
 
-      const attMap = new Map<string, { hasIn: boolean; hasOut: boolean; inTime: string; outTime: string }>();
+      const attMap = new Map<string, { hasIn: boolean; hasOut: boolean; inTime: string; outTime: string, inDate?: Date, outDate?: Date }>();
       attRows.forEach((r: any) => {
         const d = r.att_date as string;
         const ex = attMap.get(d) || { hasIn: false, hasOut: false, inTime: '', outTime: '' };
         const t = formatTime(r.timestamp);
-        if (r.action_type === 'IN') { ex.hasIn = true; ex.inTime = t; }
-        if (r.action_type === 'OUT') { ex.hasOut = true; ex.outTime = t; }
+        const dt = parseTimestamp(r.timestamp);
+        if (r.action_type === 'IN') { ex.hasIn = true; ex.inTime = t; ex.inDate = dt; }
+        if (r.action_type === 'OUT') { ex.hasOut = true; ex.outTime = t; ex.outDate = dt; }
         attMap.set(d, ex);
       });
 
@@ -338,12 +387,33 @@ export default function HRPage() {
         const isFuture = ds > todayStr;
         const leaveInfo = leaveDateMap.get(ds);
         const attInfo = attMap.get(ds);
+        
+        let isIncomplete = false;
+        let hoursWorked = 0;
+        
+        if (attInfo?.inDate) {
+           const inDate = attInfo.inDate;
+           
+           if (attInfo.outDate) {
+              hoursWorked = (attInfo.outDate.getTime() - inDate.getTime()) / (1000 * 60 * 60);
+              // Flexible timing: If they worked less than 4 hours (with a tiny buffer), it's incomplete
+              if (hoursWorked < 3.9) {
+                isIncomplete = true;
+              }
+           } else if (!isFuture && ds !== todayStr) {
+              // If they forgot to check out on a past day, it's incomplete
+              isIncomplete = true;
+           }
+        }
+
         days.push({
           date: ds,
           isWeekend,
           isPresent,
           isLeave: isLeaveDay && !isPresent,
           isAbsent: !isWeekend && !isPresent && !isLeaveDay && !isFuture,
+          isIncomplete,
+          hoursWorked,
           checkInTime: attInfo?.inTime,
           checkOutTime: attInfo?.outTime,
           leaveType: leaveInfo?.type,
@@ -662,44 +732,145 @@ export default function HRPage() {
         {/* Attendance log */}
         {activeTab === 'att' && (
           <div className="card">
-            <div className="card-head">
-              <h3>Check-In / Check-Out Log</h3>
-              <span style={{ fontSize: '.74rem', color: 'var(--muted)' }}>{fmtDateLabel(curDate)}</span>
-            </div>
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Member</th>
-                    <th>Action</th>
-                    <th>Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {att.filter(a => isAdmin || String(a.member_id) === String(user?.id)).length === 0 ? (
-                    <tr className="empty-r"><td colSpan={3}>No records for this date.</td></tr>
-                  ) : (
-                    att
-                      .filter(a => isAdmin || String(a.member_id) === String(user?.id))
-                      .map((a: any) => (
-                        <tr key={a.id}>
-                          <td>
-                            <div className="av-cell">
-                              <div className="av" style={{ background: a.avatar_color || '#4f7eff' }}>
-                                {(a.member_name || '?')[0].toUpperCase()}
-                              </div>
-                              <div>{a.member_name || 'Unknown'}</div>
-                            </div>
-                          </td>
-                          <td><span className={'badge ' + a.action_type}>{a.action_type}</span></td>
-                          <td style={{ color: 'var(--muted)' }}>
-                            {formatTime(a.timestamp)}
-                          </td>
-                        </tr>
-                      ))
-                  )}
-                </tbody>
-              </table>
+            <div className="card-head" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                <h3>Daily Attendance Log</h3>
+                <span style={{ fontSize: '.8rem', color: 'var(--muted)', background: 'rgba(255,255,255,0.05)', padding: '4px 10px', borderRadius: 20 }}>
+                  {fmtDateLabel(curDate)}
+                </span>
+              </div>
+              
+              {/* Daily Summary */}
+              {(() => {
+                const totalWorkingDays = getWorkingDaysInMonth(new Date(curDate).getFullYear(), new Date(curDate).getMonth());
+                const totalRequiredHours = totalWorkingDays * 5;
+
+                // Process monthly stats per member
+                const monthlyStats = new Map<number, { daysPresent: number; totalHours: number }>();
+                const mGroups = new Map<string, any>();
+                monthSum.forEach(m => {
+                   if (!isAdmin && String(m.member_id) !== String(user?.id)) return;
+                   const key = `${m.member_id}_${m.att_date}`;
+                   const ex = mGroups.get(key) || { inRaw: null, outRaw: null };
+                   const dt = parseTimestamp(m.timestamp);
+                   if (m.action_type === 'IN') ex.inRaw = dt;
+                   if (m.action_type === 'OUT') ex.outRaw = dt;
+                   mGroups.set(key, ex);
+                });
+                mGroups.forEach((val, key) => {
+                   const mId = parseInt(key.split('_')[0] || '0');
+                   const s = monthlyStats.get(mId) || { daysPresent: 0, totalHours: 0 };
+                   if (val.inRaw) s.daysPresent++;
+                   if (val.inRaw && val.outRaw) {
+                      s.totalHours += (val.outRaw.getTime() - val.inRaw.getTime()) / (1000 * 60 * 60);
+                   }
+                   monthlyStats.set(mId, s);
+                });
+
+                // Process daily stats
+                const agg = new Map<number, any>();
+                att.forEach(a => {
+                  if (!isAdmin && String(a.member_id) !== String(user?.id)) return;
+                  const ex = agg.get(a.member_id) || { member_id: a.member_id, name: a.member_name || 'Unknown', color: a.avatar_color, inRaw: null, outRaw: null, hours: 0, leave: null };
+                  const dt = parseTimestamp(a.timestamp);
+                  if (a.action_type === 'IN') ex.inRaw = dt;
+                  if (a.action_type === 'OUT') ex.outRaw = dt;
+                  agg.set(a.member_id, ex);
+                });
+
+                agg.forEach((ex, mId) => {
+                  if (ex.inRaw && ex.outRaw) {
+                    ex.hours = (ex.outRaw.getTime() - ex.inRaw.getTime()) / (1000 * 60 * 60);
+                  }
+                  const leave = leaves.find(l => 
+                    String(l.member_id) === String(mId) &&
+                    new Date(l.start_date + 'T00:00:00') <= new Date(curDate + 'T00:00:00') &&
+                    new Date(l.end_date + 'T00:00:00') >= new Date(curDate + 'T00:00:00')
+                  );
+                  if (leave) {
+                    ex.leave = `${leave.leave_type} (${leave.status})`;
+                  }
+                });
+
+                const list = Array.from(agg.values());
+                const totalHours = list.reduce((s, i) => s + i.hours, 0);
+                const totalLeaves = list.filter(i => i.leave).length;
+                const totalPresent = list.filter(i => i.inRaw).length;
+
+                return (
+                  <div style={{ width: '100%' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'space-between', padding: '10px', background: 'var(--gs)', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: 12 }}>
+                      <div style={{ flex: '1 1 30%', minWidth: '60px' }}>
+                        <div style={{ fontSize: '.65rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Present</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)' }}>{totalPresent}</div>
+                      </div>
+                      <div style={{ flex: '1 1 30%', minWidth: '60px' }}>
+                        <div style={{ fontSize: '.65rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Hours</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)' }}>{totalHours.toFixed(1)} <span style={{fontSize: '.7rem', fontWeight: 'normal'}}>hrs</span></div>
+                      </div>
+                      <div style={{ flex: '1 1 30%', minWidth: '60px' }}>
+                        <div style={{ fontSize: '.65rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>On Leave</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)' }}>{totalLeaves}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ overflowX: 'hidden' }}>
+                      <table style={{ width: '100%', fontSize: '.8rem' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ padding: '8px 4px' }}>Name</th>
+                            <th style={{ padding: '8px 4px' }}>Hours</th>
+                            <th style={{ padding: '8px 4px' }}>Day</th>
+                            <th style={{ padding: '8px 4px' }}>Leave</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {list.length === 0 ? (
+                            <tr className="empty-r"><td colSpan={4}>No records for this date.</td></tr>
+                          ) : (
+                            list.map((l, idx) => {
+                              const stats = monthlyStats.get(l.member_id) || { daysPresent: 0, totalHours: 0 };
+                              return (
+                                <tr key={idx}>
+                                  <td style={{ padding: '8px 4px' }}>
+                                    <div className="av-cell" style={{ gap: '6px' }}>
+                                      <div className="av" style={{ background: l.color || '#4f7eff', width: '24px', height: '24px', fontSize: '.75rem' }}>
+                                        {l.name[0].toUpperCase()}
+                                      </div>
+                                      <div style={{ fontWeight: 500, fontSize: '.75rem', maxWidth: '70px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</div>
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: '8px 4px', fontSize: '.75rem' }}>
+                                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                                      {stats.totalHours.toFixed(1)}
+                                    </span>
+                                    <span style={{ color: 'var(--muted)' }}> / {totalRequiredHours}</span>
+                                  </td>
+                                  <td style={{ padding: '8px 4px', fontSize: '.75rem' }}>
+                                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                                      {stats.daysPresent}
+                                    </span>
+                                    <span style={{ color: 'var(--muted)' }}> / {totalWorkingDays}</span>
+                                  </td>
+                                  <td style={{ padding: '8px 4px' }}>
+                                    {l.leave ? (
+                                      <span className="badge" style={{ background: l.leave.includes('APPROVED') ? 'var(--green)' : 'var(--orange)', color: '#111', fontSize: '.6rem', padding: '2px 4px' }}>
+                                        {l.leave.split(' ')[0]}
+                                      </span>
+                                    ) : (
+                                      <span style={{ color: 'var(--muted)' }}>-</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
