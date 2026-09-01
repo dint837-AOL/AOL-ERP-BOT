@@ -20,9 +20,38 @@ async function notifyMember(memberId: number, message: string, link: string = ''
   
   // Telegram Integration
   const member = await dbGet('SELECT telegram_chat_id FROM members WHERE id=?', [memberId]) as any;
-  if (member && member.telegram_chat_id) {
-    // Fire and forget
-    sendTelegramMessage(member.telegram_chat_id, message).catch(console.error);
+  let chatId = member?.telegram_chat_id?.trim();
+  if (!chatId && process.env.TELEGRAM_CHAT_ID) {
+    chatId = process.env.TELEGRAM_CHAT_ID.trim();
+  }
+
+  if (chatId) {
+    sendTelegramMessage(chatId, message).catch(console.error);
+  }
+}
+
+async function notifyAdmins(message: string, link: string = '') {
+  const admins = await dbAll("SELECT id, telegram_chat_id FROM members WHERE role = 'Admin'") as any[];
+  
+  let fallbackChatId = process.env.TELEGRAM_CHAT_ID?.trim() || '';
+  if (!fallbackChatId) {
+    const anyChat = await dbGet("SELECT telegram_chat_id FROM members WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != '' LIMIT 1") as any;
+    if (anyChat && anyChat.telegram_chat_id) fallbackChatId = anyChat.telegram_chat_id.trim();
+  }
+
+  const sentChatIds = new Set<string>();
+
+  for (const admin of admins) {
+    await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [admin.id, message, link]);
+    const cid = admin.telegram_chat_id?.trim() || fallbackChatId;
+    if (cid && !sentChatIds.has(cid)) {
+      sentChatIds.add(cid);
+      sendTelegramMessage(cid, message).catch(console.error);
+    }
+  }
+
+  if (fallbackChatId && !sentChatIds.has(fallbackChatId)) {
+    sendTelegramMessage(fallbackChatId, message).catch(console.error);
   }
 }
 
@@ -214,7 +243,11 @@ export class OpenClaw {
       const newTask = await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]);
       
       if (assigned_to) {
-        await notifyMember(assigned_to, `You have been assigned a new task: "${title}"`, '/dashboard');
+        const assignee = await dbGet('SELECT name FROM members WHERE id=?', [assigned_to]) as any;
+        await notifyMember(assigned_to, `📋 New Task Assigned: "${title}"`, '/dashboard');
+        await notifyAdmins(`📋 New Task: "${title}" (Assigned to ${assignee?.name || 'employee'}).`, '/dashboard');
+      } else {
+        await notifyAdmins(`📋 New Task Created: "${title}" (Unassigned).`, '/dashboard');
       }
 
       res.status(201).json(newTask);
@@ -241,19 +274,15 @@ export class OpenClaw {
       if (oldTask && updatedTask) {
         const user = (req as any).user;
         
-        // If status changed by an employee, notify admins
+        // If status changed, notify admins and assignee
         if (req.body.status && req.body.status !== oldTask.status) {
-          if (user && user.role !== 'Admin') {
-            const admins = await dbAll(`SELECT id FROM members WHERE role='Admin'`) as any[];
-            for (const admin of admins) {
-              await notifyMember(admin.id, `${user.name} changed task "${updatedTask.title}" status to ${req.body.status}.`, '/dashboard');
-            }
-          }
+          const statusIcon = req.body.status === 'DONE' ? '✅' : '🔄';
+          await notifyAdmins(`${statusIcon} Task Status: "${updatedTask.title}" marked as ${req.body.status} by ${user?.name || 'employee'}.`, '/dashboard');
         }
         
         // If task was re-assigned to someone else
         if (req.body.assigned_to && req.body.assigned_to !== oldTask.assigned_to) {
-          await notifyMember(req.body.assigned_to, `You have been assigned a task: "${updatedTask.title}"`, '/dashboard');
+          await notifyMember(req.body.assigned_to, `📋 You have been assigned a task: "${updatedTask.title}"`, '/dashboard');
         }
       }
 
@@ -336,7 +365,17 @@ export class OpenClaw {
       if (!action_type || !['IN','OUT'].includes(action_type)) return res.status(400).json({ error: 'action_type must be IN or OUT' });
       const nowIso = new Date().toISOString();
       const { lastID } = await dbRun('INSERT INTO attendance(member_id,action_type,timestamp) VALUES(?,?,?)', [member_id||null, action_type, nowIso]);
-      res.status(201).json(await dbGet(`SELECT a.*,m.name as member_name FROM attendance a LEFT JOIN members m ON a.member_id=m.id WHERE a.id=?`, [lastID]));
+      const rec = await dbGet(`SELECT a.*,m.name as member_name FROM attendance a LEFT JOIN members m ON a.member_id=m.id WHERE a.id=?`, [lastID]) as any;
+      
+      const empName = rec?.member_name || 'An employee';
+      const timeStr = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Dhaka' });
+      if (action_type === 'IN') {
+        await notifyAdmins(`🟢 Check-In: ${empName} checked in at ${timeStr}.`, '/hr?tab=att');
+      } else {
+        await notifyAdmins(`🔴 Check-Out: ${empName} checked out at ${timeStr}.`, '/hr?tab=att');
+      }
+
+      res.status(201).json(rec);
     });
 
     // ── WI-FI SETTINGS ENDPOINTS ─────────────────────────────
@@ -502,6 +541,7 @@ export class OpenClaw {
         if (!existingIn) {
           await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'IN', nowIso]);
           console.log(`[ROUTER WEBHOOK] Auto checked in ${member.name} on Wi-Fi CONNECT`);
+          await notifyAdmins(`⚡ Wi-Fi Auto Check-In: ${member.name} connected to Office Wi-Fi.`, '/hr?tab=att');
         }
         await dbRun(
           `INSERT INTO active_sessions (member_id, last_seen, ip, is_wifi)
@@ -523,6 +563,7 @@ export class OpenClaw {
         if (existingIn && !existingOut) {
           await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'OUT', nowIso]);
           console.log(`[ROUTER WEBHOOK] Auto checked out ${member.name} on Wi-Fi DISCONNECT`);
+          await notifyAdmins(`⚡ Wi-Fi Auto Check-Out: ${member.name} disconnected from Office Wi-Fi.`, '/hr?tab=att');
         }
         await dbRun('DELETE FROM active_sessions WHERE member_id = ?', [member.id]);
         return res.json({ ok: true, action: 'OUT', member_name: member.name });
@@ -577,6 +618,7 @@ export class OpenClaw {
           await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'OUT', nowIso]);
           autoCheckedOut = true;
           console.log(`[LAPTOP SHUTDOWN] Member #${member.id} (${member.name}) checked out via laptop shutdown hook (${hostname || clientIp}).`);
+          await notifyAdmins(`💻 Laptop Auto Check-Out: ${member.name} turned off laptop (${hostname || 'Workstation'}).`, '/hr?tab=att');
         }
 
         await dbRun('DELETE FROM active_sessions WHERE member_id = ?', [member.id]);
@@ -601,6 +643,7 @@ export class OpenClaw {
           await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'IN', nowIso]);
           autoCheckedIn = true;
           console.log(`[LAPTOP AUTO-CHECKIN] Member #${member.id} (${member.name}) automatically checked in via Laptop Agent (${hostname || clientIp}).`);
+          await notifyAdmins(`💻 Laptop Auto Check-In: ${member.name} opened laptop (${hostname || 'Workstation'}).`, '/hr?tab=att');
         }
 
         await dbRun(
@@ -983,12 +1026,8 @@ echo "======================================================"
       const { lastID } = await dbRun(`INSERT INTO leave_requests(member_id,leave_type,start_date,end_date,reason) VALUES(?,?,?,?,?)`, [member_id, leave_type, start_date, end_date, reason||'']);
       
       const member = await dbGet(`SELECT name FROM members WHERE id=?`, [member_id]) as any;
-      const admins = await dbAll(`SELECT id FROM members WHERE role='Admin'`) as any[];
-      for (const admin of admins) {
-        if (admin) {
-          await notifyMember(admin.id, `${member?.name || 'An employee'} requested ${leave_type} leave.`, '/hr?tab=leave');
-        }
-      }
+      const leaveMsg = `🌴 Leave Request: ${member?.name || 'An employee'} requested ${leave_type} leave (${start_date} to ${end_date}).${reason ? `\nReason: "${reason}"` : ''}`;
+      await notifyAdmins(leaveMsg, '/hr?tab=leave');
 
       res.status(201).json(await dbGet(`SELECT l.*,m.name as member_name FROM leave_requests l JOIN members m ON l.member_id=m.id WHERE l.id=?`, [lastID]));
     });
@@ -997,7 +1036,9 @@ echo "======================================================"
       await dbRun(`UPDATE leave_requests SET status=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?`, [status, req.params.id]);
       const leaveRow = await dbGet('SELECT * FROM leave_requests WHERE id=?', [req.params.id]) as any;
       if (leaveRow) {
+        const member = await dbGet('SELECT name FROM members WHERE id=?', [leaveRow.member_id]) as any;
         await notifyMember(leaveRow.member_id, `Your ${leaveRow.leave_type} leave request has been ${status}.`, '/hr?tab=leave');
+        await notifyAdmins(`📋 Leave Decision: ${member?.name || 'Employee'}'s ${leaveRow.leave_type} leave has been ${status}.`, '/hr?tab=leave');
       }
       res.json(leaveRow);
     });
@@ -1041,6 +1082,10 @@ echo "======================================================"
         `INSERT INTO expenses(category_id,amount,description,entered_by,expense_date,company_name,expense_head,payment_method) VALUES(?,?,?,?,?,?,?,?)`,
         [category_id||null, amount, description||'', entered_by||null, date, company_name||'', expense_head||'', payment_method||'Cash']
       );
+      
+      const member = entered_by ? await dbGet('SELECT name FROM members WHERE id=?', [entered_by]) as any : null;
+      await notifyAdmins(`💰 Expense Logged: ৳${Number(amount).toLocaleString()} for ${description || 'expense'} (${company_name || 'General'})${member ? ` by ${member.name}` : ''}.`, '/accounting');
+
       res.status(201).json(await dbGet('SELECT e.*,c.name as category_name FROM expenses e LEFT JOIN expense_categories c ON e.category_id=c.id WHERE e.id=?', [lastID]));
     });
     this.app.delete('/api/expenses/:id', async (req, res) => { await dbRun('DELETE FROM expenses WHERE id=?', [req.params.id]); res.json({ ok: true }); });
