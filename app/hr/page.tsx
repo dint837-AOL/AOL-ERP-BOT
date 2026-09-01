@@ -181,7 +181,7 @@ function MonthCalendar({ year, month, calDays }: MonthCalendarProps) {
           return (
             <div key={cell.date} className={cls} title={tip}>
               <span className="cal-day-num">{dayNum}</span>
-              {cell.isPresent && <span className="cal-dot green-dot" />}
+              {cell.isPresent && !cell.isIncomplete && <span className="cal-dot green-dot" />}
               {cell.isIncomplete && <span className="cal-dot" style={{ background: '#FF8C00', boxShadow: '0 0 5px rgba(255, 140, 0, 0.6)' }} />}
               {isApprovedLeave && <span className="cal-dot" style={{ background: '#2979FF', boxShadow: '0 0 5px rgba(41, 121, 255, 0.5)', marginTop: 2 }} />}
               {cell.isAbsent && <span className="cal-dot red-dot" />}
@@ -1083,30 +1083,41 @@ export default function HRPage() {
                 const totalAbsent = calDays.filter(d => d.isAbsent).length;
                 const totalLate = calDays.filter(d => d.isIncomplete).length;
                 const totalApprLeave = calDays.filter(d => d.isLeave && d.leaveStatus === 'APPROVED').length;
-                const workingDaysInMonth = getWorkingDaysInMonth(calYear, calMonth);
-                const requiredHours = workingDaysInMonth * 5;
+                const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+                const calMonthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
+                // Elapsed working days up to today (or end of month if viewing past month)
+                let elapsedWorkingDays = 0;
+                const totalMonthDays = daysInMonth(calYear, calMonth);
+                const cutoffDay = calMonthStr < todayStr.substring(0, 7)
+                  ? totalMonthDays  // past month: all working days
+                  : parseInt(todayStr.split('-')[2] || '1', 10); // current month: up to today
+                for (let i = 1; i <= Math.min(cutoffDay, totalMonthDays); i++) {
+                  const dow = new Date(calYear, calMonth, i).getDay();
+                  if (dow !== 5 && dow !== 6) elapsedWorkingDays++;
+                }
+                const elapsedRequiredHours = elapsedWorkingDays * 5;
                 const totalHours = calDays.reduce((sum, d) => sum + (d.hoursWorked || 0), 0);
                 const stats = [
-                  { label: 'Present',       val: totalPresent,   color: 'var(--green)', dotBg: '#26C486', dotShadow: 'rgba(38,196,134,0.6)' },
-                  { label: 'Absent',        val: totalAbsent,    color: 'var(--red)',   dotBg: '#F25C7A', dotShadow: 'rgba(242,92,122,0.6)' },
-                  { label: 'Late (<4h)',    val: totalLate,      color: '#FF8C00',      dotBg: '#FF8C00', dotShadow: 'rgba(255,140,0,0.7)' },
-                  { label: 'Appr. Leave',  val: totalApprLeave, color: '#2979FF',      dotBg: '#2979FF', dotShadow: 'rgba(41,121,255,0.6)' },
+                  { label: 'Present',      val: totalPresent,   color: 'var(--green)', dotBg: '#26C486', dotShadow: 'rgba(38,196,134,0.6)' },
+                  { label: 'Absent',       val: totalAbsent,    color: 'var(--red)',   dotBg: '#F25C7A', dotShadow: 'rgba(242,92,122,0.6)' },
+                  { label: 'Late',         val: totalLate,      color: '#FF8C00',      dotBg: '#FF8C00', dotShadow: 'rgba(255,140,0,0.7)' },
+                  { label: 'Appr. Leave', val: totalApprLeave, color: '#2979FF',      dotBg: '#2979FF', dotShadow: 'rgba(41,121,255,0.6)' },
                 ];
                 return (
                   <div style={{ padding: '0 18px 20px' }}>
-                    {/* Days / Hours row */}
+                    {/* Days / Hours row — cumulative x/elapsed */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 10 }}
                          className="cal-stats-grid">
                       <div className="s-card" style={{ textAlign: 'center' }}>
                         <div className="s-lbl">Total Days</div>
                         <div className="s-val" style={{ color: 'var(--green)', fontSize: '1.4rem' }}>
-                          {totalPresent}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{workingDaysInMonth}</span>
+                          {totalPresent}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{elapsedWorkingDays}</span>
                         </div>
                       </div>
                       <div className="s-card" style={{ textAlign: 'center' }}>
                         <div className="s-lbl">Total Hours</div>
                         <div className="s-val" style={{ color: 'var(--primary)', fontSize: '1.4rem' }}>
-                          {Math.round(totalHours)}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{requiredHours}h</span>
+                          {Math.round(totalHours)}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{elapsedRequiredHours}h</span>
                         </div>
                       </div>
                     </div>
