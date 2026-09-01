@@ -227,7 +227,7 @@ export default function HRPage() {
   const [leaves, setLeaves] = useState<any[]>([]);
   const [monthSum, setMonthSum] = useState<any[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'att' | 'leave' | 'report'>('att');
+  const [activeTab, setActiveTab] = useState<'att' | 'leave' | 'report'>('att'); // att=Team, report=Individual, leave=Leave Request
   const [attLoading, setAttLoading] = useState(false);
 
   const [showLeaveModal, setShowLeaveModal] = useState(false);
@@ -341,9 +341,9 @@ export default function HRPage() {
       const target = e?.detail || new URLSearchParams(window.location.search).get('tab');
       if (target === 'leave' || target === 'leaves') {
         setActiveTab('leave');
-      } else if (target === 'report') {
+      } else if (target === 'report' || target === 'individual') {
         setActiveTab('report');
-      } else if (target === 'att') {
+      } else if (target === 'att' || target === 'team') {
         setActiveTab('att');
       }
     };
@@ -559,37 +559,6 @@ export default function HRPage() {
     <>
       <Topbar title="HR & Attendance">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* Date navigator */}
-          <div className="dnav" style={{ position: 'relative' }}>
-            <button onClick={() => setCurDate(s => shiftDateStr(s, -1))} aria-label="Previous day">
-              <ChevronLeft size={16} />
-            </button>
-            <div
-              className={'dchip' + (curDate === todayDhaka() ? ' today' : '')}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
-              onClick={() => {
-                const inp = dateInputRef.current;
-                if (inp) {
-                  try { inp.showPicker(); } catch { inp.click(); }
-                }
-              }}
-            >
-              <Calendar size={13} style={{ opacity: 0.6, flexShrink: 0 }} />
-              {fmtDateLabel(curDate)}
-              <input
-                ref={dateInputRef}
-                type="date"
-                value={curDate}
-                onChange={e => { if (e.target.value) setCurDate(e.target.value); }}
-                style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
-                tabIndex={-1}
-              />
-            </div>
-            <button onClick={() => setCurDate(s => shiftDateStr(s, 1))} aria-label="Next day">
-              <ChevronRight size={16} />
-            </button>
-          </div>
-
           {/* Wi-Fi Network Status Pill */}
           <div
             style={{
@@ -620,6 +589,39 @@ export default function HRPage() {
       </Topbar>
 
       <div className="scroll">
+
+        {/* Date navigator — below page header */}
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12, paddingBottom: 4 }}>
+          <div className="dnav" style={{ position: 'relative' }}>
+            <button onClick={() => setCurDate(s => shiftDateStr(s, -1))} aria-label="Previous day">
+              <ChevronLeft size={16} />
+            </button>
+            <div
+              className={'dchip' + (curDate === todayDhaka() ? ' today' : '')}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+              onClick={() => {
+                const inp = dateInputRef.current;
+                if (inp) {
+                  try { inp.showPicker(); } catch { inp.click(); }
+                }
+              }}
+            >
+              <Calendar size={13} style={{ opacity: 0.6, flexShrink: 0 }} />
+              {fmtDateLabel(curDate)}
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={curDate}
+                onChange={e => { if (e.target.value) setCurDate(e.target.value); }}
+                style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+                tabIndex={-1}
+              />
+            </div>
+            <button onClick={() => setCurDate(s => shiftDateStr(s, 1))} aria-label="Next day">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
 
         {/* Employee check-in/out widget */}
         {!isAdmin && (
@@ -782,89 +784,102 @@ export default function HRPage() {
           );
         })()}
 
-        {/* Tabs */}
+        {/* Tabs: Team | Individual | Leave Request */}
         <div className="tabs">
           <div className={'tab ' + (activeTab === 'att' ? 'on' : '')} onClick={() => setActiveTab('att')}>
-            Attendance Log
+            Team
           </div>
+          {isAdmin && (
+            <div className={'tab ' + (activeTab === 'report' ? 'on' : '')} onClick={() => setActiveTab('report')}>
+              Individual
+            </div>
+          )}
           <div className={'tab ' + (activeTab === 'leave' ? 'on' : '')} onClick={() => setActiveTab('leave')}>
-            Leave Requests
+            Leave Request
             {pendingLeaves > 0 && (
               <span style={{ marginLeft: 6, background: 'var(--orange)', color: '#0d0f18', fontSize: '.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: 10, verticalAlign: 'middle' }}>
                 {pendingLeaves}
               </span>
             )}
           </div>
-          {isAdmin && (
-            <div className={'tab ' + (activeTab === 'report' ? 'on' : '')} onClick={() => setActiveTab('report')}>
-              Monthly Report
-            </div>
-          )}
         </div>
 
-        {/* Attendance log */}
+        {/* Team tab — cumulative attendance table */}
         {activeTab === 'att' && (
           <div className="card">
             <div className="card-head" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                <h3>Daily Attendance Log</h3>
-                <span style={{ fontSize: '.8rem', color: 'var(--muted)', background: 'rgba(255,255,255,0.05)', padding: '4px 10px', borderRadius: 20 }}>
-                  {fmtDateLabel(curDate)}
-                </span>
-              </div>
-              
-              {/* Daily Summary */}
-              {(() => {
-                const totalWorkingDays = getWorkingDaysInMonth(new Date(curDate).getFullYear(), new Date(curDate).getMonth());
-                const totalRequiredHours = totalWorkingDays * 5;
+              <h3>Team Attendance</h3>
 
-                // Process monthly stats per member
+              {(() => {
+                const now = new Date(curDate + 'T00:00:00');
+                const year = now.getFullYear();
+                const month = now.getMonth();
+
+                // Elapsed working days up to and including curDate
+                let elapsedWorkingDays = 0;
+                const totalDays = daysInMonth(year, month);
+                const curDay = now.getDate();
+                for (let i = 1; i <= Math.min(curDay, totalDays); i++) {
+                  const dow = new Date(year, month, i).getDay();
+                  if (dow !== 5 && dow !== 6) elapsedWorkingDays++;
+                }
+                // Required hours so far (5h per working day elapsed)
+                const elapsedRequiredHours = elapsedWorkingDays * 5;
+
+                // Process monthly cumulative stats per member (up to curDate)
                 const monthlyStats = new Map<number, { daysPresent: number; totalHours: number }>();
                 const mGroups = new Map<string, any>();
                 monthSum.forEach(m => {
-                   if (!isAdmin && String(m.member_id) !== String(user?.id)) return;
-                   const rawTs = m.timestamp;
-                   const dt = typeof rawTs === 'string' ? parseTimestamp(rawTs) : new Date(rawTs);
-                   const d = dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
-                   const key = `${m.member_id}_${d}`;
-                   const ex = mGroups.get(key) || { inRaw: null, outRaw: null };
-                   if (m.action_type === 'IN') ex.inRaw = dt;
-                   if (m.action_type === 'OUT') ex.outRaw = dt;
-                   mGroups.set(key, ex);
+                  if (!isAdmin && String(m.member_id) !== String(user?.id)) return;
+                  const rawTs = m.timestamp;
+                  const dt = typeof rawTs === 'string' ? parseTimestamp(rawTs) : new Date(rawTs);
+                  const d = dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+                  // Only count up to curDate
+                  if (d > curDate) return;
+                  const key = `${m.member_id}_${d}`;
+                  const ex = mGroups.get(key) || { inRaw: null, outRaw: null };
+                  if (m.action_type === 'IN') ex.inRaw = dt;
+                  if (m.action_type === 'OUT') ex.outRaw = dt;
+                  mGroups.set(key, ex);
                 });
                 mGroups.forEach((val, key) => {
-                   const mId = parseInt(key.split('_')[0] || '0');
-                   const s = monthlyStats.get(mId) || { daysPresent: 0, totalHours: 0 };
-                   if (val.inRaw) s.daysPresent++;
-                   if (val.inRaw && val.outRaw) {
-                      s.totalHours += (val.outRaw.getTime() - val.inRaw.getTime()) / (1000 * 60 * 60);
-                   }
-                   monthlyStats.set(mId, s);
+                  const mId = parseInt(key.split('_')[0] || '0');
+                  const s = monthlyStats.get(mId) || { daysPresent: 0, totalHours: 0 };
+                  if (val.inRaw) s.daysPresent++;
+                  if (val.inRaw && val.outRaw) {
+                    s.totalHours += (val.outRaw.getTime() - val.inRaw.getTime()) / (1000 * 60 * 60);
+                  }
+                  monthlyStats.set(mId, s);
                 });
 
-                // Process daily stats
+                // Process today's attendance records for leave lookup
                 const agg = new Map<number, any>();
                 att.forEach(a => {
                   if (!isAdmin && String(a.member_id) !== String(user?.id)) return;
-                  const ex = agg.get(a.member_id) || { member_id: a.member_id, name: a.member_name || 'Unknown', color: a.avatar_color, inRaw: null, outRaw: null, hours: 0, leave: null };
+                  const ex = agg.get(a.member_id) || { member_id: a.member_id, name: a.member_name || 'Unknown', color: a.avatar_color, inRaw: null, outRaw: null, leave: null };
                   const dt = parseTimestamp(a.timestamp);
                   if (a.action_type === 'IN') ex.inRaw = dt;
                   if (a.action_type === 'OUT') ex.outRaw = dt;
                   agg.set(a.member_id, ex);
                 });
 
-                agg.forEach((ex, mId) => {
-                  if (ex.inRaw && ex.outRaw) {
-                    ex.hours = (ex.outRaw.getTime() - ex.inRaw.getTime()) / (1000 * 60 * 60);
+                // Also include members who have monthly history but no today entry
+                monthlyStats.forEach((_, mId) => {
+                  if (!agg.has(mId)) {
+                    const memberObj = members.find(m => String(m.id) === String(mId));
+                    if (memberObj && memberObj.role !== 'Admin') {
+                      agg.set(mId, { member_id: mId, name: memberObj.name, color: memberObj.avatar_color, inRaw: null, outRaw: null, leave: null });
+                    }
                   }
-                  const leave = leaves.find(l => 
+                });
+
+                agg.forEach((ex, mId) => {
+                  const leave = leaves.find(l =>
                     String(l.member_id) === String(mId) &&
                     new Date(l.start_date + 'T00:00:00') <= new Date(curDate + 'T00:00:00') &&
                     new Date(l.end_date + 'T00:00:00') >= new Date(curDate + 'T00:00:00')
                   );
-                  if (leave) {
-                    ex.leave = `${leave.leave_type} (${leave.status})`;
-                  }
+                  if (leave) ex.leave = `${leave.leave_type} (${leave.status})`;
                 });
 
                 const list = Array.from(agg.values()).filter(i => {
@@ -873,117 +888,97 @@ export default function HRPage() {
                   if (i.name && i.name.toLowerCase().includes('ahsan')) return false;
                   return true;
                 });
-                const totalHours = list.reduce((s, i) => s + i.hours, 0);
-                const totalLeaves = list.filter(i => i.leave).length;
-                const totalPresent = list.filter(i => i.inRaw).length;
 
                 return (
-                  <div style={{ width: '100%' }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'space-between', padding: '10px', background: 'var(--gs)', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: 12 }}>
-                      <div style={{ flex: '1 1 30%', minWidth: '60px' }}>
-                        <div style={{ fontSize: '.65rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Present</div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)' }}>{totalPresent}</div>
-                      </div>
-                      <div style={{ flex: '1 1 30%', minWidth: '60px' }}>
-                        <div style={{ fontSize: '.65rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Hours</div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)' }}>{totalHours.toFixed(1)} <span style={{fontSize: '.7rem', fontWeight: 'normal'}}>hrs</span></div>
-                      </div>
-                      <div style={{ flex: '1 1 30%', minWidth: '60px' }}>
-                        <div style={{ fontSize: '.65rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>On Leave</div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)' }}>{totalLeaves}</div>
-                      </div>
-                    </div>
-
-                    <div style={{ width: '100%', overflowX: 'hidden' }}>
-                      <table className="hr-compact-table" style={{ width: '100%', minWidth: '0px', maxWidth: '100%', fontSize: '.75rem', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
-                        <colgroup>
-                          <col style={{ width: '16%' }} />
-                          <col style={{ width: '32%' }} />
-                          <col style={{ width: '28%' }} />
-                          <col style={{ width: '24%' }} />
-                        </colgroup>
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                            <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Emp</th>
-                            <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Hours</th>
-                            <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Day</th>
-                            <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Leave</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {list.length === 0 ? (
-                            <tr className="empty-r"><td colSpan={4}>No records for this date.</td></tr>
-                          ) : (
-                            list.map((l, idx) => {
-                              const stats = monthlyStats.get(l.member_id) || { daysPresent: 0, totalHours: 0 };
-                              return (
-                                <tr key={idx}>
-                                  {/* Emp Initials Avatar */}
-                                  <td style={{ padding: '6px 2px', textAlign: 'center' }}>
-                                    <div
+                  <div style={{ width: '100%', overflowX: 'hidden' }}>
+                    <table className="hr-compact-table" style={{ width: '100%', minWidth: '0px', maxWidth: '100%', fontSize: '.75rem', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
+                      <colgroup>
+                        <col style={{ width: '16%' }} />
+                        <col style={{ width: '32%' }} />
+                        <col style={{ width: '28%' }} />
+                        <col style={{ width: '24%' }} />
+                      </colgroup>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Emp</th>
+                          <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Hours</th>
+                          <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Day</th>
+                          <th style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Leave</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {list.length === 0 ? (
+                          <tr className="empty-r"><td colSpan={4}>No records for this date.</td></tr>
+                        ) : (
+                          list.map((l, idx) => {
+                            const stats = monthlyStats.get(l.member_id) || { daysPresent: 0, totalHours: 0 };
+                            return (
+                              <tr key={idx}>
+                                {/* Emp Initials Avatar */}
+                                <td style={{ padding: '6px 2px', textAlign: 'center' }}>
+                                  <div
+                                    style={{
+                                      background: l.color || '#4f7eff',
+                                      width: '26px',
+                                      height: '26px',
+                                      borderRadius: '6px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '.7rem',
+                                      fontWeight: 700,
+                                      color: '#fff',
+                                      letterSpacing: '0.5px',
+                                      boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+                                      cursor: 'default',
+                                    }}
+                                    title={l.name}
+                                  >
+                                    {getInitials(l.name)}
+                                  </div>
+                                </td>
+                                {/* Hours: cumulative worked / elapsed required (5h/day) */}
+                                <td style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
+                                  <span style={{ fontWeight: 700, color: 'var(--text)' }}>
+                                    {Math.round(stats.totalHours)}
+                                  </span>
+                                  <span style={{ color: 'var(--muted)', fontSize: '.64rem' }}>/{elapsedRequiredHours}h</span>
+                                </td>
+                                {/* Day: cumulative present / elapsed working days */}
+                                <td style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
+                                  <span style={{ fontWeight: 700, color: 'var(--text)' }}>
+                                    {stats.daysPresent}
+                                  </span>
+                                  <span style={{ color: 'var(--muted)', fontSize: '.64rem' }}>/{elapsedWorkingDays}</span>
+                                </td>
+                                {/* Leave badge */}
+                                <td style={{ padding: '6px 2px', textAlign: 'center' }}>
+                                  {l.leave ? (
+                                    <span
+                                      className="badge"
                                       style={{
-                                        background: l.color || '#4f7eff',
-                                        width: '26px',
-                                        height: '26px',
-                                        borderRadius: '6px',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: '.7rem',
-                                        fontWeight: 700,
-                                        color: '#fff',
-                                        letterSpacing: '0.5px',
-                                        boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                                        cursor: 'default',
+                                        background: l.leave.includes('APPROVED') ? 'rgba(38,196,134,0.15)' : 'rgba(255,140,0,0.15)',
+                                        color: l.leave.includes('APPROVED') ? 'var(--green)' : '#FF8C00',
+                                        border: `1px solid ${l.leave.includes('APPROVED') ? 'rgba(38,196,134,0.3)' : 'rgba(255,140,0,0.3)'}`,
+                                        fontSize: '.62rem',
+                                        padding: '2px 4px',
+                                        borderRadius: '4px',
+                                        whiteSpace: 'nowrap',
+                                        display: 'inline-block'
                                       }}
-                                      title={l.name}
                                     >
-                                      {getInitials(l.name)}
-                                    </div>
-                                  </td>
-                                  {/* Hours X/Y */}
-                                  <td style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
-                                    <span style={{ fontWeight: 700, color: 'var(--text)' }}>
-                                      {stats.totalHours.toFixed(1)}
+                                      {l.leave.split(' ')[0]}
                                     </span>
-                                    <span style={{ color: 'var(--muted)', fontSize: '.64rem' }}>/{totalRequiredHours}h</span>
-                                  </td>
-                                  {/* Day X/Y */}
-                                  <td style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
-                                    <span style={{ fontWeight: 700, color: 'var(--text)' }}>
-                                      {stats.daysPresent}
-                                    </span>
-                                    <span style={{ color: 'var(--muted)', fontSize: '.64rem' }}>/{totalWorkingDays}d</span>
-                                  </td>
-                                  {/* Leave badge */}
-                                  <td style={{ padding: '6px 2px', textAlign: 'center' }}>
-                                    {l.leave ? (
-                                      <span
-                                        className="badge"
-                                        style={{
-                                          background: l.leave.includes('APPROVED') ? 'rgba(38,196,134,0.15)' : 'rgba(255,140,0,0.15)',
-                                          color: l.leave.includes('APPROVED') ? 'var(--green)' : '#FF8C00',
-                                          border: `1px solid ${l.leave.includes('APPROVED') ? 'rgba(38,196,134,0.3)' : 'rgba(255,140,0,0.3)'}`,
-                                          fontSize: '.62rem',
-                                          padding: '2px 4px',
-                                          borderRadius: '4px',
-                                          whiteSpace: 'nowrap',
-                                          display: 'inline-block'
-                                        }}
-                                      >
-                                        {l.leave.split(' ')[0]}
-                                      </span>
-                                    ) : (
-                                      <span style={{ color: 'var(--muted)', fontSize: '.7rem' }}>—</span>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                                  ) : (
+                                    <span style={{ color: 'var(--muted)', fontSize: '.7rem' }}>—</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 );
               })()}
@@ -991,7 +986,7 @@ export default function HRPage() {
           </div>
         )}
 
-        {/* Leave requests */}
+        {/* Leave Request tab */}
         {activeTab === 'leave' && (
           <div className="card">
             <div className="card-head">
@@ -1061,7 +1056,7 @@ export default function HRPage() {
 
         {/* Summary cards removed per user request */}
 
-        {/* Monthly Report - Admin only */}
+        {/* Individual Monthly Report - Admin only */}
         {activeTab === 'report' && isAdmin && (
           <div className="card">
             {/* Controls row */}
@@ -1123,25 +1118,29 @@ export default function HRPage() {
               </div>
 
               {/* Month stats */}
-              {reportMemberId && calDays.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, padding: '0 18px 20px' }}
-                     className="cal-stats-grid">
-                  {[
-                    { label: 'Present',        val: calDays.filter(d => d.isPresent).length,                       color: 'var(--green)', dot: { background: 'var(--green)', boxShadow: '0 0 5px rgba(38,196,134,0.5)' } },
-                    { label: 'Absent',         val: calDays.filter(d => d.isAbsent).length,                        color: 'var(--red)',   dot: { background: 'var(--red)',   boxShadow: '0 0 5px rgba(255,77,79,0.5)' } },
-                    { label: 'Late',           val: calDays.filter(d => d.isIncomplete).length,                    color: '#FF8C00',      dot: { background: '#FF8C00',      boxShadow: '0 0 5px rgba(255,140,0,0.6)' } },
-                    { label: 'Appr. Leave',    val: calDays.filter(d => d.isLeave && d.leaveStatus === 'APPROVED').length, color: '#2979FF', dot: { background: '#2979FF', boxShadow: '0 0 5px rgba(41,121,255,0.5)' } },
-                  ].map(({ label, val, color, dot }) => (
-                    <div key={label} className="s-card" style={{ textAlign: 'center' }}>
-                      <div className="s-lbl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                        <span className="cal-dot" style={{ position: 'static', ...dot }} />
-                        {label}
+              {reportMemberId && calDays.length > 0 && (() => {
+                const totalPresent = calDays.filter(d => d.isPresent).length;
+                const totalHours = calDays.reduce((sum, d) => sum + (d.hoursWorked || 0), 0);
+                const workingDaysInMonth = getWorkingDaysInMonth(calYear, calMonth);
+                const requiredHours = workingDaysInMonth * 5;
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, padding: '0 18px 20px' }}
+                       className="cal-stats-grid">
+                    <div className="s-card" style={{ textAlign: 'center' }}>
+                      <div className="s-lbl">Total Days</div>
+                      <div className="s-val" style={{ color: 'var(--green)', fontSize: '1.4rem' }}>
+                        {totalPresent}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{workingDaysInMonth}</span>
                       </div>
-                      <div className="s-val" style={{ color, fontSize: '1.4rem' }}>{val}</div>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <div className="s-card" style={{ textAlign: 'center' }}>
+                      <div className="s-lbl">Total Hours</div>
+                      <div className="s-val" style={{ color: 'var(--primary)', fontSize: '1.4rem' }}>
+                        {Math.round(totalHours)}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{requiredHours}h</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Export as Picture button at the bottom */}
