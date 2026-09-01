@@ -873,50 +873,57 @@ export default function HRPage() {
                     </div>
 
                     <div style={{ overflowX: 'hidden' }}>
-                      <table style={{ width: '100%', fontSize: '.8rem' }}>
+                      <table style={{ width: '100%', fontSize: '.75rem', tableLayout: 'fixed' }}>
+                        <colgroup>
+                          <col style={{ width: '42%' }} />
+                          <col style={{ width: '35%' }} />
+                          <col style={{ width: '23%' }} />
+                        </colgroup>
                         <thead>
                           <tr>
-                            <th style={{ padding: '8px 4px' }}>Name</th>
-                            <th style={{ padding: '8px 4px' }}>Hours</th>
-                            <th style={{ padding: '8px 4px' }}>Day</th>
-                            <th style={{ padding: '8px 4px' }}>Leave</th>
+                            <th style={{ padding: '6px 4px', textAlign: 'left', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Name</th>
+                            <th style={{ padding: '6px 4px', textAlign: 'left', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Hrs / Days</th>
+                            <th style={{ padding: '6px 4px', textAlign: 'left', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Leave</th>
                           </tr>
                         </thead>
                         <tbody>
                           {list.length === 0 ? (
-                            <tr className="empty-r"><td colSpan={4}>No records for this date.</td></tr>
+                            <tr className="empty-r"><td colSpan={3}>No records for this date.</td></tr>
                           ) : (
                             list.map((l, idx) => {
                               const stats = monthlyStats.get(l.member_id) || { daysPresent: 0, totalHours: 0 };
                               return (
                                 <tr key={idx}>
-                                  <td style={{ padding: '8px 4px' }}>
-                                    <div className="av-cell" style={{ gap: '6px' }}>
-                                      <div className="av" style={{ background: l.color || '#4f7eff', width: '24px', height: '24px', fontSize: '.75rem' }}>
+                                  {/* Name + avatar */}
+                                  <td style={{ padding: '6px 4px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                      <div className="av" style={{ background: l.color || '#4f7eff', width: '22px', height: '22px', fontSize: '.68rem', flexShrink: 0 }}>
                                         {l.name[0].toUpperCase()}
                                       </div>
-                                      <div style={{ fontWeight: 500, fontSize: '.75rem', maxWidth: '70px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</div>
+                                      <div style={{ fontWeight: 600, fontSize: '.72rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</div>
                                     </div>
                                   </td>
-                                  <td style={{ padding: '8px 4px', fontSize: '.75rem' }}>
-                                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>
-                                      {stats.totalHours.toFixed(1)}
-                                    </span>
-                                    <span style={{ color: 'var(--muted)' }}> / {totalRequiredHours}</span>
+                                  {/* Hours & Days stacked */}
+                                  <td style={{ padding: '6px 4px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                      <div style={{ fontSize: '.7rem' }}>
+                                        <span style={{ fontWeight: 700, color: 'var(--text)' }}>{stats.totalHours.toFixed(1)}</span>
+                                        <span style={{ color: 'var(--muted)', fontSize: '.65rem' }}>/{totalRequiredHours}h</span>
+                                      </div>
+                                      <div style={{ fontSize: '.7rem' }}>
+                                        <span style={{ fontWeight: 700, color: 'var(--text)' }}>{stats.daysPresent}</span>
+                                        <span style={{ color: 'var(--muted)', fontSize: '.65rem' }}>/{totalWorkingDays}d</span>
+                                      </div>
+                                    </div>
                                   </td>
-                                  <td style={{ padding: '8px 4px', fontSize: '.75rem' }}>
-                                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>
-                                      {stats.daysPresent}
-                                    </span>
-                                    <span style={{ color: 'var(--muted)' }}> / {totalWorkingDays}</span>
-                                  </td>
-                                  <td style={{ padding: '8px 4px' }}>
+                                  {/* Leave badge */}
+                                  <td style={{ padding: '6px 4px' }}>
                                     {l.leave ? (
-                                      <span className="badge" style={{ background: l.leave.includes('APPROVED') ? 'var(--green)' : 'var(--orange)', color: '#111', fontSize: '.6rem', padding: '2px 4px' }}>
+                                      <span className="badge" style={{ background: l.leave.includes('APPROVED') ? 'rgba(38,196,134,0.15)' : 'rgba(255,140,0,0.15)', color: l.leave.includes('APPROVED') ? 'var(--green)' : '#FF8C00', border: `1px solid ${l.leave.includes('APPROVED') ? 'rgba(38,196,134,0.3)' : 'rgba(255,140,0,0.3)'}`, fontSize: '.6rem', padding: '2px 5px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
                                         {l.leave.split(' ')[0]}
                                       </span>
                                     ) : (
-                                      <span style={{ color: 'var(--muted)' }}>-</span>
+                                      <span style={{ color: 'var(--muted)', fontSize: '.7rem' }}>—</span>
                                     )}
                                   </td>
                                 </tr>
