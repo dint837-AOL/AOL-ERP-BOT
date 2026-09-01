@@ -189,26 +189,6 @@ function MonthCalendar({ year, month, calDays }: MonthCalendarProps) {
           );
         })}
       </div>
-
-      {/* Metrics Summary Row */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'space-between', padding: '12px', background: 'rgba(79, 126, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(79, 126, 255, 0.15)' }}>
-        <div style={{ flex: '1 1 45%', minWidth: '120px' }}>
-          <div style={{ fontSize: '.75rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Days</div>
-          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text)' }}>{totalDaysWorked} <span style={{fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal'}}>/ {getWorkingDaysInMonth(year, month)}</span></div>
-        </div>
-        <div style={{ flex: '1 1 45%', minWidth: '120px' }}>
-          <div style={{ fontSize: '.75rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Hours</div>
-          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text)' }}>{totalHoursWorked} <span style={{fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal'}}>/ {getWorkingDaysInMonth(year, month) * 5}</span></div>
-        </div>
-        <div style={{ flex: '1 1 45%', minWidth: '120px' }}>
-          <div style={{ fontSize: '.75rem', color: '#FF8C00', textTransform: 'uppercase', fontWeight: 600 }}>Late (&lt;4h)</div>
-          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#FF8C00' }}>{totalIncomplete} <span style={{fontSize: '.85rem', fontWeight: 'normal', color: 'var(--muted)'}}>times</span></div>
-        </div>
-        <div style={{ flex: '1 1 45%', minWidth: '120px' }}>
-          <div style={{ fontSize: '.75rem', color: '#2979FF', textTransform: 'uppercase', fontWeight: 600 }}>Approved Leave</div>
-          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#2979FF' }}>{totalLeaves} <span style={{fontSize: '.85rem', fontWeight: 'normal', color: 'var(--muted)'}}>days</span></div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -559,26 +539,6 @@ export default function HRPage() {
     <>
       <Topbar title="HR & Attendance">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* Wi-Fi Network Status Pill */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 12px',
-              borderRadius: '20px',
-              background: wifiInfo.is_office_wifi ? 'rgba(38, 196, 134, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-              border: `1px solid ${wifiInfo.is_office_wifi ? 'rgba(38, 196, 134, 0.35)' : 'var(--border)'}`,
-              fontSize: '.74rem',
-              fontWeight: 600,
-              color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)',
-            }}
-            title={wifiInfo.is_office_wifi ? `Connected to ${wifiInfo.office_wifi_name} (Auto Check-In Active)` : 'Connected via Remote / Mobile Network'}
-          >
-            <Wifi size={13} style={{ color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)' }} />
-            <span>{wifiInfo.is_office_wifi ? (wifiInfo.office_wifi_name || 'Office Wi-Fi') : 'Remote Network'}</span>
-          </div>
-
           {/* Leave Request button - Employee only */}
           {!isAdmin && (
             <button className="btn btn-primary" onClick={() => setShowLeaveModal(true)}>
@@ -1120,23 +1080,51 @@ export default function HRPage() {
               {/* Month stats */}
               {reportMemberId && calDays.length > 0 && (() => {
                 const totalPresent = calDays.filter(d => d.isPresent).length;
-                const totalHours = calDays.reduce((sum, d) => sum + (d.hoursWorked || 0), 0);
+                const totalAbsent = calDays.filter(d => d.isAbsent).length;
+                const totalLate = calDays.filter(d => d.isIncomplete).length;
+                const totalApprLeave = calDays.filter(d => d.isLeave && d.leaveStatus === 'APPROVED').length;
                 const workingDaysInMonth = getWorkingDaysInMonth(calYear, calMonth);
                 const requiredHours = workingDaysInMonth * 5;
+                const totalHours = calDays.reduce((sum, d) => sum + (d.hoursWorked || 0), 0);
+                const stats = [
+                  { label: 'Present',       val: totalPresent,   color: 'var(--green)', dotBg: '#26C486', dotShadow: 'rgba(38,196,134,0.6)' },
+                  { label: 'Absent',        val: totalAbsent,    color: 'var(--red)',   dotBg: '#F25C7A', dotShadow: 'rgba(242,92,122,0.6)' },
+                  { label: 'Late (<4h)',    val: totalLate,      color: '#FF8C00',      dotBg: '#FF8C00', dotShadow: 'rgba(255,140,0,0.7)' },
+                  { label: 'Appr. Leave',  val: totalApprLeave, color: '#2979FF',      dotBg: '#2979FF', dotShadow: 'rgba(41,121,255,0.6)' },
+                ];
                 return (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, padding: '0 18px 20px' }}
-                       className="cal-stats-grid">
-                    <div className="s-card" style={{ textAlign: 'center' }}>
-                      <div className="s-lbl">Total Days</div>
-                      <div className="s-val" style={{ color: 'var(--green)', fontSize: '1.4rem' }}>
-                        {totalPresent}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{workingDaysInMonth}</span>
+                  <div style={{ padding: '0 18px 20px' }}>
+                    {/* Days / Hours row */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 10 }}
+                         className="cal-stats-grid">
+                      <div className="s-card" style={{ textAlign: 'center' }}>
+                        <div className="s-lbl">Total Days</div>
+                        <div className="s-val" style={{ color: 'var(--green)', fontSize: '1.4rem' }}>
+                          {totalPresent}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{workingDaysInMonth}</span>
+                        </div>
+                      </div>
+                      <div className="s-card" style={{ textAlign: 'center' }}>
+                        <div className="s-lbl">Total Hours</div>
+                        <div className="s-val" style={{ color: 'var(--primary)', fontSize: '1.4rem' }}>
+                          {Math.round(totalHours)}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{requiredHours}h</span>
+                        </div>
                       </div>
                     </div>
-                    <div className="s-card" style={{ textAlign: 'center' }}>
-                      <div className="s-lbl">Total Hours</div>
-                      <div className="s-val" style={{ color: 'var(--primary)', fontSize: '1.4rem' }}>
-                        {Math.round(totalHours)}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{requiredHours}h</span>
-                      </div>
+                    {/* Breakdown row with colored dots */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}
+                         className="cal-stats-grid">
+                      {stats.map(({ label, val, color, dotBg, dotShadow }) => (
+                        <div key={label} className="s-card" style={{ textAlign: 'center' }}>
+                          <div className="s-lbl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                            <span style={{
+                              display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+                              background: dotBg, boxShadow: `0 0 6px ${dotShadow}`, flexShrink: 0
+                            }} />
+                            {label}
+                          </div>
+                          <div className="s-val" style={{ color, fontSize: '1.3rem' }}>{val}</div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );
