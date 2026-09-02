@@ -1387,11 +1387,6 @@ export default function HRPage() {
           <div className="card">
             <div className="card-head">
               <h3>{isAdmin ? 'All Leave Requests' : 'My Leave Requests'}</h3>
-              {!isAdmin && (
-                <button className="btn btn-primary btn-sm" onClick={() => setShowLeaveModal(true)}>
-                  <Plus size={13} /> New
-                </button>
-              )}
             </div>
             <div className="table-scroll">
               <table>
