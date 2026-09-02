@@ -557,16 +557,7 @@ export default function HRPage() {
 
   return (
     <>
-      <Topbar title="HR & Attendance">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* Leave Request button - Employee only */}
-          {!isAdmin && (
-            <button className="btn btn-primary" onClick={() => setShowLeaveModal(true)}>
-              <Plus size={15} /> Leave Request
-            </button>
-          )}
-        </div>
-      </Topbar>
+      <Topbar title="HR & Attendance" />
 
       <div className="scroll">
 
@@ -606,7 +597,7 @@ export default function HRPage() {
         {/* Employee check-in/out widget */}
         {!isAdmin && (
           <div className="checkin-widget">
-            <div className="cw-title">Mark Your Attendance</div>
+            <div className="cw-title">Mark Attendance</div>
             
             {/* Wi-Fi Presence Banner */}
             <div style={{
@@ -625,20 +616,18 @@ export default function HRPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                 <Wifi size={14} style={{ color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)' }} />
                 <span style={{ color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)', fontWeight: 600 }}>
-                  {wifiInfo.is_office_wifi ? `${wifiInfo.office_wifi_name || 'Office Wi-Fi'} Connected` : 'Remote Network (Manual Check-In)'}
+                  {wifiInfo.is_office_wifi ? 'Office Wi-Fi Connected' : 'Remote Network (Manual Check-In)'}
                 </span>
               </div>
               {wifiInfo.is_office_wifi && wifiInfo.is_auto_enabled && (
                 <span style={{ fontSize: '.72rem', color: 'var(--green)', opacity: 0.9 }}>
-                  ⚡ Auto Check-In Active
+                  Auto Check-In Active
                 </span>
               )}
             </div>
 
             <div style={{ marginBottom: 12, fontSize: '.83rem', color: 'var(--muted)' }}>
               Logged in as <strong style={{ color: 'var(--text)' }}>{user?.name}</strong>
-              <span style={{ margin: '0 8px', opacity: 0.5 }}>|</span>
-              <span style={{ color: 'var(--muted)', fontSize: '.78rem' }}>Time recorded automatically</span>
             </div>
             <div className="cw-btns" style={{ gap: 12 }}>
               <button
@@ -660,13 +649,13 @@ export default function HRPage() {
             </div>
             {alreadyCheckedIn && (
               <div style={{ marginTop: 10, fontSize: '.78rem', color: 'var(--green)', fontWeight: 600 }}>
-                You are checked in{alreadyCheckedOut ? ' and checked out' : ''} today
+                {alreadyCheckedOut ? '✓ Checked in and checked out today' : '✓ Checked in today'}
               </div>
             )}
           </div>
         )}
 
-        {/* Zero-Browser Laptop Auto-Attendance Setup Card */}
+        {/* Laptop Auto-Attendance Setup Card */}
         {!isAdmin && (
           <div className="card" style={{ marginBottom: '20px', background: 'linear-gradient(145deg, rgba(79, 126, 255, 0.06), rgba(0, 0, 0, 0.25))', border: '1px solid rgba(79, 126, 255, 0.25)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', padding: '16px 20px' }}>
@@ -676,13 +665,13 @@ export default function HRPage() {
                 </div>
                 <div>
                   <div style={{ fontSize: '.95rem', fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    Zero-Browser Laptop Auto-Attendance
+                    Laptop Auto-Attendance
                     <span style={{ fontSize: '.68rem', background: 'var(--gs)', color: 'var(--green)', padding: '2px 7px', borderRadius: '4px', fontWeight: 600 }}>
                       RECOMMENDED
                     </span>
                   </div>
                   <p style={{ fontSize: '.78rem', color: 'var(--muted)', margin: '4px 0 0', maxWidth: '540px', lineHeight: 1.45 }}>
-                    Open your laptop at the office: <strong>Auto Check-In</strong>. Turn off your laptop: <strong>Auto Check-Out</strong>. No browser needed!
+                    Auto Check-In when you open your laptop at office. Auto Check-Out when turned off.
                   </p>
                 </div>
               </div>
