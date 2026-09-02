@@ -214,7 +214,7 @@ export default function HRPage() {
   const [attLoading, setAttLoading] = useState(false);
 
   const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [leaveData, setLeaveData] = useState({ member_id: '', leave_type: 'SICK', start_date: '', start_time: '', end_date: '', end_time: '', reason: '' });
+  const [leaveData, setLeaveData] = useState({ member_id: '', leave_type: 'SICK', start_datetime: '', end_datetime: '', reason: '' });
 
   const [reportMemberId, setReportMemberId] = useState('');
   const nowJS = new Date();
@@ -448,18 +448,25 @@ export default function HRPage() {
     finally { setAttLoading(false); }
   };
 
-  const submitLeave = async () => {
-    if (!leaveData.start_date || !leaveData.end_date) {
-      showToast('Please select start and end dates.');
+  const submitLeave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!leaveData.start_datetime || !leaveData.end_datetime) {
+      showToast('Please select From and To date & time.');
       return;
     }
     try {
       await authFetch('/api/leaves', {
         method: 'POST',
-        body: JSON.stringify({ ...leaveData, member_id: leaveData.member_id || user?.id }),
+        body: JSON.stringify({
+          member_id: leaveData.member_id || user?.id,
+          leave_type: leaveData.leave_type,
+          start_date: leaveData.start_datetime,
+          end_date: leaveData.end_datetime,
+          reason: leaveData.reason || ''
+        }),
       });
       setShowLeaveModal(false);
-      setLeaveData({ member_id: '', leave_type: 'SICK', start_date: '', start_time: '', end_date: '', end_time: '', reason: '' });
+      setLeaveData({ member_id: '', leave_type: 'SICK', start_datetime: '', end_datetime: '', reason: '' });
       showToast('Leave request submitted. Awaiting admin approval.');
       await loadAll();
     } catch { showToast('Cannot reach server.'); }
@@ -1415,7 +1422,24 @@ export default function HRPage() {
                           </td>
                         )}
                         <td><span className={'badge ' + l.leave_type}>{l.leave_type}</span></td>
-                        <td style={{ color: 'var(--muted)', fontSize: '.76rem' }}>{l.start_date} to {l.end_date}</td>
+                        <td style={{ color: 'var(--muted)', fontSize: '.76rem' }}>
+                          {(() => {
+                            const fmt = (s: string) => {
+                              if (!s) return '';
+                              if (s.includes('T')) {
+                                const parts = s.split('T');
+                                const dParts = (parts[0] || '').split('-');
+                                return `${dParts[2] || ''}-${dParts[1] || ''}-${dParts[0] || ''} ${parts[1] || ''}`.trim();
+                              }
+                              if (s.includes('-')) {
+                                const dParts = s.split('-');
+                                return `${dParts[2] || ''}-${dParts[1] || ''}-${dParts[0] || ''}`;
+                              }
+                              return s;
+                            };
+                            return `${fmt(l.start_date)} to ${fmt(l.end_date)}`;
+                          })()}
+                        </td>
                         <td style={{ color: 'var(--muted)', fontSize: '.76rem', maxWidth: 130 }}>{l.reason || '-'}</td>
                         <td>
                           <span className={'badge ' + (l.status === 'APPROVED' ? 'APPROVED' : l.status === 'REJECTED' || l.status === 'CANCELLED' ? 'REJECTED' : 'PENDING')}>
@@ -1588,66 +1612,171 @@ export default function HRPage() {
 
       </div>
 
-      {/* Leave request modal */}
+      {/* FAB for Leave Request */}
+      {(!isAdmin || activeTab === 'leave') && (
+        <button
+          id="leave-fab"
+          onClick={() => {
+            const today = todayDhaka();
+            setLeaveData({
+              member_id: user?.id ? String(user.id) : '',
+              leave_type: 'SICK',
+              start_datetime: `${today}T09:00`,
+              end_datetime: `${today}T18:00`,
+              reason: ''
+            });
+            setShowLeaveModal(true);
+          }}
+          title="New Leave Request"
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 800,
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            background: 'var(--primary)',
+            color: '#fff',
+            border: 'none',
+            fontSize: '1.8rem',
+            cursor: 'pointer',
+            boxShadow: '0 4px 20px rgba(79,126,255,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.2s'
+          }}
+        >
+          +
+        </button>
+      )}
+
+      {/* Leave Request Bottom Sheet / Modal */}
       {showLeaveModal && (
-        <div className="veil on" onClick={e => { if (e.target === e.currentTarget) setShowLeaveModal(false); }}>
-          <div className="modal">
-            <div className="mhead">
-              <h3>Leave Request</h3>
-              <button className="xbtn" onClick={() => setShowLeaveModal(false)}><X size={16} /></button>
+        <div
+          onClick={e => { if (e.target === e.currentTarget) setShowLeaveModal(false); }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 920,
+            background: 'rgba(0,0,0,.7)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'center'
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--surface)',
+              borderRadius: '20px 20px 0 0',
+              width: '100%',
+              maxWidth: 520,
+              paddingBottom: 'env(safe-area-inset-bottom, 16px)',
+              maxHeight: '90dvh',
+              overflowY: 'auto',
+              boxShadow: '0 -8px 40px rgba(0,0,0,.5)',
+              animation: 'slideSheet .22s ease-out'
+            }}
+          >
+            {/* Top Handle */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border)' }} />
             </div>
-            <div className="fg">
-              <label>Employee</label>
-              {isAdmin ? (
-                <select value={leaveData.member_id || user?.id || ''} onChange={e => setLeaveData({ ...leaveData, member_id: e.target.value })}>
-                  <option value={user?.id || ''}>{user?.name}</option>
-                  {[...members].sort((a,b) => a.name.localeCompare(b.name)).map(m => (
-                    m.id !== user?.id && <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
+
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 14px' }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>New Leave Request</h3>
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1, padding: 4 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={submitLeave} style={{ padding: '0 20px 24px' }}>
+              {/* Employee selection (Admin) or current user display */}
+              <div className="fg">
+                <label>Employee</label>
+                {isAdmin ? (
+                  <select
+                    value={leaveData.member_id || user?.id || ''}
+                    onChange={e => setLeaveData({ ...leaveData, member_id: e.target.value })}
+                  >
+                    <option value={user?.id || ''}>{user?.name} (You)</option>
+                    {[...members].sort((a,b) => a.name.localeCompare(b.name)).map(m => (
+                      m.id !== user?.id && <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input type="text" value={user?.name || ''} disabled style={{ opacity: 0.8, cursor: 'not-allowed' }} />
+                )}
+              </div>
+
+              {/* Leave Type */}
+              <div className="fg">
+                <label>Leave Type</label>
+                <select
+                  value={leaveData.leave_type}
+                  onChange={e => setLeaveData({ ...leaveData, leave_type: e.target.value })}
+                  required
+                >
+                  <option value="SICK">Sick Leave</option>
+                  <option value="PERSONAL">Personal Leave</option>
+                  <option value="EXAM">Exam / Study Leave</option>
+                  <option value="CASUAL">Casual Leave</option>
+                  <option value="VACATION">Vacation Leave</option>
                 </select>
-              ) : (
-                <input type="text" value={user?.name || ''} disabled style={{ opacity: 0.7 }} />
-              )}
-            </div>
-            <div className="fg">
-              <label>Reason</label>
-              <select value={leaveData.leave_type} onChange={e => setLeaveData({ ...leaveData, leave_type: e.target.value })}>
-                <option value="SICK">Sick</option>
-                <option value="PERSONAL">Personal</option>
-                <option value="EXAM">Exam</option>
-              </select>
-            </div>
-            <div className="drow">
-              <div className="fg" style={{ flex: 1 }}>
-                <label>From Date</label>
-                <input type="date" value={leaveData.start_date} onChange={e => setLeaveData({ ...leaveData, start_date: e.target.value })} />
               </div>
-              <div className="fg" style={{ flex: 1 }}>
-                <label>From Time</label>
-                <input type="time" value={leaveData.start_time} onChange={e => setLeaveData({ ...leaveData, start_time: e.target.value })} />
+
+              {/* From & To in the SAME ROW with Date & Time picker */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                <div className="fg" style={{ marginBottom: 0 }}>
+                  <label>From (Date & Time)</label>
+                  <input
+                    type="datetime-local"
+                    value={leaveData.start_datetime}
+                    onChange={e => setLeaveData({ ...leaveData, start_datetime: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="fg" style={{ marginBottom: 0 }}>
+                  <label>To (Date & Time)</label>
+                  <input
+                    type="datetime-local"
+                    value={leaveData.end_datetime}
+                    min={leaveData.start_datetime}
+                    onChange={e => setLeaveData({ ...leaveData, end_datetime: e.target.value })}
+                    required
+                  />
+                </div>
               </div>
-            </div>
-            <div className="drow">
-              <div className="fg" style={{ flex: 1 }}>
-                <label>To Date</label>
-                <input type="date" value={leaveData.end_date} min={leaveData.start_date} onChange={e => setLeaveData({ ...leaveData, end_date: e.target.value })} />
+
+              {/* Reason / Notes */}
+              <div className="fg">
+                <label>Reason / Notes <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></label>
+                <textarea
+                  rows={2}
+                  placeholder="Reason or details for leave..."
+                  value={leaveData.reason}
+                  onChange={e => setLeaveData({ ...leaveData, reason: e.target.value })}
+                />
               </div>
-              <div className="fg" style={{ flex: 1 }}>
-                <label>To Time</label>
-                <input type="time" value={leaveData.end_time} onChange={e => setLeaveData({ ...leaveData, end_time: e.target.value })} />
+
+              <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8, background: 'rgba(79,126,255,.08)', border: '1px solid rgba(79,126,255,.18)', fontSize: '.76rem', color: 'var(--muted)' }}>
+                Your request will be submitted for Admin review.
               </div>
-            </div>
-            <div className="fg">
-              <label>Notes</label>
-              <textarea placeholder="Optional notes..." value={leaveData.reason} onChange={e => setLeaveData({ ...leaveData, reason: e.target.value })} />
-            </div>
-            <div style={{ marginBottom: 8, padding: '8px 10px', borderRadius: 7, background: 'rgba(79,126,255,.08)', fontSize: '.76rem', color: 'var(--muted)' }}>
-              Note: Your request will be sent to Admin for approval.
-            </div>
-            <div className="mfooter">
-              <button className="btn btn-ghost" onClick={() => setShowLeaveModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={submitLeave}>Submit Request</button>
-            </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary"
+                style={{ width: '100%', justifyContent: 'center', padding: '13px', fontSize: '.95rem', fontWeight: 700, borderRadius: 10 }}
+              >
+                Submit Leave Request
+              </button>
+            </form>
           </div>
         </div>
       )}
