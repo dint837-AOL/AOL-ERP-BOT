@@ -729,7 +729,7 @@ function Send-Ping($action) {
     try {
         $body = @{ token = $token; action = $action; hostname = $hostname_val; os = $os_val } | ConvertTo-Json
         return Invoke-RestMethod -Uri "$serverUrl/api/attendance/client-ping" \`
-            -Method Post -Body $body -ContentType "application/json" -TimeoutSec 15
+            -Method Post -Body $body -ContentType "application/json" -TimeoutSec 20
     } catch { return $null }
 }
 
@@ -747,7 +747,15 @@ Register-EngineEvent -SourceIdentifier ([System.Management.Automation.PsEngineEv
     Send-Ping "SHUTDOWN"
 } | Out-Null
 
-$initResp = Send-Ping "PING"
+# Wait for network + server to be ready (handles Render cold start & Windows boot delay)
+$maxRetries = 6
+$retryDelay = 20
+$initResp   = $null
+for ($i = 0; $i -lt $maxRetries; $i++) {
+    $initResp = Send-Ping "PING"
+    if ($initResp) { break }
+    Start-Sleep -Seconds $retryDelay
+}
 if ($initResp -and $initResp.auto_checked_in) {
     Show-Toast "AlliedOne ERP" "Good morning $employeeName! Automatically checked in."
 }
@@ -814,8 +822,15 @@ Register-EngineEvent -SourceIdentifier ([System.Management.Automation.PsEngineEv
     Send-Ping "SHUTDOWN"
 } | Out-Null
 
-# Initial check-in ping
-$initResp = Send-Ping "PING"
+# Wait for network + server (handles Render cold start & slow Windows boot)
+$maxRetries = 6
+$retryDelay = 20
+$initResp   = $null
+for ($i = 0; $i -lt $maxRetries; $i++) {
+    $initResp = Send-Ping "PING"
+    if ($initResp) { break }
+    Start-Sleep -Seconds $retryDelay
+}
 if ($initResp -and $initResp.auto_checked_in) {
     Show-Toast "AlliedOne ERP" "Good morning $employeeName! Automatically checked in."
 }
@@ -1074,6 +1089,23 @@ echo "======================================================"
       const month = (req.query.month as string) || new Date().toISOString().substring(0, 7);
       res.json(await dbAll(`SELECT c.id,c.name,c.color,c.budget_limit,COALESCE(SUM(e.amount),0) as total FROM expense_categories c LEFT JOIN expenses e ON e.category_id=c.id AND e.expense_date LIKE ? GROUP BY c.id ORDER BY total DESC`, [month+'%']));
     });
+    this.app.get('/api/expenses/daily-summary', async (req, res) => {
+      const month = (req.query.month as string) || new Date().toISOString().substring(0, 7);
+      // Get per-day totals and top-3 heads
+      const days = await dbAll(
+        `SELECT expense_date as date, SUM(amount) as total FROM expenses WHERE expense_date LIKE ? GROUP BY expense_date ORDER BY expense_date DESC`,
+        [month+'%']
+      ) as any[];
+      const result = [];
+      for (const day of days) {
+        const heads = await dbAll(
+          `SELECT expense_head, SUM(amount) as amt FROM expenses WHERE expense_date=? AND expense_head!='' GROUP BY expense_head ORDER BY amt DESC LIMIT 3`,
+          [day.date]
+        ) as any[];
+        result.push({ date: day.date, total: day.total, top_heads: heads.map((h: any) => h.expense_head) });
+      }
+      res.json(result);
+    });
     this.app.post('/api/expenses', async (req, res) => {
       const { category_id, amount, description, entered_by, expense_date, company_name, expense_head, payment_method } = req.body;
       if (amount === undefined || amount === null) return res.status(400).json({ error: 'amount required' });
@@ -1087,6 +1119,21 @@ echo "======================================================"
       await notifyAdmins(`💰 Expense Logged: ৳${Number(amount).toLocaleString()} for ${description || 'expense'} (${company_name || 'General'})${member ? ` by ${member.name}` : ''}.`, '/accounting');
 
       res.status(201).json(await dbGet('SELECT e.*,c.name as category_name FROM expenses e LEFT JOIN expense_categories c ON e.category_id=c.id WHERE e.id=?', [lastID]));
+    });
+    this.app.patch('/api/expenses/:id', async (req, res) => {
+      const { amount, description, expense_date, company_name, expense_head, payment_method } = req.body;
+      const parts: string[] = [];
+      const values: any[] = [];
+      if (amount !== undefined) { parts.push('amount=?'); values.push(Number(amount)); }
+      if (description !== undefined) { parts.push('description=?'); values.push(description); }
+      if (expense_date) { parts.push('expense_date=?'); values.push(expense_date); }
+      if (company_name) { parts.push('company_name=?'); values.push(company_name); }
+      if (expense_head) { parts.push('expense_head=?'); values.push(expense_head); }
+      if (payment_method) { parts.push('payment_method=?'); values.push(payment_method); }
+      if (parts.length === 0) return res.status(400).json({ error: 'No fields to update' });
+      values.push(req.params.id);
+      await dbRun(`UPDATE expenses SET ${parts.join(',')} WHERE id=?`, values);
+      res.json(await dbGet('SELECT * FROM expenses WHERE id=?', [req.params.id]));
     });
     this.app.delete('/api/expenses/:id', async (req, res) => { await dbRun('DELETE FROM expenses WHERE id=?', [req.params.id]); res.json({ ok: true }); });
 
