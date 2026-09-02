@@ -324,6 +324,10 @@ export default function HRPage() {
 
     const handleTabSwitch = (e?: any) => {
       const target = e?.detail || new URLSearchParams(window.location.search).get('tab');
+      if (!isAdmin) {
+        setActiveTab('leave');
+        return;
+      }
       if (target === 'leave' || target === 'leaves') {
         setActiveTab('leave');
       } else if (target === 'report' || target === 'individual') {
@@ -1158,28 +1162,28 @@ export default function HRPage() {
           );
         })()}
 
-        {/* Tabs: Team | Individual | Leave Request */}
-        <div className="tabs">
-          <div className={'tab ' + (activeTab === 'att' ? 'on' : '')} onClick={() => setActiveTab('att')}>
-            Team
-          </div>
-          {isAdmin && (
+        {/* Tabs: Only Admin sees Team & Individual tabs */}
+        {isAdmin && (
+          <div className="tabs">
+            <div className={'tab ' + (activeTab === 'att' ? 'on' : '')} onClick={() => setActiveTab('att')}>
+              Team
+            </div>
             <div className={'tab ' + (activeTab === 'report' ? 'on' : '')} onClick={() => setActiveTab('report')}>
               Individual
             </div>
-          )}
-          <div className={'tab ' + (activeTab === 'leave' ? 'on' : '')} onClick={() => setActiveTab('leave')}>
-            Leave Request
-            {pendingLeaves > 0 && (
-              <span style={{ marginLeft: 6, background: 'var(--orange)', color: '#0d0f18', fontSize: '.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: 10, verticalAlign: 'middle' }}>
-                {pendingLeaves}
-              </span>
-            )}
+            <div className={'tab ' + (activeTab === 'leave' ? 'on' : '')} onClick={() => setActiveTab('leave')}>
+              Leave Request
+              {pendingLeaves > 0 && (
+                <span style={{ marginLeft: 6, background: 'var(--orange)', color: '#0d0f18', fontSize: '.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: 10, verticalAlign: 'middle' }}>
+                  {pendingLeaves}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Team tab — cumulative attendance table */}
-        {activeTab === 'att' && (
+        {/* Team tab — cumulative attendance table (Admin only) */}
+        {activeTab === 'att' && isAdmin && (
           <div className="card">
             <div className="card-head" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
               <h3>Team Attendance</h3>
@@ -1382,8 +1386,8 @@ export default function HRPage() {
           </div>
         )}
 
-        {/* Leave Request tab */}
-        {activeTab === 'leave' && (
+        {/* Leave Request tab (always visible to employee, or selected by admin) */}
+        {(activeTab === 'leave' || !isAdmin) && (
           <div className="card">
             <div className="card-head">
               <h3>{isAdmin ? 'All Leave Requests' : 'My Leave Requests'}</h3>
