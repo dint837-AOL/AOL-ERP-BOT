@@ -228,7 +228,7 @@ export default function AccountsPage() {
             </select>
           </div>
         </div>
-        <button type="submit" className="btn btn-primary" style={{width:'100%',padding:'12px',fontSize:'.9rem'}} disabled={formLoading}>
+        <button type="submit" className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:'12px',fontSize:'.95rem',fontWeight:700,borderRadius:10}} disabled={formLoading}>
           {formLoading?'Saving...':'Save'}
         </button>
       </form>
