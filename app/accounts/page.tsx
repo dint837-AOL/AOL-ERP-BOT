@@ -22,10 +22,10 @@ const EXPENSE_HEADS = [
 ];
 
 const BDT = '';
-function fmtDate(iso) { const [y,m,d]=iso.split('-'); return `${d}-${m}-${y}`; }
-function fmtBDT(n)  { return Number(n).toLocaleString('en-BD',{maximumFractionDigits:0}); }
+function fmtDate(iso: string) { const [y,m,d]=iso.split('-'); return `${d}-${m}-${y}`; }
+function fmtBDT(n: number | string)  { return Number(n).toLocaleString('en-BD',{maximumFractionDigits:0}); }
 
-const H={
+const H: Record<string, string> ={
   'Utilities (Electricity, Gas, Water)':'Utilities','Internet & Telephone':'Internet',
   'Office Supplies/Stationery':'Stationery','Entertainment (Client/Staff)':'Entertainment',
   'Repairs & Maintenance':'Repairs','Security/Cleaning':'Security',
@@ -43,7 +43,7 @@ const H={
   'Donation & Subscription':'Donation','Miscellaneous Expense':'Misc.',
   'Fuel & Lubricants (Generator/Vehicle)':'Fuel','Vehicle Maintenance':'Vehicle',
 };
-function sh(h){ return H[h]||h; }
+function sh(h: string){ return H[h]||h; }
 
 const BLANK = {date:new Date().toISOString().split('T')[0],company_name:'AOD',expense_head:EXPENSE_HEADS[0],description:'',amount:'',payment_method:'Cash'};
 
@@ -76,24 +76,24 @@ export default function AccountsPage() {
 
   const curMonth = new Date().toISOString().substring(0,7);
   const [month, setMonth] = useState(curMonth);
-  const [expenses, setExpenses] = useState([]);
+  const [expenses, setExpenses] = useState<any[]>([]);
   const [monthTotal, setMonthTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
   // Entry form
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [editId, setEditId] = useState(null);
+  const [editId, setEditId] = useState<any>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [form, setForm] = useState(BLANK);
   const [toast, setToast] = useState('');
 
   // Delete confirm
-  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
   // Manage sheet (individual entries per date)
-  const [manageDate, setManageDate] = useState(null); // { date, entries[] }
+  const [manageDate, setManageDate] = useState<any>(null); // { date, entries[] }
 
-  const showToast = (m) => { setToast(m); setTimeout(() => setToast(''), 2600); };
+  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2600); };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -103,7 +103,7 @@ export default function AccountsPage() {
       });
       const data = await res.json();
       setExpenses(data);
-      setMonthTotal(data.reduce((s,r) => s+Number(r.amount), 0));
+      setMonthTotal(data.reduce((s: number, r: any) => s+Number(r.amount), 0));
     } catch {}
     setLoading(false);
   }, [month, getToken]);
@@ -112,8 +112,8 @@ export default function AccountsPage() {
 
   // Group expenses by date (date DESC)
   const grouped = useMemo(() => {
-    const byDate = {};
-    expenses.forEach(exp => {
+    const byDate: Record<string, any> = {};
+    expenses.forEach((exp: any) => {
       const d = exp.expense_date;
       if (!byDate[d]) byDate[d] = { date:d, total:0, headAmts:{}, entries:[] };
       byDate[d].total += Number(exp.amount);
@@ -122,8 +122,8 @@ export default function AccountsPage() {
       byDate[d].headAmts[hk] = (byDate[d].headAmts[hk]||0)+Number(exp.amount);
     });
     return Object.values(byDate)
-      .map(g => ({ ...g, top3: Object.entries(g.headAmts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([h])=>h) }))
-      .sort((a,b) => b.date.localeCompare(a.date));
+      .map((g: any) => ({ ...g, top3: Object.entries(g.headAmts).sort((a: any, b: any)=>b[1]-a[1]).slice(0,3).map(([h])=>h) }))
+      .sort((a: any, b: any) => b.date.localeCompare(a.date));
   }, [expenses]);
 
   function openAdd() {
@@ -131,7 +131,7 @@ export default function AccountsPage() {
     setForm({...BLANK, date: new Date().toISOString().split('T')[0]});
     setSheetOpen(true);
   }
-  function openEdit(exp) {
+  function openEdit(exp: any) {
     setEditId(exp.id);
     setForm({
       date: exp.expense_date||BLANK.date,
@@ -144,9 +144,9 @@ export default function AccountsPage() {
     setManageDate(null);
     setSheetOpen(true);
   }
-  function openManage(group) { setManageDate({ date: group.date, entries: group.entries }); }
+  function openManage(group: any) { setManageDate({ date: group.date, entries: group.entries }); }
 
-  function handleDelete(exp) {
+  function handleDelete(exp: any) {
     setDeleteTarget({ id: exp.id, amount: exp.amount, date: exp.expense_date });
   }
   async function confirmDelete() {
@@ -157,8 +157,8 @@ export default function AccountsPage() {
     showToast('Expense deleted.');
     load();
   }
-  function handleChange(e) { setForm(prev => ({...prev, [e.target.name]: e.target.value})); }
-  async function handleSubmit(e) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) { setForm(prev => ({...prev, [e.target.name]: e.target.value})); }
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.amount||isNaN(Number(form.amount))||Number(form.amount)<=0) { showToast('Enter a valid amount.'); return; }
     setFormLoading(true);
@@ -175,11 +175,11 @@ export default function AccountsPage() {
         method, headers: {'Content-Type':'application/json', Authorization:'Bearer '+getToken()},
         body: JSON.stringify(body)
       });
-      if (!res.ok) { const err = await res.json().catch(()=>{}); throw new Error(err?.error||'Failed'); }
+      if (!res.ok) { const err: any = await res.json().catch(()=>{}); throw new Error(err?.error||'Failed'); }
       showToast(editId ? 'Expense updated.' : 'Expense saved.');
       setSheetOpen(false);
-      if (form.date.substring(0,7)===month) load();
-    } catch(err) { showToast(err.message||'Error'); }
+      if (form.date && form.date.substring(0,7)===month) load();
+    } catch(err: any) { showToast(err.message||'Error'); }
     setFormLoading(false);
   }
 
@@ -235,7 +235,7 @@ export default function AccountsPage() {
     </>
   );
 
-  const iconBtn = (onClick, color, bg, border, children, title) => (
+  const iconBtn = (onClick: () => void, color: string, bg: string, border: string, children: React.ReactNode, title: string) => (
     <button onClick={onClick} title={title} style={{
       background:bg, border:`1px solid ${border}`, color, borderRadius:8,
       width:30, height:30, display:'flex', alignItems:'center', justifyContent:'center',
@@ -271,13 +271,13 @@ export default function AccountsPage() {
           <div style={{overflowY:'auto',overflowX:'hidden',maxHeight:'calc(100dvh - 260px)',WebkitOverflowScrolling:'touch'}}>
             <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
               <colgroup>
-                <col style={{width:'22%'}}/><col style={{width:'22%'}}/><col style={{width:'36%'}}/><col style={{width:'20%'}}/>
+                <col style={{width:'32%'}}/><col style={{width:'24%'}}/><col style={{width:'30%'}}/><col style={{width:'14%'}}/>
               </colgroup>
               <thead>
                 <tr>
                   {['Date','Total','Top 3 Heads',''].map((h,i)=>(
                     <th key={i} style={{
-                      padding:'9px 8px',textAlign:i===1?'right':'left',
+                      padding:'9px 10px',textAlign:i===1?'right':'left',
                       fontSize:'.6rem',fontWeight:700,color:'var(--muted)',
                       textTransform:'uppercase',letterSpacing:'.04em',
                       borderBottom:'1px solid var(--border)',
@@ -296,7 +296,7 @@ export default function AccountsPage() {
                     <td style={{padding:'11px 10px',textAlign:'right',fontSize:'.78rem',fontWeight:700,color:'var(--green)',whiteSpace:'nowrap'}}>{fmtBDT(g.total)}</td>
                     <td style={{padding:'11px 10px'}}>
                       <div style={{display:'flex',flexDirection:'column',gap:3}}>
-                        {g.top3.map((hd,j)=>(
+                        {g.top3.map((hd: string, j: number)=>(
                           <span key={j} style={{
                             fontSize:'.6rem',fontWeight:600,display:'block',
                             overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
@@ -359,7 +359,7 @@ export default function AccountsPage() {
               <button onClick={()=>setManageDate(null)} style={{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:'1.3rem',lineHeight:1,padding:4}}>X</button>
             </div>
             <div style={{padding:'8px 16px 20px',display:'flex',flexDirection:'column',gap:8}}>
-              {manageDate.entries.map(exp=>(
+              {manageDate.entries.map((exp: any)=>(
                 <div key={exp.id} style={{
                   background:'var(--card)',border:'1px solid var(--border)',borderRadius:10,
                   padding:'12px 14px',display:'flex',alignItems:'center',gap:10

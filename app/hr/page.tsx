@@ -12,7 +12,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LogIn, LogOut, Plus, ChevronLeft, ChevronRight, X, Calendar, Download, BarChart2, Wifi, Laptop, Image as ImageIcon } from 'lucide-react';
+import { LogIn, LogOut, Plus, ChevronLeft, ChevronRight, X, Calendar, Download, BarChart2, Wifi, Laptop, Image as ImageIcon, Terminal, Copy, Check, ShieldCheck, Zap } from 'lucide-react';
 import Topbar from '../components/Topbar';
 import { useAuth } from '../context/AuthContext';
 import html2canvas from 'html2canvas';
@@ -222,6 +222,8 @@ export default function HRPage() {
 
   const [toastMsg, setToastMsg] = useState('');
   const [showSetupModal, setShowSetupModal] = useState(false);
+  const [setupOs, setSetupOs] = useState<'windows' | 'mac'>('windows');
+  const [copiedCmd, setCopiedCmd] = useState(false);
 
   // Wi-Fi automated attendance state
   const [wifiInfo, setWifiInfo] = useState<{
@@ -688,56 +690,454 @@ export default function HRPage() {
           </div>
         )}
 
-        {/* Windows Setup Modal — clean, mobile-first, no raw command shown */}
+        {/* Auto Attendance Setup Modal — Glassmorphism, intuitive OS switcher, copy state */}
         {showSetupModal && (() => {
-          const cmd = `Set-ExecutionPolicy Bypass -Scope Process -Force; $d="$env:LOCALAPPDATA\\AlliedOneERP"; if(!(Test-Path $d)){New-Item -ItemType Directory -Path $d | Out-Null}; Invoke-WebRequest -Uri "${typeof window !== 'undefined' ? window.location.origin : ''}/api/attendance/download-script?os=ps1&token=${token || ''}" -OutFile "$d\\aol-attendance.ps1"; $vs='Set WshShell = CreateObject("WScript.Shell"):WshShell.Run "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File """&WshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%")&"\\AlliedOneERP\\aol-attendance.ps1""", 0, False'; $vs | Out-File "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\AlliedOneAttendance.vbs"; Start-Process wscript "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\AlliedOneAttendance.vbs"; Write-Host 'Done!' -ForegroundColor Green`;
+          const origin = typeof window !== 'undefined' ? window.location.origin : '';
+          const winCmd = `Set-ExecutionPolicy Bypass -Scope Process -Force; $d="$env:LOCALAPPDATA\\AlliedOneERP"; if(!(Test-Path $d)){New-Item -ItemType Directory -Path $d | Out-Null}; Invoke-WebRequest -Uri "${origin}/api/attendance/download-script?os=ps1&token=${token || ''}" -OutFile "$d\\aol-attendance.ps1"; $vs='Set WshShell = CreateObject("WScript.Shell"):WshShell.Run "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File """&WshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%")&"\\AlliedOneERP\\aol-attendance.ps1""", 0, False'; $vs | Out-File "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\AlliedOneAttendance.vbs"; Start-Process wscript "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\AlliedOneAttendance.vbs"; Write-Host 'Done!' -ForegroundColor Green`;
+          
+          const macCmd = `curl -s "${origin}/api/attendance/download-script?os=mac&token=${token || ''}" -o ~/AlliedOne-Attendance.sh && chmod +x ~/AlliedOne-Attendance.sh && ~/AlliedOne-Attendance.sh`;
+
+          const activeCmd = setupOs === 'windows' ? winCmd : macCmd;
+
+          const handleCopy = () => {
+            navigator.clipboard.writeText(activeCmd).then(() => {
+              setCopiedCmd(true);
+              showToast('Copied setup command to clipboard!');
+              setTimeout(() => setCopiedCmd(false), 3000);
+            });
+          };
+
           return (
             <div
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '0' }}
-              onClick={() => setShowSetupModal(false)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(5, 7, 13, 0.8)',
+                backdropFilter: 'blur(8px)',
+                zIndex: 9999,
+                display: 'flex',
+                alignItems: 'flex-end',
+                justifyContent: 'center',
+                padding: '0'
+              }}
+              onClick={() => { setShowSetupModal(false); setCopiedCmd(false); }}
             >
               <div
-                style={{ background: 'var(--panel)', borderRadius: '20px 20px 0 0', padding: '20px 20px 32px', width: '100%', maxWidth: '480px', boxShadow: '0 -8px 32px rgba(0,0,0,0.5)' }}
+                style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '24px 24px 0 0',
+                  padding: '24px 20px 32px',
+                  width: '100%',
+                  maxWidth: '520px',
+                  maxHeight: '90vh',
+                  overflowY: 'auto',
+                  boxShadow: '0 -12px 48px rgba(0,0,0,0.6)'
+                }}
                 onClick={e => e.stopPropagation()}
               >
-                {/* Handle bar */}
-                <div style={{ width: 40, height: 4, background: 'var(--border)', borderRadius: 4, margin: '0 auto 16px' }} />
+                {/* Top Drag Handle */}
+                <div style={{ width: 44, height: 4, background: 'var(--border)', borderRadius: 4, margin: '0 auto 20px', opacity: 0.8 }} />
 
-                {/* Title */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-                  <div style={{ background: 'rgba(79,126,255,0.15)', borderRadius: 10, padding: 8, color: 'var(--primary)' }}>
-                    <Laptop size={20} />
+                {/* Modal Header */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
+                      background: 'linear-gradient(135deg, rgba(79, 126, 255, 0.25), rgba(79, 126, 255, 0.05))',
+                      border: '1px solid rgba(79, 126, 255, 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--primary)',
+                      boxShadow: '0 4px 16px rgba(79, 126, 255, 0.15)'
+                    }}>
+                      <Laptop size={22} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        Auto Attendance Setup
+                        <span style={{ fontSize: '.62rem', background: 'rgba(38,196,134,0.15)', color: 'var(--green)', border: '1px solid rgba(38,196,134,0.3)', padding: '2px 8px', borderRadius: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                          Self-updating
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '.76rem', color: 'var(--muted)', marginTop: 2 }}>
+                        One-time background setup for your laptop
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)' }}>Auto Attendance Setup</div>
-                    <div style={{ fontSize: '.72rem', color: 'var(--muted)' }}>Windows — one-time setup</div>
-                  </div>
-                  <button onClick={() => setShowSetupModal(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+                  <button
+                    onClick={() => { setShowSetupModal(false); setCopiedCmd(false); }}
+                    style={{
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--muted)',
+                      borderRadius: '50%',
+                      width: 32,
+                      height: 32,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
 
-                {/* Steps */}
-                {[
-                  { n: '1', icon: '⌨️', text: 'Press Win + X on your keyboard, then click "Terminal (Admin)" or "PowerShell (Admin)".' },
-                  { n: '2', icon: '📋', text: 'Tap the button below to copy the setup command.' },
-                  { n: '3', icon: '↵',  text: 'Paste it in the PowerShell window and press Enter. Done!' },
-                ].map(s => (
-                  <div key={s.n} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
-                    <div style={{ minWidth: 28, height: 28, borderRadius: '50%', background: 'rgba(79,126,255,0.12)', border: '1px solid rgba(79,126,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.75rem', fontWeight: 700, color: 'var(--primary)', flexShrink: 0 }}>{s.n}</div>
-                    <div style={{ fontSize: '.82rem', color: 'var(--muted)', lineHeight: 1.55, paddingTop: 4 }}>{s.icon} {s.text}</div>
-                  </div>
-                ))}
+                {/* OS Switcher Segmented Control */}
+                <div style={{
+                  display: 'flex',
+                  background: 'var(--card)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 12,
+                  padding: 3,
+                  marginBottom: 20
+                }}>
+                  <button
+                    onClick={() => { setSetupOs('windows'); setCopiedCmd(false); }}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: 9,
+                      fontSize: '.82rem',
+                      fontWeight: 600,
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      transition: 'all 0.2s',
+                      background: setupOs === 'windows' ? 'var(--primary)' : 'transparent',
+                      color: setupOs === 'windows' ? '#fff' : 'var(--muted)',
+                      boxShadow: setupOs === 'windows' ? '0 2px 8px rgba(79,126,255,0.3)' : 'none'
+                    }}
+                  >
+                    <Laptop size={15} /> Windows (PowerShell)
+                  </button>
+                  <button
+                    onClick={() => { setSetupOs('mac'); setCopiedCmd(false); }}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: 9,
+                      fontSize: '.82rem',
+                      fontWeight: 600,
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      transition: 'all 0.2s',
+                      background: setupOs === 'mac' ? 'var(--primary)' : 'transparent',
+                      color: setupOs === 'mac' ? '#fff' : 'var(--muted)',
+                      boxShadow: setupOs === 'mac' ? '0 2px 8px rgba(79,126,255,0.3)' : 'none'
+                    }}
+                  >
+                    <Terminal size={15} /> Mac / Linux (.sh)
+                  </button>
+                </div>
 
-                {/* Copy button */}
+                {/* OS Step-by-Step Instructions */}
+                {setupOs === 'windows' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                    {/* Step 1 */}
+                    <div style={{
+                      display: 'flex',
+                      gap: 12,
+                      alignItems: 'flex-start',
+                      background: 'var(--card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 14,
+                      padding: '12px 14px'
+                    }}>
+                      <div style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        background: 'rgba(79,126,255,0.15)',
+                        border: '1px solid rgba(79,126,255,0.3)',
+                        color: 'var(--primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '.75rem',
+                        fontWeight: 700,
+                        flexShrink: 0
+                      }}>
+                        1
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '.84rem', fontWeight: 600, color: 'var(--text)' }}>
+                          Open Terminal as Administrator
+                        </div>
+                        <div style={{ fontSize: '.76rem', color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+                          Press <kbd style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid var(--border)', padding: '1px 5px', borderRadius: 4, fontSize: '.7rem', color: 'var(--text)' }}>Win + X</kbd> on keyboard and select <strong>Terminal (Admin)</strong> or <strong>PowerShell (Admin)</strong>.
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div style={{
+                      display: 'flex',
+                      gap: 12,
+                      alignItems: 'flex-start',
+                      background: 'var(--card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 14,
+                      padding: '12px 14px'
+                    }}>
+                      <div style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        background: 'rgba(79,126,255,0.15)',
+                        border: '1px solid rgba(79,126,255,0.3)',
+                        color: 'var(--primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '.75rem',
+                        fontWeight: 700,
+                        flexShrink: 0
+                      }}>
+                        2
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '.84rem', fontWeight: 600, color: 'var(--text)' }}>
+                          Copy One-Liner Command
+                        </div>
+                        <div style={{ fontSize: '.76rem', color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+                          Click the main button below to copy the setup script.
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div style={{
+                      display: 'flex',
+                      gap: 12,
+                      alignItems: 'flex-start',
+                      background: 'var(--card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 14,
+                      padding: '12px 14px'
+                    }}>
+                      <div style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        background: 'rgba(38,196,134,0.15)',
+                        border: '1px solid rgba(38,196,134,0.3)',
+                        color: 'var(--green)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '.75rem',
+                        fontWeight: 700,
+                        flexShrink: 0
+                      }}>
+                        3
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '.84rem', fontWeight: 600, color: 'var(--text)' }}>
+                          Paste & Press Enter
+                        </div>
+                        <div style={{ fontSize: '.76rem', color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+                          Right-click in PowerShell window to paste, press <kbd style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid var(--border)', padding: '1px 5px', borderRadius: 4, fontSize: '.7rem', color: 'var(--text)' }}>Enter</kbd>. Done!
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                    {/* Mac Step 1 */}
+                    <div style={{
+                      display: 'flex',
+                      gap: 12,
+                      alignItems: 'flex-start',
+                      background: 'var(--card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 14,
+                      padding: '12px 14px'
+                    }}>
+                      <div style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        background: 'rgba(79,126,255,0.15)',
+                        border: '1px solid rgba(79,126,255,0.3)',
+                        color: 'var(--primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '.75rem',
+                        fontWeight: 700,
+                        flexShrink: 0
+                      }}>
+                        1
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '.84rem', fontWeight: 600, color: 'var(--text)' }}>
+                          Open Mac Terminal
+                        </div>
+                        <div style={{ fontSize: '.76rem', color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+                          Press <kbd style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid var(--border)', padding: '1px 5px', borderRadius: 4, fontSize: '.7rem', color: 'var(--text)' }}>Cmd + Space</kbd>, type <strong>Terminal</strong>, and press Enter.
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mac Step 2 */}
+                    <div style={{
+                      display: 'flex',
+                      gap: 12,
+                      alignItems: 'flex-start',
+                      background: 'var(--card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 14,
+                      padding: '12px 14px'
+                    }}>
+                      <div style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        background: 'rgba(79,126,255,0.15)',
+                        border: '1px solid rgba(79,126,255,0.3)',
+                        color: 'var(--primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '.75rem',
+                        fontWeight: 700,
+                        flexShrink: 0
+                      }}>
+                        2
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '.84rem', fontWeight: 600, color: 'var(--text)' }}>
+                          Run Terminal Setup Command
+                        </div>
+                        <div style={{ fontSize: '.76rem', color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+                          Copy the terminal curl command below and paste it into Terminal.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Code Preview snippet */}
+                <div style={{
+                  background: '#090b12',
+                  border: '1px solid var(--border)',
+                  borderRadius: 12,
+                  padding: '10px 12px',
+                  marginBottom: 16,
+                  fontFamily: 'monospace',
+                  fontSize: '.72rem',
+                  color: 'var(--muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10
+                }}>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.85 }}>
+                    {activeCmd}
+                  </div>
+                  <button
+                    onClick={handleCopy}
+                    style={{
+                      background: 'rgba(255,255,255,0.08)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text)',
+                      borderRadius: 6,
+                      padding: '4px 8px',
+                      fontSize: '.7rem',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                  >
+                    {copiedCmd ? <Check size={12} color="var(--green)" /> : <Copy size={12} />}
+                    {copiedCmd ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+
+                {/* Big Copy Button */}
                 <button
                   className="btn btn-primary"
-                  style={{ width: '100%', justifyContent: 'center', gap: 8, padding: '14px 20px', fontSize: '1rem', marginTop: 8, borderRadius: 12 }}
-                  onClick={() => navigator.clipboard.writeText(cmd).then(() => { showToast('✅ Copied! Paste in Admin PowerShell.'); setShowSetupModal(false); })}
+                  style={{
+                    width: '100%',
+                    justifyContent: 'center',
+                    gap: 10,
+                    padding: '14px 20px',
+                    fontSize: '.95rem',
+                    fontWeight: 700,
+                    borderRadius: 14,
+                    background: copiedCmd ? 'var(--green)' : 'var(--primary)',
+                    color: copiedCmd ? '#0d0f18' : '#fff',
+                    boxShadow: copiedCmd ? '0 4px 20px rgba(38,196,134,0.4)' : '0 4px 20px rgba(79,126,255,0.4)',
+                    transition: 'all 0.2s'
+                  }}
+                  onClick={handleCopy}
                 >
-                  📋 Copy Setup Command
+                  {copiedCmd ? (
+                    <>
+                      <Check size={18} /> Copied to Clipboard!
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={18} /> Copy Setup Command
+                    </>
+                  )}
                 </button>
 
-                <div style={{ textAlign: 'center', fontSize: '.7rem', color: 'var(--muted)', marginTop: 10 }}>
-                  Safe & personalised to your account only.
+                {/* Additional Direct File Download Link for Mac */}
+                {setupOs === 'mac' && (
+                  <a
+                    href={`/api/attendance/download-script?os=mac&token=${token || ''}`}
+                    download={`AlliedOne-Attendance-${(user?.name || 'Employee').replace(/[^a-zA-Z0-9]/g, '_')}.sh`}
+                    className="btn btn-ghost"
+                    style={{
+                      width: '100%',
+                      justifyContent: 'center',
+                      gap: 8,
+                      padding: '10px 20px',
+                      fontSize: '.82rem',
+                      marginTop: 10,
+                      borderRadius: 12,
+                      textDecoration: 'none'
+                    }}
+                  >
+                    <Download size={14} /> Download Direct .sh File
+                  </a>
+                )}
+
+                {/* Security badges */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 16,
+                  marginTop: 18,
+                  fontSize: '.68rem',
+                  color: 'var(--muted)',
+                  borderTop: '1px solid var(--border)',
+                  paddingTop: 14
+                }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <ShieldCheck size={13} color="var(--green)" /> Safe & Tokenized
+                  </span>
+                  <span>•</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Zap size={13} color="var(--orange)" /> Zero CPU process
+                  </span>
                 </div>
               </div>
             </div>
