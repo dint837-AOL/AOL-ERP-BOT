@@ -87,6 +87,17 @@ export function isIpMatching(clientIp: string, allowedIpsStr: string): boolean {
   return false;
 }
 
+export function parseDbDate(raw: string | Date): Date {
+  if (!raw) return new Date();
+  if (raw instanceof Date) return raw;
+  let s = String(raw).trim();
+  if (s.endsWith('Z') || s.includes('+') || (s.includes('-') && s.lastIndexOf('-') > 10)) {
+    return new Date(s);
+  }
+  if (s.includes('T')) return new Date(s + 'Z');
+  return new Date(s.replace(' ', 'T') + 'Z');
+}
+
 export class WhatsAppGateway { config: any; constructor(c: any) { this.config = c; } }
 export class Tool { config: any; constructor(c: any) { this.config = c; } }
 
@@ -331,12 +342,12 @@ export class OpenClaw {
         [member_id]
       ) as any[];
       const filtered = rows.filter(r => {
-        const dt = new Date(r.timestamp);
+        const dt = parseDbDate(r.timestamp);
         const dStr = dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
         return dStr.startsWith(month);
       }).map(r => ({
         ...r,
-        att_date: new Date(r.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' })
+        att_date: parseDbDate(r.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' })
       }));
       res.json(filtered);
     });
@@ -351,12 +362,12 @@ export class OpenClaw {
          ORDER BY a.timestamp ASC`
       ) as any[];
       const filtered = rows.filter(r => {
-        const dt = new Date(r.timestamp);
+        const dt = parseDbDate(r.timestamp);
         const dStr = dt.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
         return dStr.startsWith(month);
       }).map(r => ({
         ...r,
-        att_date: new Date(r.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' })
+        att_date: parseDbDate(r.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' })
       }));
       res.json(filtered);
     });

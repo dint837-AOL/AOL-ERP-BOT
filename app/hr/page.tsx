@@ -34,9 +34,12 @@ function nowDhaka(): string {
 
 function parseTimestamp(ts: string): Date {
   if (!ts) return new Date();
-  if (ts.endsWith('Z')) return new Date(ts);
-  if (ts.includes('T')) return new Date(ts + 'Z');
-  return new Date(ts.replace(' ', 'T') + 'Z');
+  const s = String(ts).trim();
+  if (s.endsWith('Z') || s.includes('+') || (s.includes('-') && s.lastIndexOf('-') > 10)) {
+    return new Date(s);
+  }
+  if (s.includes('T')) return new Date(s + 'Z');
+  return new Date(s.replace(' ', 'T') + 'Z');
 }
 
 function formatTime(ts: string): string {
@@ -395,14 +398,18 @@ export default function HRPage() {
            const inDate = attInfo.inDate;
            
            if (attInfo.outDate) {
-              hoursWorked = (attInfo.outDate.getTime() - inDate.getTime()) / (1000 * 60 * 60);
+              hoursWorked = Math.max(0, (attInfo.outDate.getTime() - inDate.getTime()) / (1000 * 60 * 60));
               // Flexible timing: If they worked less than 4 hours (with a tiny buffer), it's incomplete
               if (hoursWorked < 3.9) {
                 isIncomplete = true;
               }
+           } else if (ds === todayStr) {
+              // Checked in today and currently active: calculate live elapsed hours
+              hoursWorked = Math.max(0, (Date.now() - inDate.getTime()) / (1000 * 60 * 60));
            } else if (!isFuture && ds !== todayStr) {
-              // If they forgot to check out on a past day, it's incomplete
-              isIncomplete = true;
+              // If they forgot to check out on a past day, count standard 5h
+              hoursWorked = 5;
+              isIncomplete = false;
            }
         }
 
@@ -1189,7 +1196,17 @@ export default function HRPage() {
                 // Process monthly cumulative stats per member (up to curDate)
                 const monthlyStats = new Map<number, { daysPresent: number; totalHours: number }>();
                 const mGroups = new Map<string, any>();
-                monthSum.forEach(m => {
+                const todayStr = todayDhaka();
+
+                // Merge monthly summary with today's live attendance
+                const allAttRecords = [...monthSum];
+                att.forEach(a => {
+                  if (!allAttRecords.some(m => m.id === a.id)) {
+                    allAttRecords.push(a);
+                  }
+                });
+
+                allAttRecords.forEach(m => {
                   if (!isAdmin && String(m.member_id) !== String(user?.id)) return;
                   const rawTs = m.timestamp;
                   const dt = typeof rawTs === 'string' ? parseTimestamp(rawTs) : new Date(rawTs);
@@ -1202,12 +1219,24 @@ export default function HRPage() {
                   if (m.action_type === 'OUT') ex.outRaw = dt;
                   mGroups.set(key, ex);
                 });
+
                 mGroups.forEach((val, key) => {
-                  const mId = parseInt(key.split('_')[0] || '0');
+                  const parts = key.split('_');
+                  const mId = parseInt(parts[0] || '0', 10);
+                  const d = parts[1] || '';
                   const s = monthlyStats.get(mId) || { daysPresent: 0, totalHours: 0 };
                   if (val.inRaw) s.daysPresent++;
                   if (val.inRaw && val.outRaw) {
-                    s.totalHours += (val.outRaw.getTime() - val.inRaw.getTime()) / (1000 * 60 * 60);
+                    s.totalHours += Math.max(0, (val.outRaw.getTime() - val.inRaw.getTime()) / (1000 * 60 * 60));
+                  } else if (val.inRaw && !val.outRaw) {
+                    if (d === todayStr) {
+                      // Active check-in today: calculate live elapsed hours worked
+                      const elapsedHrs = (Date.now() - val.inRaw.getTime()) / (1000 * 60 * 60);
+                      s.totalHours += Math.max(0, elapsedHrs);
+                    } else if (d < todayStr) {
+                      // Past day missing checkout: credit standard 5h
+                      s.totalHours += 5;
+                    }
                   }
                   monthlyStats.set(mId, s);
                 });
@@ -1300,7 +1329,7 @@ export default function HRPage() {
                                 {/* Hours: cumulative worked / elapsed required (5h/day) */}
                                 <td style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
                                   <span style={{ fontWeight: 700, color: 'var(--text)' }}>
-                                    {Math.round(stats.totalHours)}
+                                    {stats.totalHours >= 10 ? Math.round(stats.totalHours) : Number(stats.totalHours.toFixed(1))}
                                   </span>
                                   <span style={{ color: 'var(--muted)', fontSize: '.64rem' }}>/{elapsedRequiredHours}h</span>
                                 </td>
