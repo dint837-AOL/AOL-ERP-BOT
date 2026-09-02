@@ -594,70 +594,67 @@ export default function HRPage() {
           </div>
         </div>
 
-        {/* Employee check-in/out widget */}
-        {!isAdmin && (
-          <div className="checkin-widget">
-            <div className="cw-title">Mark Attendance</div>
-            
-            {/* Wi-Fi Presence Banner */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '8px',
-              marginBottom: 12,
-              padding: '8px 12px',
-              borderRadius: '8px',
-              background: wifiInfo.is_office_wifi ? 'rgba(38, 196, 134, 0.08)' : 'rgba(255, 255, 255, 0.03)',
-              border: `1px solid ${wifiInfo.is_office_wifi ? 'rgba(38, 196, 134, 0.25)' : 'var(--border)'}`,
-              fontSize: '.78rem'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                <Wifi size={14} style={{ color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)' }} />
-                <span style={{ color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)', fontWeight: 600 }}>
-                  {wifiInfo.is_office_wifi ? 'Office Wi-Fi Connected' : 'Remote Network (Manual Check-In)'}
-                </span>
-              </div>
-              {wifiInfo.is_office_wifi && wifiInfo.is_auto_enabled && (
-                <span style={{ fontSize: '.72rem', color: 'var(--green)', opacity: 0.9 }}>
-                  Auto Check-In Active
-                </span>
-              )}
+        {/* Attendance & Check-in widget */}
+        <div className="checkin-widget">
+          <div className="cw-title">Mark Attendance</div>
+          
+          {/* Wi-Fi Presence Banner */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px',
+            marginBottom: 12,
+            padding: '8px 12px',
+            borderRadius: '8px',
+            background: wifiInfo.is_office_wifi ? 'rgba(38, 196, 134, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+            border: `1px solid ${wifiInfo.is_office_wifi ? 'rgba(38, 196, 134, 0.25)' : 'var(--border)'}`,
+            fontSize: '.78rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+              <Wifi size={14} style={{ color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)' }} />
+              <span style={{ color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)', fontWeight: 600 }}>
+                {wifiInfo.is_office_wifi ? 'Office Wi-Fi Connected' : 'Remote Network (Manual Check-In)'}
+              </span>
             </div>
-
-            <div style={{ marginBottom: 12, fontSize: '.83rem', color: 'var(--muted)' }}>
-              Logged in as <strong style={{ color: 'var(--text)' }}>{user?.name}</strong>
-            </div>
-            <div className="cw-btns" style={{ gap: 12 }}>
-              <button
-                className="btn btn-green"
-                disabled={attLoading || alreadyCheckedIn}
-                onClick={() => markAttendance('IN')}
-                style={{ flex: 1, justifyContent: 'center', fontSize: '.95rem', padding: '13px 20px', opacity: alreadyCheckedIn ? 0.45 : 1, transition: 'opacity .2s' }}
-              >
-                <LogIn size={18} /> Check In
-              </button>
-              <button
-                className="btn btn-red"
-                disabled={attLoading || !alreadyCheckedIn || alreadyCheckedOut}
-                onClick={() => markAttendance('OUT')}
-                style={{ flex: 1, justifyContent: 'center', fontSize: '.95rem', padding: '13px 20px', opacity: (!alreadyCheckedIn || alreadyCheckedOut) ? 0.45 : 1, transition: 'opacity .2s' }}
-              >
-                <LogOut size={18} /> Check Out
-              </button>
-            </div>
-            {alreadyCheckedIn && (
-              <div style={{ marginTop: 10, fontSize: '.78rem', color: 'var(--green)', fontWeight: 600 }}>
-                {alreadyCheckedOut ? '✓ Checked in and checked out today' : '✓ Checked in today'}
-              </div>
+            {wifiInfo.is_office_wifi && wifiInfo.is_auto_enabled && (
+              <span style={{ fontSize: '.72rem', color: 'var(--green)', opacity: 0.9 }}>
+                Auto Check-In Active
+              </span>
             )}
           </div>
-        )}
+
+          <div style={{ marginBottom: 12, fontSize: '.83rem', color: 'var(--muted)' }}>
+            Logged in as <strong style={{ color: 'var(--text)' }}>{user?.name}</strong>
+          </div>
+          <div className="cw-btns" style={{ gap: 12 }}>
+            <button
+              className="btn btn-green"
+              disabled={attLoading || alreadyCheckedIn}
+              onClick={() => markAttendance('IN')}
+              style={{ flex: 1, justifyContent: 'center', fontSize: '.95rem', padding: '13px 20px', opacity: alreadyCheckedIn ? 0.45 : 1, transition: 'opacity .2s' }}
+            >
+              <LogIn size={18} /> Check In
+            </button>
+            <button
+              className="btn btn-red"
+              disabled={attLoading || !alreadyCheckedIn || alreadyCheckedOut}
+              onClick={() => markAttendance('OUT')}
+              style={{ flex: 1, justifyContent: 'center', fontSize: '.95rem', padding: '13px 20px', opacity: (!alreadyCheckedIn || alreadyCheckedOut) ? 0.45 : 1, transition: 'opacity .2s' }}
+            >
+              <LogOut size={18} /> Check Out
+            </button>
+          </div>
+          {alreadyCheckedIn && (
+            <div style={{ marginTop: 10, fontSize: '.78rem', color: 'var(--green)', fontWeight: 600 }}>
+              {alreadyCheckedOut ? '✓ Checked in and checked out today' : '✓ Checked in today'}
+            </div>
+          )}
+        </div>
 
         {/* Laptop Auto-Attendance Setup Card */}
-        {!isAdmin && (
-          <div className="card" style={{ marginBottom: '20px', background: 'linear-gradient(145deg, rgba(79, 126, 255, 0.06), rgba(0, 0, 0, 0.25))', border: '1px solid rgba(79, 126, 255, 0.25)' }}>
+        <div className="card" style={{ marginBottom: '20px', background: 'linear-gradient(145deg, rgba(79, 126, 255, 0.06), rgba(0, 0, 0, 0.25))', border: '1px solid rgba(79, 126, 255, 0.25)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', padding: '16px 20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                 <div style={{ padding: '10px', background: 'rgba(79, 126, 255, 0.15)', borderRadius: '10px', color: 'var(--primary)' }}>
@@ -695,7 +692,6 @@ export default function HRPage() {
               </div>
             </div>
           </div>
-        )}
 
         {/* Auto Attendance Setup Modal — Glassmorphism, intuitive OS switcher, copy state */}
         {showSetupModal && (() => {
@@ -1256,7 +1252,7 @@ export default function HRPage() {
                 monthlyStats.forEach((_, mId) => {
                   if (!agg.has(mId)) {
                     const memberObj = members.find(m => String(m.id) === String(mId));
-                    if (memberObj && memberObj.role !== 'Admin') {
+                    if (memberObj) {
                       agg.set(mId, { member_id: mId, name: memberObj.name, color: memberObj.avatar_color, inRaw: null, outRaw: null, leave: null });
                     }
                   }
@@ -1271,12 +1267,7 @@ export default function HRPage() {
                   if (leave) ex.leave = `${leave.leave_type} (${leave.status})`;
                 });
 
-                const list = Array.from(agg.values()).filter(i => {
-                  const memberObj = members.find(m => String(m.id) === String(i.member_id));
-                  if (memberObj) return memberObj.role !== 'Admin';
-                  if (i.name && i.name.toLowerCase().includes('ahsan')) return false;
-                  return true;
-                });
+                const list = Array.from(agg.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
                 return (
                   <div style={{ width: '100%', overflowX: 'hidden' }}>

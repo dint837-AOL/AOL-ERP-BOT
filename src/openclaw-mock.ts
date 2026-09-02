@@ -488,10 +488,11 @@ export class OpenClaw {
       if (isMatching) {
         // Connected to Office Wi-Fi!
         // 1. Check if user already checked in today
-        const existingIn = await dbGet(
-          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'IN'`,
-          [user.id, todayDhaka]
-        ) as any;
+        const userRows = await dbAll('SELECT * FROM attendance WHERE member_id = ?', [user.id]) as any[];
+        const existingIn = userRows.find(r => {
+          const d = parseDbDate(r.timestamp);
+          return d && d.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }) === todayDhaka && r.action_type === 'IN';
+        });
 
         let autoCheckedIn = false;
         if (!existingIn) {
@@ -544,11 +545,15 @@ export class OpenClaw {
       const todayDhaka = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
       const nowIso = new Date().toISOString();
 
+      const memberAtt = await dbAll('SELECT * FROM attendance WHERE member_id = ?', [member.id]) as any[];
+      const todayRecords = memberAtt.filter(r => {
+        const d = parseDbDate(r.timestamp);
+        return d ? d.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }) === todayDhaka : false;
+      });
+      const existingIn = todayRecords.find(r => r.action_type === 'IN');
+      const existingOut = todayRecords.find(r => r.action_type === 'OUT');
+
       if (event === 'CONNECT') {
-        const existingIn = await dbGet(
-          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'IN'`,
-          [member.id, todayDhaka]
-        );
         if (!existingIn) {
           await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'IN', nowIso]);
           console.log(`[ROUTER WEBHOOK] Auto checked in ${member.name} on Wi-Fi CONNECT`);
@@ -563,14 +568,6 @@ export class OpenClaw {
         return res.json({ ok: true, action: 'IN', member_name: member.name });
       } else {
         // DISCONNECT
-        const existingIn = await dbGet(
-          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'IN'`,
-          [member.id, todayDhaka]
-        );
-        const existingOut = await dbGet(
-          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'OUT'`,
-          [member.id, todayDhaka]
-        );
         if (existingIn && !existingOut) {
           await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'OUT', nowIso]);
           console.log(`[ROUTER WEBHOOK] Auto checked out ${member.name} on Wi-Fi DISCONNECT`);
@@ -614,16 +611,15 @@ export class OpenClaw {
       const todayDhaka = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
       const nowIso = new Date().toISOString();
 
-      if (action === 'SHUTDOWN') {
-        const existingIn = await dbGet(
-          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'IN'`,
-          [member.id, todayDhaka]
-        );
-        const existingOut = await dbGet(
-          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'OUT'`,
-          [member.id, todayDhaka]
-        );
+      const memberAtt = await dbAll('SELECT * FROM attendance WHERE member_id = ?', [member.id]) as any[];
+      const todayRecords = memberAtt.filter(r => {
+        const d = parseDbDate(r.timestamp);
+        return d ? d.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }) === todayDhaka : false;
+      });
+      const existingIn = todayRecords.find(r => r.action_type === 'IN');
+      const existingOut = todayRecords.find(r => r.action_type === 'OUT');
 
+      if (action === 'SHUTDOWN') {
         let autoCheckedOut = false;
         if (existingIn && !existingOut) {
           await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'OUT', nowIso]);
@@ -644,11 +640,6 @@ export class OpenClaw {
 
       // Action is 'PING'
       if (isMatching && isEnabled) {
-        const existingIn = await dbGet(
-          `SELECT * FROM attendance WHERE member_id = ? AND date(timestamp) = ? AND action_type = 'IN'`,
-          [member.id, todayDhaka]
-        );
-
         let autoCheckedIn = false;
         if (!existingIn) {
           await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'IN', nowIso]);
