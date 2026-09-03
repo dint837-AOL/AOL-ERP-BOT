@@ -108,11 +108,29 @@ function getWorkingDaysInMonth(year: number, month: number): number {
 
 function getInitials(name: string): string {
   if (!name) return '??';
+  const n = name.trim().toLowerCase();
+  if (n.includes('ahsan') || n.includes('kabir')) return 'MAK';
+  if (n.includes('kamrul') || n.includes('islam')) return 'KI';
+  if (n.includes('rafi') || n.includes('tajimur')) return 'TR';
+  if (n.includes('orko')) return 'O';
   const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return (parts[0] || '').slice(0, 2).toUpperCase();
+  if (parts.length === 1) return (parts[0] || '').slice(0, 1).toUpperCase();
   const first = parts[0] || '';
   const last = parts[parts.length - 1] || '';
   return ((first[0] || '') + (last[0] || '')).toUpperCase();
+}
+
+function fmtLeavePeriod(startDate: string, endDate: string): string {
+  const fmt = (s: string) => {
+    if (!s) return '';
+    const dStr = s.split('T')[0] || '';
+    const parts = dStr.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}`;
+    return s;
+  };
+  const d1 = fmt(startDate);
+  const d2 = fmt(endDate);
+  return d1 === d2 ? d1 : `${d1}-${d2}`;
 }
 
 // --- Monthly Calendar Component ---
@@ -279,7 +297,7 @@ export default function HRPage() {
       if (Array.isArray(mRes) && mRes.length > 0) {
         setReportMemberId(prev => {
           if (prev) return prev;
-          const emp = mRes.find((m: any) => m.role !== 'Admin') || mRes[0];
+          const emp = mRes.find((m: any) => String(m.id) === String(user?.id)) || mRes.find((m: any) => m.role === 'Admin') || mRes[0];
           return emp ? String(emp.id) : '';
         });
       }
@@ -358,7 +376,7 @@ export default function HRPage() {
   }, [loadAll, checkWifiStatus, sendWifiHeartbeat]);
 
   const loadCalendar = useCallback(async () => {
-    if (!reportMemberId || !isAdmin) return;
+    if (!reportMemberId) return;
     setCalLoading(true);
     const monthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
     try {
@@ -584,26 +602,10 @@ export default function HRPage() {
     <>
       <Topbar title="HR & Attendance" />
 
-      <div className="scroll">
+      <div className="scroll" style={{ overflowX: 'hidden', maxWidth: '100vw' }}>
 
-        {/* Date navigator — Check In | ← date → | Check Out */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '12px 16px 10px', gap: 8 }}>
-          {/* Check In — left */}
-          <button
-            className="btn btn-green btn-sm"
-            disabled={attLoading || alreadyCheckedIn}
-            onClick={() => markAttendance('IN')}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              fontSize: '.82rem', padding: '7px 14px',
-              opacity: alreadyCheckedIn ? 0.45 : 1, transition: 'opacity .2s',
-              borderRadius: 10, flexShrink: 0
-            }}
-          >
-            <LogIn size={14} /> Check In
-          </button>
-
-          {/* Date navigator — center */}
+        {/* Date navigator — Top */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '12px 16px 6px' }}>
           <div className="dnav" style={{ position: 'relative' }}>
             <button onClick={() => setCurDate(s => shiftDateStr(s, -1))} aria-label="Previous day">
               <ChevronLeft size={16} />
@@ -633,21 +635,6 @@ export default function HRPage() {
               <ChevronRight size={16} />
             </button>
           </div>
-
-          {/* Check Out — right */}
-          <button
-            className="btn btn-red btn-sm"
-            disabled={attLoading || !alreadyCheckedIn || alreadyCheckedOut}
-            onClick={() => markAttendance('OUT')}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              fontSize: '.82rem', padding: '7px 14px',
-              opacity: (!alreadyCheckedIn || alreadyCheckedOut) ? 0.45 : 1, transition: 'opacity .2s',
-              borderRadius: 10, flexShrink: 0
-            }}
-          >
-            <LogOut size={14} /> Check Out
-          </button>
         </div>
 
 
@@ -1106,25 +1093,25 @@ export default function HRPage() {
           );
         })()}
 
-        {/* Tabs: Only Admin sees Team & Individual tabs */}
-        {isAdmin && (
-          <div className="tabs">
+        {/* Tabs: Team (admin only), Individual (all), Leave Request (all) */}
+        <div className="tabs">
+          {isAdmin && (
             <div className={'tab ' + (activeTab === 'att' ? 'on' : '')} onClick={() => setActiveTab('att')}>
               Team
             </div>
-            <div className={'tab ' + (activeTab === 'report' ? 'on' : '')} onClick={() => setActiveTab('report')}>
-              Individual
-            </div>
-            <div className={'tab ' + (activeTab === 'leave' ? 'on' : '')} onClick={() => setActiveTab('leave')}>
-              Leave Request
-              {pendingLeaves > 0 && (
-                <span style={{ marginLeft: 6, background: 'var(--orange)', color: '#0d0f18', fontSize: '.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: 10, verticalAlign: 'middle' }}>
-                  {pendingLeaves}
-                </span>
-              )}
-            </div>
+          )}
+          <div className={'tab ' + (activeTab === 'report' ? 'on' : '')} onClick={() => setActiveTab('report')}>
+            Individual
           </div>
-        )}
+          <div className={'tab ' + (activeTab === 'leave' ? 'on' : '')} onClick={() => setActiveTab('leave')}>
+            Leave Request
+            {pendingLeaves > 0 && isAdmin && (
+              <span style={{ marginLeft: 6, background: 'var(--orange)', color: '#0d0f18', fontSize: '.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: 10, verticalAlign: 'middle' }}>
+                {pendingLeaves}
+              </span>
+            )}
+          </div>
+        </div>
 
         {/* Team tab — cumulative attendance table (Admin only) */}
         {activeTab === 'att' && isAdmin && (
@@ -1331,61 +1318,80 @@ export default function HRPage() {
             <div className="card-head">
               <h3>{isAdmin ? 'All Leave Requests' : 'My Leave Requests'}</h3>
             </div>
-            <div className="table-scroll">
-              <table>
+            <div style={{ width: '100%', overflowX: 'hidden' }}>
+              <table style={{ width: '100%', minWidth: '0px', maxWidth: '100%', fontSize: '.74rem', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
+                <colgroup>
+                  {isAdmin && <col style={{ width: '14%' }} />}
+                  <col style={{ width: isAdmin ? '26%' : '30%' }} />
+                  <col style={{ width: isAdmin ? '28%' : '46%' }} />
+                  <col style={{ width: isAdmin ? '16%' : '24%' }} />
+                  {isAdmin && <col style={{ width: '16%' }} />}
+                </colgroup>
                 <thead>
-                  <tr>
-                    {isAdmin && <th>Employee</th>}
-                    <th>Type</th>
-                    <th>Period</th>
-                    <th>Reason</th>
-                    <th>Status</th>
-                    {isAdmin && <th>Actions</th>}
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    {isAdmin && <th style={{ padding: '8px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Emp</th>}
+                    <th style={{ padding: '8px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Period</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'left', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Remarks</th>
+                    <th style={{ padding: '8px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Status</th>
+                    {isAdmin && <th style={{ padding: '8px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Action</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {leaves.length === 0 ? (
-                    <tr className="empty-r"><td colSpan={isAdmin ? 6 : 4}>No leave requests found.</td></tr>
+                    <tr className="empty-r"><td colSpan={isAdmin ? 5 : 3}>No leave requests found.</td></tr>
                   ) : (
                     leaves.map((l: any) => (
-                      <tr key={l.id}>
+                      <tr key={l.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                         {isAdmin && (
-                          <td>
-                            <div className="av-cell">
-                              <div className="av" style={{ background: l.avatar_color || '#4f7eff' }}>
-                                {(l.member_name || '?')[0]}
-                              </div>
-                              {l.member_name || '?'}
+                          <td style={{ padding: '6px 2px', textAlign: 'center' }}>
+                            <div
+                              style={{
+                                background: l.avatar_color || '#4f7eff',
+                                width: '26px',
+                                height: '26px',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '.68rem',
+                                fontWeight: 700,
+                                color: '#fff',
+                                letterSpacing: '0.5px',
+                                margin: '0 auto',
+                              }}
+                              title={l.member_name}
+                            >
+                              {getInitials(l.member_name)}
                             </div>
                           </td>
                         )}
-                        <td><span className={'badge ' + l.leave_type}>{l.leave_type}</span></td>
-                        <td style={{ color: 'var(--muted)', fontSize: '.76rem' }}>
-                          {(() => {
-                            const fmt = (s: string) => {
-                              if (!s) return '';
-                              if (s.includes('T')) {
-                                const parts = s.split('T');
-                                const dParts = (parts[0] || '').split('-');
-                                return `${dParts[2] || ''}-${dParts[1] || ''}-${dParts[0] || ''} ${parts[1] || ''}`.trim();
-                              }
-                              if (s.includes('-')) {
-                                const dParts = s.split('-');
-                                return `${dParts[2] || ''}-${dParts[1] || ''}-${dParts[0] || ''}`;
-                              }
-                              return s;
-                            };
-                            return `${fmt(l.start_date)} to ${fmt(l.end_date)}`;
-                          })()}
+                        <td style={{ padding: '6px 2px', textAlign: 'center', color: 'var(--muted)', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
+                          {fmtLeavePeriod(l.start_date, l.end_date)}
                         </td>
-                        <td style={{ color: 'var(--muted)', fontSize: '.76rem', maxWidth: 130 }}>{l.reason || '-'}</td>
-                        <td>
-                          <span className={'badge ' + (l.status === 'APPROVED' ? 'APPROVED' : l.status === 'REJECTED' || l.status === 'CANCELLED' ? 'REJECTED' : 'PENDING')}>
-                            {l.status === 'REJECTED' ? 'CANCELLED' : l.status}
+                        <td
+                          style={{
+                            padding: '6px 4px',
+                            color: 'var(--text)',
+                            fontSize: '.72rem',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: '100px'
+                          }}
+                          title={l.reason || l.leave_type || '-'}
+                        >
+                          {l.reason || l.leave_type || '-'}
+                        </td>
+                        <td style={{ padding: '6px 2px', textAlign: 'center' }}>
+                          <span
+                            className={'badge ' + (l.status === 'APPROVED' ? 'APPROVED' : l.status === 'REJECTED' || l.status === 'CANCELLED' ? 'REJECTED' : 'PENDING')}
+                            style={{ fontSize: '.64rem', padding: '2px 4px', borderRadius: 4, display: 'inline-block' }}
+                          >
+                            {l.status === 'APPROVED' ? 'Appr' : l.status === 'REJECTED' ? 'Canc' : l.status === 'CANCELLED' ? 'Canc' : 'Pend'}
                           </span>
                         </td>
                         {isAdmin && (
-                          <td>
+                          <td style={{ padding: '6px 2px', textAlign: 'center' }}>
                             <select
                               defaultValue=""
                               onChange={e => {
@@ -1409,14 +1415,14 @@ export default function HRPage() {
                               }}
                               style={{
                                 background: 'var(--card)', border: '1px solid var(--border)',
-                                color: 'var(--text)', borderRadius: 7, padding: '4px 8px',
-                                fontSize: '.76rem', cursor: 'pointer', maxWidth: 110
+                                color: 'var(--text)', borderRadius: 6, padding: '3px 2px',
+                                fontSize: '.68rem', cursor: 'pointer', maxWidth: 64, width: '100%'
                               }}
                             >
-                              <option value="">Action...</option>
-                              {l.status === 'PENDING' && <option value="approve">✓ Approve</option>}
-                              {l.status === 'PENDING' && <option value="decline">✗ Decline</option>}
-                              {l.status === 'APPROVED' && <option value="cancel">⊘ Cancel</option>}
+                              <option value="">...</option>
+                              {l.status === 'PENDING' && <option value="approve">✓ Appr</option>}
+                              {l.status === 'PENDING' && <option value="decline">✗ Decl</option>}
+                              {l.status === 'APPROVED' && <option value="cancel">⊘ Canc</option>}
                               <option value="edit">✎ Edit</option>
                             </select>
                           </td>
@@ -1432,36 +1438,107 @@ export default function HRPage() {
 
         {/* Summary cards removed per user request */}
 
-        {/* Individual Monthly Report - Admin only */}
-        {activeTab === 'report' && isAdmin && (
+        {/* Individual Monthly Report & Check In/Out */}
+        {activeTab === 'report' && (
           <div className="card">
             {/* Controls row */}
-            <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
-              <div>
-                <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Employee</div>
-                <select
-                  className="cw-select"
-                  style={{ minWidth: 210 }}
-                  value={reportMemberId}
-                  onChange={e => setReportMemberId(e.target.value)}
-                >
-                  <option value="">Select employee...</option>
-                  {members.sort((a,b) => a.name.localeCompare(b.name)).map(m => (
-                    <option key={m.id} value={m.id}>{m.name} - {m.role}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Month</div>
-                <div className="dnav">
-                  <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); }}>
-                    <ChevronLeft size={14} />
-                  </button>
-                  <div className="dchip" style={{ minWidth: 150, fontSize: '.84rem' }}>{monthLabel(calYear, calMonth)}</div>
-                  <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); } else setCalMonth(m => m + 1); }}>
-                    <ChevronRight size={14} />
-                  </button>
+            <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, flexWrap: 'wrap' }}>
+                {isAdmin ? (
+                  <div>
+                    <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Employee</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <select
+                        className="cw-select"
+                        style={{ minWidth: 180 }}
+                        value={reportMemberId}
+                        onChange={e => setReportMemberId(e.target.value)}
+                      >
+                        <option value="">Select employee...</option>
+                        {members
+                          .filter(m => !(m.name.toLowerCase().includes('ahsan kabir') && m.role !== 'Admin'))
+                          .sort((a,b) => a.name.localeCompare(b.name)).map(m => (
+                          <option key={m.id} value={m.id}>{m.name} - {m.role}</option>
+                        ))}
+                      </select>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setShowSetupModal(true)}
+                        title="Download Auto-Attendance Script"
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          fontSize: '.76rem', padding: '6px 12px',
+                          background: 'rgba(79,126,255,0.12)', border: '1px solid rgba(79,126,255,0.25)',
+                          color: 'var(--primary)', borderRadius: 8, whiteSpace: 'nowrap', cursor: 'pointer'
+                        }}
+                      >
+                        <Download size={13} /> Download
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Employee</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div className="dchip" style={{ fontWeight: 600, fontSize: '.84rem' }}>{user?.name}</div>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setShowSetupModal(true)}
+                        title="Download Auto-Attendance Script"
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          fontSize: '.76rem', padding: '6px 12px',
+                          background: 'rgba(79,126,255,0.12)', border: '1px solid rgba(79,126,255,0.25)',
+                          color: 'var(--primary)', borderRadius: 8, whiteSpace: 'nowrap', cursor: 'pointer'
+                        }}
+                      >
+                        <Download size={13} /> Download
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Month</div>
+                  <div className="dnav">
+                    <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); }}>
+                      <ChevronLeft size={14} />
+                    </button>
+                    <div className="dchip" style={{ minWidth: 140, fontSize: '.84rem' }}>{monthLabel(calYear, calMonth)}</div>
+                    <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); } else setCalMonth(m => m + 1); }}>
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
                 </div>
+              </div>
+
+              {/* Check In / Check Out buttons — ONLY in Individual page */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-green btn-sm"
+                  disabled={attLoading || alreadyCheckedIn}
+                  onClick={() => markAttendance('IN')}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    fontSize: '.8rem', padding: '7px 14px',
+                    opacity: alreadyCheckedIn ? 0.45 : 1, transition: 'opacity .2s',
+                    borderRadius: 8
+                  }}
+                >
+                  <LogIn size={14} /> Check In
+                </button>
+                <button
+                  className="btn btn-red btn-sm"
+                  disabled={attLoading || !alreadyCheckedIn || alreadyCheckedOut}
+                  onClick={() => markAttendance('OUT')}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    fontSize: '.8rem', padding: '7px 14px',
+                    opacity: (!alreadyCheckedIn || alreadyCheckedOut) ? 0.45 : 1, transition: 'opacity .2s',
+                    borderRadius: 8
+                  }}
+                >
+                  <LogOut size={14} /> Check Out
+                </button>
               </div>
             </div>
 
@@ -1471,25 +1548,11 @@ export default function HRPage() {
               {/* Employee info header for report */}
               {reportMemberId && (
                 <div style={{ padding: '20px 18px 0', textAlign: 'center' }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
-                    <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)' }}>
-                      {members.find(m => String(m.id) === String(reportMemberId))?.name || 'Employee'}
-                    </h2>
-                    <button
-                      onClick={() => setShowSetupModal(true)}
-                      title="Download Auto-Attendance Script"
-                      style={{
-                        background: 'rgba(79,126,255,0.15)', border: '1px solid rgba(79,126,255,0.3)',
-                        color: 'var(--primary)', borderRadius: 8, width: 28, height: 28,
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', padding: 0, flexShrink: 0
-                      }}
-                    >
-                      <Download size={13} />
-                    </button>
-                  </div>
+                  <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)' }}>
+                    {members.find(m => String(m.id) === String(reportMemberId))?.name || user?.name || 'Employee'}
+                  </h2>
                   <div style={{ fontSize: '.85rem', color: 'var(--muted)', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>
-                    {members.find(m => String(m.id) === String(reportMemberId))?.role || ''} • {monthLabel(calYear, calMonth)}
+                    {members.find(m => String(m.id) === String(reportMemberId))?.role || user?.role || ''} • {monthLabel(calYear, calMonth)}
                   </div>
                 </div>
               )}
@@ -1731,12 +1794,12 @@ export default function HRPage() {
                 </div>
               </div>
 
-              {/* Reason / Notes */}
+              {/* Remarks */}
               <div className="fg">
-                <label>Reason / Notes <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></label>
+                <label>Remarks <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></label>
                 <textarea
                   rows={2}
-                  placeholder="Reason or details for leave..."
+                  placeholder="Remarks or details for leave..."
                   value={leaveData.reason}
                   onChange={e => setLeaveData({ ...leaveData, reason: e.target.value })}
                 />
