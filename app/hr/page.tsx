@@ -604,15 +604,31 @@ export default function HRPage() {
 
       <div className="scroll" style={{ overflowX: 'hidden', maxWidth: '100vw' }}>
 
-        {/* Date navigator — Top */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '12px 16px 6px' }}>
-          <div className="dnav" style={{ position: 'relative' }}>
-            <button onClick={() => setCurDate(s => shiftDateStr(s, -1))} aria-label="Previous day">
-              <ChevronLeft size={16} />
+        {/* Date navigator & In/Out buttons — Top */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px 8px 6px', gap: 8, maxWidth: '100%', boxSizing: 'border-box' }}>
+          {/* In button — small left */}
+          <button
+            className="btn btn-green btn-sm"
+            disabled={attLoading || alreadyCheckedIn}
+            onClick={() => markAttendance('IN')}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              fontSize: '.76rem', padding: '5px 10px', fontWeight: 700,
+              opacity: alreadyCheckedIn ? 0.45 : 1, transition: 'opacity .2s',
+              borderRadius: 7, flexShrink: 0
+            }}
+          >
+            <LogIn size={12} /> In
+          </button>
+
+          {/* Date navigator — center */}
+          <div className="dnav" style={{ position: 'relative', flexShrink: 0 }}>
+            <button onClick={() => setCurDate(s => shiftDateStr(s, -1))} aria-label="Previous day" style={{ padding: '4px 6px' }}>
+              <ChevronLeft size={15} />
             </button>
             <div
               className={'dchip' + (curDate === todayDhaka() ? ' today' : '')}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', padding: '5px 10px', fontSize: '.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}
               onClick={() => {
                 const inp = dateInputRef.current;
                 if (inp) {
@@ -620,7 +636,7 @@ export default function HRPage() {
                 }
               }}
             >
-              <Calendar size={13} style={{ opacity: 0.6, flexShrink: 0 }} />
+              <Calendar size={13} style={{ opacity: 0.7, flexShrink: 0 }} />
               {fmtDateLabel(curDate)}
               <input
                 ref={dateInputRef}
@@ -631,10 +647,25 @@ export default function HRPage() {
                 tabIndex={-1}
               />
             </div>
-            <button onClick={() => setCurDate(s => shiftDateStr(s, 1))} aria-label="Next day">
-              <ChevronRight size={16} />
+            <button onClick={() => setCurDate(s => shiftDateStr(s, 1))} aria-label="Next day" style={{ padding: '4px 6px' }}>
+              <ChevronRight size={15} />
             </button>
           </div>
+
+          {/* Out button — small right */}
+          <button
+            className="btn btn-red btn-sm"
+            disabled={attLoading || !alreadyCheckedIn || alreadyCheckedOut}
+            onClick={() => markAttendance('OUT')}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              fontSize: '.76rem', padding: '5px 10px', fontWeight: 700,
+              opacity: (!alreadyCheckedIn || alreadyCheckedOut) ? 0.45 : 1, transition: 'opacity .2s',
+              borderRadius: 7, flexShrink: 0
+            }}
+          >
+            <LogOut size={12} /> Out
+          </button>
         </div>
 
 
@@ -1442,103 +1473,71 @@ export default function HRPage() {
         {activeTab === 'report' && (
           <div className="card">
             {/* Controls row */}
-            <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, flexWrap: 'wrap' }}>
-                {isAdmin ? (
-                  <div>
-                    <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Employee</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <select
-                        className="cw-select"
-                        style={{ minWidth: 180 }}
-                        value={reportMemberId}
-                        onChange={e => setReportMemberId(e.target.value)}
-                      >
-                        <option value="">Select employee...</option>
-                        {members
-                          .filter(m => !(m.name.toLowerCase().includes('ahsan kabir') && m.role !== 'Admin'))
-                          .sort((a,b) => a.name.localeCompare(b.name)).map(m => (
-                          <option key={m.id} value={m.id}>{m.name} - {m.role}</option>
-                        ))}
-                      </select>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setShowSetupModal(true)}
-                        title="Download Auto-Attendance Script"
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 5,
-                          fontSize: '.76rem', padding: '6px 12px',
-                          background: 'rgba(79,126,255,0.12)', border: '1px solid rgba(79,126,255,0.25)',
-                          color: 'var(--primary)', borderRadius: 8, whiteSpace: 'nowrap', cursor: 'pointer'
-                        }}
-                      >
-                        <Download size={13} /> Download
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Employee</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div className="dchip" style={{ fontWeight: 600, fontSize: '.84rem' }}>{user?.name}</div>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setShowSetupModal(true)}
-                        title="Download Auto-Attendance Script"
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 5,
-                          fontSize: '.76rem', padding: '6px 12px',
-                          background: 'rgba(79,126,255,0.12)', border: '1px solid rgba(79,126,255,0.25)',
-                          color: 'var(--primary)', borderRadius: 8, whiteSpace: 'nowrap', cursor: 'pointer'
-                        }}
-                      >
-                        <Download size={13} /> Download
-                      </button>
-                    </div>
-                  </div>
-                )}
+            <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'flex-end', gap: 14, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
+              {isAdmin ? (
                 <div>
-                  <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Month</div>
-                  <div className="dnav">
-                    <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); }}>
-                      <ChevronLeft size={14} />
-                    </button>
-                    <div className="dchip" style={{ minWidth: 140, fontSize: '.84rem' }}>{monthLabel(calYear, calMonth)}</div>
-                    <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); } else setCalMonth(m => m + 1); }}>
-                      <ChevronRight size={14} />
+                  <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Employee</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <select
+                      className="cw-select"
+                      style={{ minWidth: 180 }}
+                      value={reportMemberId}
+                      onChange={e => setReportMemberId(e.target.value)}
+                    >
+                      <option value="">Select employee...</option>
+                      {members
+                        .filter(m => !(m.name.toLowerCase().includes('ahsan kabir') && m.role !== 'Admin'))
+                        .sort((a,b) => a.name.localeCompare(b.name)).map(m => (
+                        <option key={m.id} value={m.id}>{m.name} - {m.role}</option>
+                      ))}
+                    </select>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setShowSetupModal(true)}
+                      title="Download Auto-Attendance Script"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        fontSize: '.76rem', padding: '6px 12px',
+                        background: 'rgba(79,126,255,0.12)', border: '1px solid rgba(79,126,255,0.25)',
+                        color: 'var(--primary)', borderRadius: 8, whiteSpace: 'nowrap', cursor: 'pointer'
+                      }}
+                    >
+                      <Download size={13} /> Download
                     </button>
                   </div>
                 </div>
-              </div>
-
-              {/* Check In / Check Out buttons — ONLY in Individual page */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  className="btn btn-green btn-sm"
-                  disabled={attLoading || alreadyCheckedIn}
-                  onClick={() => markAttendance('IN')}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    fontSize: '.8rem', padding: '7px 14px',
-                    opacity: alreadyCheckedIn ? 0.45 : 1, transition: 'opacity .2s',
-                    borderRadius: 8
-                  }}
-                >
-                  <LogIn size={14} /> Check In
-                </button>
-                <button
-                  className="btn btn-red btn-sm"
-                  disabled={attLoading || !alreadyCheckedIn || alreadyCheckedOut}
-                  onClick={() => markAttendance('OUT')}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    fontSize: '.8rem', padding: '7px 14px',
-                    opacity: (!alreadyCheckedIn || alreadyCheckedOut) ? 0.45 : 1, transition: 'opacity .2s',
-                    borderRadius: 8
-                  }}
-                >
-                  <LogOut size={14} /> Check Out
-                </button>
+              ) : (
+                <div>
+                  <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Employee</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div className="dchip" style={{ fontWeight: 600, fontSize: '.84rem' }}>{user?.name}</div>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setShowSetupModal(true)}
+                      title="Download Auto-Attendance Script"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        fontSize: '.76rem', padding: '6px 12px',
+                        background: 'rgba(79,126,255,0.12)', border: '1px solid rgba(79,126,255,0.25)',
+                        color: 'var(--primary)', borderRadius: 8, whiteSpace: 'nowrap', cursor: 'pointer'
+                      }}
+                    >
+                      <Download size={13} /> Download
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Month</div>
+                <div className="dnav">
+                  <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); }}>
+                    <ChevronLeft size={14} />
+                  </button>
+                  <div className="dchip" style={{ minWidth: 140, fontSize: '.82rem' }}>{monthLabel(calYear, calMonth)}</div>
+                  <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); } else setCalMonth(m => m + 1); }}>
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
               </div>
             </div>
 
