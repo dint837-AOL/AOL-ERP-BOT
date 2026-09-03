@@ -1049,15 +1049,32 @@ echo "======================================================"
       res.status(201).json(await dbGet(`SELECT l.*,m.name as member_name FROM leave_requests l JOIN members m ON l.member_id=m.id WHERE l.id=?`, [lastID]));
     });
     this.app.patch('/api/leaves/:id', async (req, res) => {
-      const { status } = req.body;
-      await dbRun(`UPDATE leave_requests SET status=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?`, [status, req.params.id]);
-      const leaveRow = await dbGet('SELECT * FROM leave_requests WHERE id=?', [req.params.id]) as any;
-      if (leaveRow) {
-        const member = await dbGet('SELECT name FROM members WHERE id=?', [leaveRow.member_id]) as any;
-        await notifyMember(leaveRow.member_id, `Your ${leaveRow.leave_type} leave request has been ${status}.`, '/hr?tab=leave');
-        await notifyAdmins(`📋 Leave Decision: ${member?.name || 'Employee'}'s ${leaveRow.leave_type} leave has been ${status}.`, '/hr?tab=leave');
+      const { status, leave_type, start_date, end_date, reason } = req.body;
+      if (status) {
+        // Status update (Approve / Reject / Cancel)
+        await dbRun(`UPDATE leave_requests SET status=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?`, [status, req.params.id]);
+        const leaveRow = await dbGet('SELECT * FROM leave_requests WHERE id=?', [req.params.id]) as any;
+        if (leaveRow) {
+          const member = await dbGet('SELECT name FROM members WHERE id=?', [leaveRow.member_id]) as any;
+          await notifyMember(leaveRow.member_id, `Your ${leaveRow.leave_type} leave request has been ${status}.`, '/hr?tab=leave');
+          await notifyAdmins(`📋 Leave Decision: ${member?.name || 'Employee'}'s ${leaveRow.leave_type} leave has been ${status}.`, '/hr?tab=leave');
+        }
+        return res.json(leaveRow);
+      } else {
+        // Field update (Edit mode — admin editing leave details)
+        const updates: string[] = [];
+        const values: any[] = [];
+        if (leave_type) { updates.push('leave_type=?'); values.push(leave_type); }
+        if (start_date) { updates.push('start_date=?'); values.push(start_date); }
+        if (end_date)   { updates.push('end_date=?');   values.push(end_date); }
+        if (reason !== undefined) { updates.push('reason=?'); values.push(reason); }
+        if (updates.length > 0) {
+          values.push(req.params.id);
+          await dbRun(`UPDATE leave_requests SET ${updates.join(', ')} WHERE id=?`, values);
+        }
+        const leaveRow = await dbGet('SELECT * FROM leave_requests WHERE id=?', [req.params.id]) as any;
+        return res.json(leaveRow);
       }
-      res.json(leaveRow);
     });
 
     // ── NOTIFICATIONS ────────────────────────────────────────

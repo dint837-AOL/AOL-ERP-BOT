@@ -56,6 +56,13 @@ function formatTime(ts: string): string {
   }
 }
 
+function fmtHoursMinutes(hours: number): string {
+  if (!hours || hours < 0) return '0:00';
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  return `${h}:${String(m).padStart(2, '0')}`;
+}
+
 function fmtDateLabel(dateStr: string): string {
   const today = todayDhaka();
   const dt = new Date(dateStr + 'T00:00:00');
@@ -184,10 +191,10 @@ function MonthCalendar({ year, month, calDays }: MonthCalendarProps) {
           return (
             <div key={cell.date} className={cls} title={tip}>
               <span className="cal-day-num">{dayNum}</span>
-              {cell.isPresent && !cell.isIncomplete && <span className="cal-dot green-dot" />}
-              {cell.isIncomplete && <span className="cal-dot" style={{ background: '#FF8C00', boxShadow: '0 0 5px rgba(255, 140, 0, 0.6)' }} />}
-              {isApprovedLeave && <span className="cal-dot" style={{ background: '#2979FF', boxShadow: '0 0 5px rgba(41, 121, 255, 0.5)', marginTop: 2 }} />}
-              {cell.isAbsent && <span className="cal-dot red-dot" />}
+              {cell.isPresent && !cell.isIncomplete && !cell.isWeekend && <span className="cal-dot green-dot" />}
+              {cell.isIncomplete && !cell.isWeekend && <span className="cal-dot" style={{ background: '#FF8C00', boxShadow: '0 0 5px rgba(255, 140, 0, 0.6)' }} />}
+              {isApprovedLeave && !cell.isWeekend && <span className="cal-dot" style={{ background: '#2979FF', boxShadow: '0 0 5px rgba(41, 121, 255, 0.5)', marginTop: 2 }} />}
+              {cell.isAbsent && !cell.isWeekend && <span className="cal-dot red-dot" />}
             </div>
           );
         })}
@@ -227,6 +234,7 @@ export default function HRPage() {
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [setupOs, setSetupOs] = useState<'windows' | 'mac'>('windows');
   const [copiedCmd, setCopiedCmd] = useState(false);
+  const [editLeaveId, setEditLeaveId] = useState<string | null>(null);
 
   // Wi-Fi automated attendance state
   const [wifiInfo, setWifiInfo] = useState<{
@@ -378,7 +386,10 @@ export default function HRPage() {
         const start = new Date(l.start_date + 'T00:00:00');
         const end = new Date(l.end_date + 'T00:00:00');
         for (const cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
-          leaveDateMap.set(cur.toLocaleDateString('en-CA'), { type: l.leave_type, status: l.status });
+          const dow = cur.getDay();
+          if (dow !== 5 && dow !== 6) { // Skip Fri & Sat — not counted as leave days
+            leaveDateMap.set(cur.toLocaleDateString('en-CA'), { type: l.leave_type, status: l.status });
+          }
         }
       });
 
@@ -459,19 +470,33 @@ export default function HRPage() {
       return;
     }
     try {
-      await authFetch('/api/leaves', {
-        method: 'POST',
-        body: JSON.stringify({
-          member_id: leaveData.member_id || user?.id,
-          leave_type: leaveData.leave_type,
-          start_date: leaveData.start_datetime,
-          end_date: leaveData.end_datetime,
-          reason: leaveData.reason || ''
-        }),
-      });
+      if (editLeaveId) {
+        await authFetch('/api/leaves/' + editLeaveId, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            leave_type: leaveData.leave_type,
+            start_date: leaveData.start_datetime.split('T')[0] || leaveData.start_datetime,
+            end_date: leaveData.end_datetime.split('T')[0] || leaveData.end_datetime,
+            reason: leaveData.reason || ''
+          }),
+        });
+        showToast('Leave request updated.');
+        setEditLeaveId(null);
+      } else {
+        await authFetch('/api/leaves', {
+          method: 'POST',
+          body: JSON.stringify({
+            member_id: leaveData.member_id || user?.id,
+            leave_type: leaveData.leave_type,
+            start_date: leaveData.start_datetime,
+            end_date: leaveData.end_datetime,
+            reason: leaveData.reason || ''
+          }),
+        });
+        showToast('Leave request submitted. Awaiting admin approval.');
+      }
       setShowLeaveModal(false);
       setLeaveData({ member_id: '', leave_type: 'SICK', start_datetime: '', end_datetime: '', reason: '' });
-      showToast('Leave request submitted. Awaiting admin approval.');
       await loadAll();
     } catch { showToast('Cannot reach server.'); }
   };
@@ -561,8 +586,24 @@ export default function HRPage() {
 
       <div className="scroll">
 
-        {/* Date navigator — below page header */}
-        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12, paddingBottom: 4 }}>
+        {/* Date navigator — Check In | ← date → | Check Out */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '12px 16px 10px', gap: 8 }}>
+          {/* Check In — left */}
+          <button
+            className="btn btn-green btn-sm"
+            disabled={attLoading || alreadyCheckedIn}
+            onClick={() => markAttendance('IN')}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: '.82rem', padding: '7px 14px',
+              opacity: alreadyCheckedIn ? 0.45 : 1, transition: 'opacity .2s',
+              borderRadius: 10, flexShrink: 0
+            }}
+          >
+            <LogIn size={14} /> Check In
+          </button>
+
+          {/* Date navigator — center */}
           <div className="dnav" style={{ position: 'relative' }}>
             <button onClick={() => setCurDate(s => shiftDateStr(s, -1))} aria-label="Previous day">
               <ChevronLeft size={16} />
@@ -592,106 +633,24 @@ export default function HRPage() {
               <ChevronRight size={16} />
             </button>
           </div>
+
+          {/* Check Out — right */}
+          <button
+            className="btn btn-red btn-sm"
+            disabled={attLoading || !alreadyCheckedIn || alreadyCheckedOut}
+            onClick={() => markAttendance('OUT')}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: '.82rem', padding: '7px 14px',
+              opacity: (!alreadyCheckedIn || alreadyCheckedOut) ? 0.45 : 1, transition: 'opacity .2s',
+              borderRadius: 10, flexShrink: 0
+            }}
+          >
+            <LogOut size={14} /> Check Out
+          </button>
         </div>
 
-        {/* Attendance & Check-in widget */}
-        <div className="checkin-widget">
-          <div className="cw-title">Mark Attendance</div>
-          
-          {/* Wi-Fi Presence Banner */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '8px',
-            marginBottom: 12,
-            padding: '8px 12px',
-            borderRadius: '8px',
-            background: wifiInfo.is_office_wifi ? 'rgba(38, 196, 134, 0.08)' : 'rgba(255, 255, 255, 0.03)',
-            border: `1px solid ${wifiInfo.is_office_wifi ? 'rgba(38, 196, 134, 0.25)' : 'var(--border)'}`,
-            fontSize: '.78rem'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-              <Wifi size={14} style={{ color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)' }} />
-              <span style={{ color: wifiInfo.is_office_wifi ? 'var(--green)' : 'var(--muted)', fontWeight: 600 }}>
-                {wifiInfo.is_office_wifi ? 'Office Wi-Fi Connected' : 'Remote Network (Manual Check-In)'}
-              </span>
-            </div>
-            {wifiInfo.is_office_wifi && wifiInfo.is_auto_enabled && (
-              <span style={{ fontSize: '.72rem', color: 'var(--green)', opacity: 0.9 }}>
-                Auto Check-In Active
-              </span>
-            )}
-          </div>
 
-          <div style={{ marginBottom: 12, fontSize: '.83rem', color: 'var(--muted)' }}>
-            Logged in as <strong style={{ color: 'var(--text)' }}>{user?.name}</strong>
-          </div>
-          <div className="cw-btns" style={{ gap: 12 }}>
-            <button
-              className="btn btn-green"
-              disabled={attLoading || alreadyCheckedIn}
-              onClick={() => markAttendance('IN')}
-              style={{ flex: 1, justifyContent: 'center', fontSize: '.95rem', padding: '13px 20px', opacity: alreadyCheckedIn ? 0.45 : 1, transition: 'opacity .2s' }}
-            >
-              <LogIn size={18} /> Check In
-            </button>
-            <button
-              className="btn btn-red"
-              disabled={attLoading || !alreadyCheckedIn || alreadyCheckedOut}
-              onClick={() => markAttendance('OUT')}
-              style={{ flex: 1, justifyContent: 'center', fontSize: '.95rem', padding: '13px 20px', opacity: (!alreadyCheckedIn || alreadyCheckedOut) ? 0.45 : 1, transition: 'opacity .2s' }}
-            >
-              <LogOut size={18} /> Check Out
-            </button>
-          </div>
-          {alreadyCheckedIn && (
-            <div style={{ marginTop: 10, fontSize: '.78rem', color: 'var(--green)', fontWeight: 600 }}>
-              {alreadyCheckedOut ? '✓ Checked in and checked out today' : '✓ Checked in today'}
-            </div>
-          )}
-        </div>
-
-        {/* Laptop Auto-Attendance Setup Card */}
-        <div className="card" style={{ marginBottom: '20px', background: 'linear-gradient(145deg, rgba(79, 126, 255, 0.06), rgba(0, 0, 0, 0.25))', border: '1px solid rgba(79, 126, 255, 0.25)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', padding: '16px 20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                <div style={{ padding: '10px', background: 'rgba(79, 126, 255, 0.15)', borderRadius: '10px', color: 'var(--primary)' }}>
-                  <Laptop size={22} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '.95rem', fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    Laptop Auto-Attendance
-                    <span style={{ fontSize: '.68rem', background: 'var(--gs)', color: 'var(--green)', padding: '2px 7px', borderRadius: '4px', fontWeight: 600 }}>
-                      RECOMMENDED
-                    </span>
-                  </div>
-                  <p style={{ fontSize: '.78rem', color: 'var(--muted)', margin: '4px 0 0', maxWidth: '540px', lineHeight: 1.45 }}>
-                    Auto Check-In when you open your laptop at office. Auto Check-Out when turned off.
-                  </p>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => setShowSetupModal(true)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <Laptop size={14} /> Windows Setup
-                </button>
-                <a
-                  href={`/api/attendance/download-script?os=mac&token=${token || ''}`}
-                  download={`AlliedOne-Attendance-${(user?.name || 'Employee').replace(/[^a-zA-Z0-9]/g, '_')}.sh`}
-                  className="btn btn-ghost btn-sm"
-                  style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <Download size={14} /> Mac / Linux (.sh)
-                </a>
-              </div>
-            </div>
-          </div>
 
         {/* Auto Attendance Setup Modal — Glassmorphism, intuitive OS switcher, copy state */}
         {showSetupModal && (() => {
@@ -1320,9 +1279,9 @@ export default function HRPage() {
                                 {/* Hours: cumulative worked / elapsed required (5h/day) */}
                                 <td style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
                                   <span style={{ fontWeight: 700, color: 'var(--text)' }}>
-                                    {stats.totalHours >= 10 ? Math.round(stats.totalHours) : Number(stats.totalHours.toFixed(1))}
+                                    {fmtHoursMinutes(stats.totalHours)}
                                   </span>
-                                  <span style={{ color: 'var(--muted)', fontSize: '.64rem' }}>/{elapsedRequiredHours}h</span>
+                                  <span style={{ color: 'var(--muted)', fontSize: '.64rem' }}>/{fmtHoursMinutes(elapsedRequiredHours)}</span>
                                 </td>
                                 {/* Day: cumulative present / elapsed working days */}
                                 <td style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
@@ -1427,14 +1386,39 @@ export default function HRPage() {
                         </td>
                         {isAdmin && (
                           <td>
-                            {l.status === 'PENDING' ? (
-                              <>
-                                <button className="btn btn-green btn-sm" style={{ marginRight: 4 }} onClick={() => reviewLeave(l.id, 'APPROVED')}>Approve</button>
-                                <button className="btn btn-red btn-sm" onClick={() => reviewLeave(l.id, 'REJECTED')}>Cancel</button>
-                              </>
-                            ) : (
-                              <span style={{ color: 'var(--muted)', fontSize: '.76rem' }}>Reviewed</span>
-                            )}
+                            <select
+                              defaultValue=""
+                              onChange={e => {
+                                const val = e.target.value;
+                                e.target.value = '';
+                                if (val === 'approve') reviewLeave(l.id, 'APPROVED');
+                                else if (val === 'decline') reviewLeave(l.id, 'REJECTED');
+                                else if (val === 'cancel') reviewLeave(l.id, 'REJECTED');
+                                else if (val === 'edit') {
+                                  const normDate = (d: string) => d ? (d.includes('T') ? d : d + 'T09:00') : '';
+                                  setEditLeaveId(String(l.id));
+                                  setLeaveData({
+                                    member_id: String(l.member_id),
+                                    leave_type: l.leave_type,
+                                    start_datetime: normDate(l.start_date),
+                                    end_datetime: normDate(l.end_date),
+                                    reason: l.reason || ''
+                                  });
+                                  setShowLeaveModal(true);
+                                }
+                              }}
+                              style={{
+                                background: 'var(--card)', border: '1px solid var(--border)',
+                                color: 'var(--text)', borderRadius: 7, padding: '4px 8px',
+                                fontSize: '.76rem', cursor: 'pointer', maxWidth: 110
+                              }}
+                            >
+                              <option value="">Action...</option>
+                              {l.status === 'PENDING' && <option value="approve">✓ Approve</option>}
+                              {l.status === 'PENDING' && <option value="decline">✗ Decline</option>}
+                              {l.status === 'APPROVED' && <option value="cancel">⊘ Cancel</option>}
+                              <option value="edit">✎ Edit</option>
+                            </select>
                           </td>
                         )}
                       </tr>
@@ -1462,7 +1446,7 @@ export default function HRPage() {
                   onChange={e => setReportMemberId(e.target.value)}
                 >
                   <option value="">Select employee...</option>
-                  {members.filter(m => m.role !== 'Admin').sort((a,b) => a.name.localeCompare(b.name)).map(m => (
+                  {members.sort((a,b) => a.name.localeCompare(b.name)).map(m => (
                     <option key={m.id} value={m.id}>{m.name} - {m.role}</option>
                   ))}
                 </select>
@@ -1487,9 +1471,23 @@ export default function HRPage() {
               {/* Employee info header for report */}
               {reportMemberId && (
                 <div style={{ padding: '20px 18px 0', textAlign: 'center' }}>
-                  <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)' }}>
-                    {members.find(m => String(m.id) === String(reportMemberId))?.name || 'Employee'}
-                  </h2>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
+                    <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)' }}>
+                      {members.find(m => String(m.id) === String(reportMemberId))?.name || 'Employee'}
+                    </h2>
+                    <button
+                      onClick={() => setShowSetupModal(true)}
+                      title="Download Auto-Attendance Script"
+                      style={{
+                        background: 'rgba(79,126,255,0.15)', border: '1px solid rgba(79,126,255,0.3)',
+                        color: 'var(--primary)', borderRadius: 8, width: 28, height: 28,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', padding: 0, flexShrink: 0
+                      }}
+                    >
+                      <Download size={13} />
+                    </button>
+                  </div>
                   <div style={{ fontSize: '.85rem', color: 'var(--muted)', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>
                     {members.find(m => String(m.id) === String(reportMemberId))?.role || ''} • {monthLabel(calYear, calMonth)}
                   </div>
@@ -1542,14 +1540,14 @@ export default function HRPage() {
                          className="cal-stats-grid">
                       <div className="s-card" style={{ textAlign: 'center' }}>
                         <div className="s-lbl">Total Days</div>
-                        <div className="s-val" style={{ color: 'var(--green)', fontSize: '1.4rem' }}>
+                        <div className="s-val" style={{ color: 'var(--text)', fontSize: '1.4rem' }}>
                           {totalPresent}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{elapsedWorkingDays}</span>
                         </div>
                       </div>
                       <div className="s-card" style={{ textAlign: 'center' }}>
                         <div className="s-lbl">Total Hours</div>
-                        <div className="s-val" style={{ color: 'var(--primary)', fontSize: '1.4rem' }}>
-                          {Math.round(totalHours)}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{elapsedRequiredHours}h</span>
+                        <div className="s-val" style={{ color: 'var(--text)', fontSize: '1.4rem' }}>
+                          {fmtHoursMinutes(totalHours)}<span style={{ fontSize: '.85rem', color: 'var(--muted)', fontWeight: 'normal' }}>/{fmtHoursMinutes(elapsedRequiredHours)}</span>
                         </div>
                       </div>
                     </div>
@@ -1634,7 +1632,7 @@ export default function HRPage() {
       {/* Leave Request Bottom Sheet / Modal */}
       {showLeaveModal && (
         <div
-          onClick={e => { if (e.target === e.currentTarget) setShowLeaveModal(false); }}
+          onClick={e => { if (e.target === e.currentTarget) { setShowLeaveModal(false); setEditLeaveId(null); } }}
           style={{
             position: 'fixed',
             inset: 0,
@@ -1666,9 +1664,9 @@ export default function HRPage() {
 
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 14px' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>New Leave Request</h3>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>{editLeaveId ? 'Edit Leave Request' : 'New Leave Request'}</h3>
               <button
-                onClick={() => setShowLeaveModal(false)}
+                onClick={() => { setShowLeaveModal(false); setEditLeaveId(null); }}
                 style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1, padding: 4 }}
               >
                 ✕
@@ -1744,16 +1742,18 @@ export default function HRPage() {
                 />
               </div>
 
-              <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8, background: 'rgba(79,126,255,.08)', border: '1px solid rgba(79,126,255,.18)', fontSize: '.76rem', color: 'var(--muted)' }}>
-                Your request will be submitted for Admin review.
-              </div>
+              {!editLeaveId && (
+                <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8, background: 'rgba(79,126,255,.08)', border: '1px solid rgba(79,126,255,.18)', fontSize: '.76rem', color: 'var(--muted)' }}>
+                  Your request will be submitted for Admin review.
+                </div>
+              )}
 
               <button
                 type="submit"
                 className="btn btn-primary"
                 style={{ width: '100%', justifyContent: 'center', padding: '13px', fontSize: '.95rem', fontWeight: 700, borderRadius: 10 }}
               >
-                Submit Leave Request
+                {editLeaveId ? 'Update Leave Request' : 'Submit Leave Request'}
               </button>
             </form>
           </div>
