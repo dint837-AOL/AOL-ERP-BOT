@@ -1166,6 +1166,14 @@ echo "======================================================"
       res.status(201).json(await dbGet('SELECT * FROM credentials WHERE id=?', [lastID]));
     });
     this.app.delete('/api/credentials/:id', async (req, res) => { await dbRun('DELETE FROM credentials WHERE id=?', [req.params.id]); res.json({ ok: true }); });
+    this.app.patch('/api/credentials/:id', async (req, res) => {
+      const { name, cred_type, url, username, cost, expiry_date, last_changed_date, reminder_days_before } = req.body;
+      await dbRun(
+        `UPDATE credentials SET name=COALESCE(?,name), cred_type=COALESCE(?,cred_type), url=COALESCE(?,url), username=COALESCE(?,username), cost=COALESCE(?,cost), expiry_date=?, last_changed_date=?, reminder_days_before=COALESCE(?,reminder_days_before) WHERE id=?`,
+        [name||null, cred_type||null, url??null, username??null, cost||null, expiry_date||null, last_changed_date||null, reminder_days_before||null, req.params.id]
+      );
+      res.json(await dbGet('SELECT * FROM credentials WHERE id=?', [req.params.id]));
+    });
 
     // ── MEETINGS ─────────────────────────────────────────────
     this.app.get('/api/meetings', async (_, res) => res.json(await dbAll('SELECT * FROM meetings ORDER BY scheduled_at ASC')));
