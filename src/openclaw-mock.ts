@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { initDB, dbAll, dbGet, dbRun, isPostgres } from './db.js';
-import { sendTelegramMessage } from './telegram.js';
+import { sendTelegramMessage, getTelegramBotInfo } from './telegram.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -27,11 +27,13 @@ async function notifyMember(memberId: number, message: string, link: string = ''
 
   if (chatId) {
     sendTelegramMessage(chatId, message).catch(console.error);
+  } else {
+    console.log(`[Telegram] Skipped member notification for member #${memberId}: No telegram_chat_id found on member and no TELEGRAM_CHAT_ID fallback.`);
   }
 }
 
 async function notifyAdmins(message: string, link: string = '') {
-  const admins = await dbAll("SELECT id, telegram_chat_id FROM members WHERE role = 'Admin'") as any[];
+  const admins = await dbAll("SELECT id, name, telegram_chat_id FROM members WHERE role = 'Admin'") as any[];
   
   let fallbackChatId = process.env.TELEGRAM_CHAT_ID?.trim() || '';
   if (!fallbackChatId) {
@@ -46,12 +48,19 @@ async function notifyAdmins(message: string, link: string = '') {
     const cid = admin.telegram_chat_id?.trim() || fallbackChatId;
     if (cid && !sentChatIds.has(cid)) {
       sentChatIds.add(cid);
+      console.log(`[Telegram] Sending admin alert to chat_id=${cid} for admin "${admin.name}"`);
       sendTelegramMessage(cid, message).catch(console.error);
     }
   }
 
   if (fallbackChatId && !sentChatIds.has(fallbackChatId)) {
+    sentChatIds.add(fallbackChatId);
+    console.log(`[Telegram] Sending admin alert to fallback chat_id=${fallbackChatId}`);
     sendTelegramMessage(fallbackChatId, message).catch(console.error);
+  }
+
+  if (sentChatIds.size === 0) {
+    console.warn('[Telegram] Skipped admin notification: No Admin has a telegram_chat_id in members table, and TELEGRAM_CHAT_ID is not set in environment.');
   }
 }
 
@@ -334,7 +343,19 @@ export class OpenClaw {
 
     this.app.post('/api/debug-env', requireRole('Admin'), async (req, res) => {
       const hasToken = !!((process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_BOT_TOKEN.trim()) || (process.env.TELEGRAM_TOKEN && process.env.TELEGRAM_TOKEN.trim()));
-      res.json({ keys: Object.keys(process.env), hasToken });
+      const botInfo = await getTelegramBotInfo();
+      res.json({ keys: Object.keys(process.env), hasToken, botInfo, telegramChatIdEnv: process.env.TELEGRAM_CHAT_ID || '' });
+    });
+
+    this.app.get('/api/telegram/status', requireRole('Admin'), async (req, res) => {
+      const botInfo = await getTelegramBotInfo();
+      const defaultChatId = process.env.TELEGRAM_CHAT_ID?.trim() || '';
+      const adminMembers = await dbAll("SELECT id, name, role, telegram_chat_id FROM members WHERE role = 'Admin'") as any[];
+      res.json({
+        ...botInfo,
+        defaultChatId,
+        adminMembers
+      });
     });
 
     // ── ATTENDANCE ───────────────────────────────────────────

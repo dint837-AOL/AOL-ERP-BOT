@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, X, Pencil, Trash2, Wifi, Radio, Globe, Shield, Save, Check, Laptop } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, Wifi, Radio, Globe, Shield, Save, Check, Laptop, Send, Bot, ExternalLink, RefreshCw } from 'lucide-react';
 import Topbar from '../components/Topbar';
 import { useAuth } from '../context/AuthContext';
 import Cookies from 'js-cookie';
@@ -50,6 +50,66 @@ export default function AdminPage() {
   const [savingWifi, setSavingWifi] = useState(false);
   const [detectingIp, setDetectingIp] = useState(false);
   const [activeDevices, setActiveDevices] = useState<any[]>([]);
+
+  // Telegram Status & Testing
+  const [telegramStatus, setTelegramStatus] = useState<any>(null);
+  const [loadingTgStatus, setLoadingTgStatus] = useState(false);
+  const [testChatId, setTestChatId] = useState('');
+  const [testingTg, setTestingTg] = useState(false);
+
+  const loadTelegramStatus = async () => {
+    try {
+      setLoadingTgStatus(true);
+      const token = getAuthToken();
+      const res = await fetch('/api/telegram/status', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTelegramStatus(data);
+        if (data.defaultChatId && !testChatId) {
+          setTestChatId(data.defaultChatId);
+        } else if (data.adminMembers?.[0]?.telegram_chat_id && !testChatId) {
+          setTestChatId(data.adminMembers[0].telegram_chat_id);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingTgStatus(false);
+    }
+  };
+
+  const handleTestTelegram = async (customId?: string) => {
+    const idToSend = (customId || testChatId || '').trim();
+    if (!idToSend) {
+      showToast('Please enter a Chat ID to test.');
+      return;
+    }
+    setTestingTg(true);
+    showToast('Sending test message...');
+    try {
+      const token = getAuthToken();
+      const res = await fetch('/api/test-telegram', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ chat_id: idToSend })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('✅ Test message delivered to your Telegram!');
+      } else {
+        showToast('❌ ' + (data.error || 'Failed to send'));
+      }
+    } catch (e) {
+      showToast('Failed to reach server.');
+    } finally {
+      setTestingTg(false);
+    }
+  };
 
   const detectIpDirectly = async (): Promise<string | null> => {
     try {
@@ -124,9 +184,11 @@ export default function AdminPage() {
     loadMembers();
     loadWifiSettings();
     loadActiveDevices();
+    loadTelegramStatus();
     const iv = setInterval(loadActiveDevices, 20000);
     return () => clearInterval(iv);
   }, []);
+
 
   const saveWifiSettings = async () => {
     setSavingWifi(true);
@@ -354,6 +416,122 @@ export default function AdminPage() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* Telegram Bot & Real-Time Notification Status */}
+        <div className="card" style={{ marginTop: '24px' }}>
+          <div className="card-head">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Bot size={17} style={{ color: 'var(--primary)' }} />
+              <h3>Telegram Bot & Notifications</h3>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={loadTelegramStatus} disabled={loadingTgStatus}>
+              <RefreshCw size={13} className={loadingTgStatus ? 'spin' : ''} /> {loadingTgStatus ? 'Checking...' : 'Refresh Status'}
+            </button>
+          </div>
+
+          <div style={{ padding: '20px' }}>
+            {/* Connection Status Banner */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px',
+              padding: '14px 18px',
+              background: telegramStatus?.success ? 'rgba(46, 213, 115, 0.08)' : 'rgba(255, 77, 79, 0.08)',
+              border: `1px solid ${telegramStatus?.success ? 'rgba(46, 213, 115, 0.25)' : 'rgba(255, 77, 79, 0.25)'}`,
+              borderRadius: '10px',
+              marginBottom: '18px'
+            }}>
+              <div>
+                <div style={{ fontSize: '.76rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 600 }}>
+                  Bot Token Connection Status
+                </div>
+                <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  {telegramStatus?.success ? (
+                    <>
+                      <span style={{ color: 'var(--green)' }}>● Online: @{telegramStatus.bot?.username}</span>
+                      <a
+                        href={`https://t.me/${telegramStatus.bot?.username}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-primary btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '3px 10px', fontSize: '.75rem' }}
+                      >
+                        Open in Telegram <ExternalLink size={12} />
+                      </a>
+                    </>
+                  ) : (
+                    <span style={{ color: 'var(--red)' }}>
+                      ❌ {telegramStatus?.error || 'TELEGRAM_BOT_TOKEN missing in environment (Render).'}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {telegramStatus?.success && (
+                <div style={{ fontSize: '.75rem', color: 'var(--muted)', background: 'rgba(255,255,255,.05)', padding: '6px 12px', borderRadius: '8px' }}>
+                  ⚠️ <strong>Rule:</strong> You must click <code>START</code> inside Telegram once before the bot can message you.
+                </div>
+              )}
+            </div>
+
+            {/* Recipient Overview */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '10px',
+              padding: '12px 16px',
+              background: 'rgba(255,255,255,.03)',
+              borderRadius: '8px',
+              marginBottom: '18px',
+              fontSize: '.82rem'
+            }}>
+              <div>
+                <strong style={{ color: 'var(--text)' }}>Configured Admin Recipients: </strong>
+                {telegramStatus?.adminMembers?.filter((a: any) => a.telegram_chat_id)?.length > 0 ? (
+                  <span style={{ color: 'var(--green)' }}>
+                    {telegramStatus.adminMembers.filter((a: any) => a.telegram_chat_id).map((a: any) => `${a.name} (${a.telegram_chat_id})`).join(', ')}
+                  </span>
+                ) : telegramStatus?.defaultChatId ? (
+                  <span style={{ color: 'var(--primary)' }}>Fallback TELEGRAM_CHAT_ID: {telegramStatus.defaultChatId}</span>
+                ) : (
+                  <span style={{ color: 'var(--red)', fontWeight: 600 }}>
+                    ⚠️ No Chat ID configured! Edit an Admin above to add their Telegram Chat ID.
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Test Message Box */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <label style={{ fontSize: '.82rem', fontWeight: 600, color: 'var(--text)' }}>Send Immediate Test Message</label>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  placeholder="Enter Numeric Chat ID (e.g. 123456789)"
+                  value={testChatId}
+                  onChange={e => setTestChatId(e.target.value)}
+                  style={{ flex: 1, minWidth: '220px', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text)' }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => handleTestTelegram()}
+                  disabled={testingTg}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Send size={14} /> {testingTg ? 'Sending...' : 'Send Test Alert'}
+                </button>
+              </div>
+              <div style={{ fontSize: '.75rem', color: 'var(--muted)', lineHeight: '1.5' }}>
+                💡 <strong>How to get your numeric Chat ID:</strong> Open Telegram, search for <code>@userinfobot</code>, and send <code>/start</code>. It will reply with your numeric ID (e.g. <code>123456789</code>). Put that ID above or save it in your Admin profile.
+              </div>
+            </div>
           </div>
         </div>
 
