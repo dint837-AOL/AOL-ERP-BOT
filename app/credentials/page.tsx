@@ -171,13 +171,6 @@ export default function CredentialsPage() {
     setSheetOpen(true);
   }
 
-  function openRotate(c: Cred) {
-    setEditId(c.id);
-    setForm({ name: c.name, cred_type: c.cred_type, url: c.url || '', username: c.username || '', expiry_date: c.expiry_date || '', last_changed_date: new Date().toISOString().split('T')[0], reminder_days_before: c.reminder_days_before || '5, 2, 1' });
-    setSheetOpen(true);
-    showToast('Update the last changed date & save to log rotation.');
-  }
-
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   }, []);
