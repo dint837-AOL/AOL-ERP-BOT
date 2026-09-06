@@ -308,8 +308,8 @@ export default function TendersPage() {
               <tr>
                 <th style={th}>Title</th>
                 <th style={th}>Type</th>
-                <th style={th}>Deadline</th>
-                <th style={th}>Status</th>
+                <th style={{ ...th, textAlign: 'center' }}>Deadline</th>
+                <th style={{ ...th, textAlign: 'center' }}>Status</th>
                 <th style={{ ...th, textAlign: 'right' }}></th>
               </tr>
             </thead>
@@ -346,25 +346,27 @@ export default function TendersPage() {
                         {t.tender_type === 'GOVT' ? 'Govt' : 'Private'}
                       </span>
                     </td>
-                    {/* Deadline — countdown only */}
-                    <td style={{ ...td, fontSize: '.76rem', fontWeight: 600, whiteSpace: 'nowrap', color: isDone ? 'var(--muted)' : cd.color }}>
+                    {/* Deadline — centered countdown */}
+                    <td style={{ ...td, textAlign: 'center', fontSize: '.76rem', fontWeight: 700, whiteSpace: 'nowrap', color: isDone ? 'var(--muted)' : cd.color }}>
                       {cd.text}
                     </td>
-                    {/* Status dropdown */}
-                    <td style={{ ...td, padding: '6px 8px 6px 14px' }}>
-                      <select
-                        value={t.status}
-                        onChange={e => updateStatus(t.id, e.target.value)}
-                        style={{
-                          width: 'auto', padding: '5px 6px', borderRadius: 6, fontSize: '.68rem', fontWeight: 600,
-                          border: '1px solid var(--border)', background: STATUS_BGS[t.status],
-                          color: STATUS_COLORS[t.status], cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
-                        }}
-                      >
-                        {Object.entries(STATUS_LABELS).map(([v, l]) => (
-                          <option key={v} value={v}>{l}</option>
-                        ))}
-                      </select>
+                    {/* Status dropdown — centered with left gap */}
+                    <td style={{ ...td, padding: '6px 8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'center', paddingLeft: 10 }}>
+                        <select
+                          value={t.status}
+                          onChange={e => updateStatus(t.id, e.target.value)}
+                          style={{
+                            width: 'auto', padding: '5px 6px', borderRadius: 6, fontSize: '.68rem', fontWeight: 600,
+                            border: '1px solid var(--border)', background: STATUS_BGS[t.status],
+                            color: STATUS_COLORS[t.status], cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
+                          }}
+                        >
+                          {Object.entries(STATUS_LABELS).map(([v, l]) => (
+                            <option key={v} value={v}>{l}</option>
+                          ))}
+                        </select>
+                      </div>
                     </td>
                     {/* Actions */}
                     <td style={{ ...td, textAlign: 'right', padding: '6px 8px' }}>
