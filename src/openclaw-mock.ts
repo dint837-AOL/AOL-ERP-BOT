@@ -1133,9 +1133,7 @@ echo "======================================================"
         `INSERT INTO expenses(category_id,amount,description,entered_by,expense_date,company_name,expense_head,payment_method) VALUES(?,?,?,?,?,?,?,?)`,
         [category_id||null, amount, description||'', entered_by||null, date, company_name||'', expense_head||'', payment_method||'Cash']
       );
-      
-      const member = entered_by ? await dbGet('SELECT name FROM members WHERE id=?', [entered_by]) as any : null;
-      await notifyAdmins(`💰 Expense Logged: ৳${Number(amount).toLocaleString()} for ${description || 'expense'} (${company_name || 'General'})${member ? ` by ${member.name}` : ''}.`, '/accounting');
+
 
       res.status(201).json(await dbGet('SELECT e.*,c.name as category_name FROM expenses e LEFT JOIN expense_categories c ON e.category_id=c.id WHERE e.id=?', [lastID]));
     });

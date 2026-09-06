@@ -1,27 +1,28 @@
 'use client';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Topbar from '../components/Topbar';
 import { useAuth } from '../context/AuthContext';
 import Cookies from 'js-cookie';
 
 const EXPENSE_HEADS = [
-  "Office Rent","Utilities (Electricity, Gas, Water)","Internet & Telephone",
-  "Office Supplies/Stationery","Conveyance","Entertainment (Client/Staff)",
-  "Printing","Repairs & Maintenance","Security/Cleaning","Salaries & Wages",
-  "Staff Welfare","Overtime","Bonus/Festival Allowance","Training & Development",
-  "Recruitment Cost","Freight & Shipping","Customs Duty & Clearing",
-  "LC (Letter of Credit) Charges","Insurance (Cargo/Marine)","Warehousing",
-  "Sample & Testing","Indenting Commission","Port/C&F Charges",
-  "Software Subscription/License","Hosting & Domain","Cloud Services (AWS/Server)",
-  "Freelancer/Contractor Payment","Tools & Equipment (Laptop, etc.)",
-  "Advertising & Promotion","Website/Social Media","Business Travel",
-  "Client Meeting/Gift","Tender Documentation Cost","Bank Charges",
-  "Legal & Professional Fees","Audit Fees","Trade License/Renewal",
-  "Tax & VAT","Donation & Subscription","Depreciation",
-  "Miscellaneous Expense","Fuel & Lubricants (Generator/Vehicle)","Vehicle Maintenance"
+  "Advertising & Promotion","Audit Fees","Bank Charges","Bonus/Festival Allowance",
+  "Business Travel","Client Meeting/Gift","Cloud Services (AWS/Server)",
+  "Conveyance","Customs Duty & Clearing","Depreciation",
+  "Donation & Subscription","Entertainment (Client/Staff)",
+  "Freelancer/Contractor Payment","Freight & Shipping",
+  "Fuel & Lubricants (Generator/Vehicle)","Hosting & Domain",
+  "Indenting Commission","Insurance (Cargo/Marine)","Internet & Telephone",
+  "LC (Letter of Credit) Charges","Legal & Professional Fees",
+  "Miscellaneous Expense","Office Rent","Office Supplies/Stationery",
+  "Overtime","Port/C&F Charges","Printing",
+  "Recruitment Cost","Repairs & Maintenance","Sample & Testing",
+  "Salaries & Wages","Security/Cleaning","Software Subscription/License",
+  "Staff Welfare","Tax & VAT","Tender Documentation Cost",
+  "Tools & Equipment (Laptop, etc.)","Trade License/Renewal",
+  "Training & Development","Utilities (Electricity, Gas, Water)",
+  "Vehicle Maintenance","Warehousing","Website/Social Media",
 ];
 
-const BDT = '';
 function fmtDate(iso: string) { const [y,m,d]=iso.split('-'); return `${d}-${m}-${y}`; }
 function fmtBDT(n: number | string)  { return Number(n).toLocaleString('en-BD',{maximumFractionDigits:0}); }
 
@@ -67,6 +68,76 @@ const IconList = () => (
   </svg>
 );
 
+// EntrySheet is defined OUTSIDE the component to prevent remount on each render (fixes keyboard dismiss)
+interface EntrySheetProps {
+  editId: any;
+  form: typeof BLANK;
+  formLoading: boolean;
+  onClose: () => void;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
+  onSubmit: (e: React.FormEvent) => void;
+}
+function EntrySheet({ editId, form, formLoading, onClose, onChange, onSubmit }: EntrySheetProps) {
+  return (
+    <>
+      <div style={{display:'flex',justifyContent:'center',padding:'12px 0 0'}}>
+        <div style={{width:36,height:4,borderRadius:2,background:'var(--border)'}}/>
+      </div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 20px 12px'}}>
+        <h3 style={{fontSize:'1rem',fontWeight:700}}>{editId?'Edit Expense':'New Expense'}</h3>
+        <button onClick={onClose} style={{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:'1.3rem',lineHeight:1,padding:4}}>X</button>
+      </div>
+      <form onSubmit={onSubmit} style={{padding:'0 20px 24px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:13}}>
+          <div className="fg" style={{marginBottom:0}}>
+            <label>Date</label>
+            <input type="date" name="date" value={form.date} onChange={onChange} required/>
+          </div>
+          <div className="fg" style={{marginBottom:0}}>
+            <label>Company</label>
+            <select name="company_name" value={form.company_name} onChange={onChange} required>
+              <option value="AOD">AOD</option><option value="GSBD">GSBD</option>
+            </select>
+          </div>
+        </div>
+        <div className="fg">
+          <label>Expense Head</label>
+          <select name="expense_head" value={form.expense_head} onChange={onChange} required>
+            {EXPENSE_HEADS.map(h=><option key={h} value={h}>{h}</option>)}
+          </select>
+        </div>
+        <div className="fg">
+          <label>Description <span style={{color:'var(--muted)',fontWeight:400,textTransform:'none'}}>(optional)</span></label>
+          <textarea name="description" placeholder="Short details..." value={form.description} onChange={onChange} rows={2}/>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
+          <div className="fg" style={{marginBottom:0}}>
+            <label>Amount (BDT)</label>
+            <input type="number" name="amount" placeholder="e.g. 5000" value={form.amount} onChange={onChange} required min="0" step="0.01" inputMode="decimal"/>
+          </div>
+          <div className="fg" style={{marginBottom:0}}>
+            <label>Payment</label>
+            <select name="payment_method" value={form.payment_method} onChange={onChange} required>
+              <option value="Cash">Cash</option><option value="Cheque">Cheque</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:'12px',fontSize:'.95rem',fontWeight:700,borderRadius:10}} disabled={formLoading}>
+          {formLoading?'Saving...':'Save'}
+        </button>
+      </form>
+    </>
+  );
+}
+
+const iconBtn = (onClick: () => void, color: string, bg: string, border: string, children: React.ReactNode, title: string) => (
+  <button onClick={onClick} title={title} style={{
+    background:bg, border:`1px solid ${border}`, color, borderRadius:8,
+    width:30, height:30, display:'flex', alignItems:'center', justifyContent:'center',
+    cursor:'pointer', flexShrink:0
+  }}>{children}</button>
+);
+
 export default function AccountsPage() {
   const { user, token: ctxToken } = useAuth();
   const getToken = useCallback(() =>
@@ -110,7 +181,7 @@ export default function AccountsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Group expenses by date (date DESC)
+  // Group expenses by date — ASCENDING order
   const grouped = useMemo(() => {
     const byDate: Record<string, any> = {};
     expenses.forEach((exp: any) => {
@@ -123,7 +194,20 @@ export default function AccountsPage() {
     });
     return Object.values(byDate)
       .map((g: any) => ({ ...g, top3: Object.entries(g.headAmts).sort((a: any, b: any)=>b[1]-a[1]).slice(0,3).map(([h])=>h) }))
-      .sort((a: any, b: any) => b.date.localeCompare(a.date));
+      .sort((a: any, b: any) => a.date.localeCompare(b.date)); // ASC
+  }, [expenses]);
+
+  // Aggregate top expense heads for the month
+  const topHeads = useMemo(() => {
+    const headAmts: Record<string, number> = {};
+    expenses.forEach((exp: any) => {
+      const h = exp.expense_head || 'Other';
+      headAmts[h] = (headAmts[h] || 0) + Number(exp.amount);
+    });
+    return Object.entries(headAmts)
+      .map(([head, amt], i) => ({ sl: i+1, head, amt }))
+      .sort((a, b) => b.amt - a.amt)
+      .map((r, i) => ({ ...r, sl: i+1 }));
   }, [expenses]);
 
   function openAdd() {
@@ -157,7 +241,9 @@ export default function AccountsPage() {
     showToast('Expense deleted.');
     load();
   }
-  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) { setForm(prev => ({...prev, [e.target.name]: e.target.value})); }
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    setForm(prev => ({...prev, [e.target.name]: e.target.value}));
+  }, []);
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.amount||isNaN(Number(form.amount))||Number(form.amount)<=0) { showToast('Enter a valid amount.'); return; }
@@ -183,65 +269,16 @@ export default function AccountsPage() {
     setFormLoading(false);
   }
 
-  // Shared bottom sheet inner content
-  const EntrySheet = () => (
-    <>
-      <div style={{display:'flex',justifyContent:'center',padding:'12px 0 0'}}>
-        <div style={{width:36,height:4,borderRadius:2,background:'var(--border)'}}/>
-      </div>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 20px 12px'}}>
-        <h3 style={{fontSize:'1rem',fontWeight:700}}>{editId?'Edit Expense':'New Expense'}</h3>
-        <button onClick={()=>setSheetOpen(false)} style={{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:'1.3rem',lineHeight:1,padding:4}}>X</button>
-      </div>
-      <form onSubmit={handleSubmit} style={{padding:'0 20px 24px'}}>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:13}}>
-          <div className="fg" style={{marginBottom:0}}>
-            <label>Date</label>
-            <input type="date" name="date" value={form.date} onChange={handleChange} required/>
-          </div>
-          <div className="fg" style={{marginBottom:0}}>
-            <label>Company</label>
-            <select name="company_name" value={form.company_name} onChange={handleChange} required>
-              <option value="AOD">AOD</option><option value="GSBD">GSBD</option>
-            </select>
-          </div>
-        </div>
-        <div className="fg">
-          <label>Expense Head</label>
-          <select name="expense_head" value={form.expense_head} onChange={handleChange} required>
-            {EXPENSE_HEADS.map(h=><option key={h} value={h}>{h}</option>)}
-          </select>
-        </div>
-        <div className="fg">
-          <label>Description <span style={{color:'var(--muted)',fontWeight:400,textTransform:'none'}}>(optional)</span></label>
-          <textarea name="description" placeholder="Short details..." value={form.description} onChange={handleChange} rows={2}/>
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
-          <div className="fg" style={{marginBottom:0}}>
-            <label>Amount (BDT)</label>
-            <input type="number" name="amount" placeholder="e.g. 5000" value={form.amount} onChange={handleChange} required min="0" step="0.01" inputMode="decimal"/>
-          </div>
-          <div className="fg" style={{marginBottom:0}}>
-            <label>Payment</label>
-            <select name="payment_method" value={form.payment_method} onChange={handleChange} required>
-              <option value="Cash">Cash</option><option value="Cheque">Cheque</option>
-            </select>
-          </div>
-        </div>
-        <button type="submit" className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:'12px',fontSize:'.95rem',fontWeight:700,borderRadius:10}} disabled={formLoading}>
-          {formLoading?'Saving...':'Save'}
-        </button>
-      </form>
-    </>
-  );
-
-  const iconBtn = (onClick: () => void, color: string, bg: string, border: string, children: React.ReactNode, title: string) => (
-    <button onClick={onClick} title={title} style={{
-      background:bg, border:`1px solid ${border}`, color, borderRadius:8,
-      width:30, height:30, display:'flex', alignItems:'center', justifyContent:'center',
-      cursor:'pointer', flexShrink:0
-    }}>{children}</button>
-  );
+  const thStyle: React.CSSProperties = {
+    padding:'8px 10px',fontSize:'.6rem',fontWeight:700,color:'var(--text)',
+    textTransform:'uppercase',letterSpacing:'.04em',
+    borderBottom:'1px solid var(--border)',
+    position:'sticky',top:0,background:'rgba(13,15,24,.98)',zIndex:2,
+    whiteSpace:'nowrap'
+  };
+  const tdStyle: React.CSSProperties = {
+    padding:'10px 10px',fontSize:'.78rem',color:'var(--text)',whiteSpace:'nowrap'
+  };
 
   return (
     <>
@@ -256,70 +293,103 @@ export default function AccountsPage() {
         }}>{toast}</div>
       )}
 
-      <div style={{padding:'16px',overflowY:'auto',height:'calc(100dvh - 56px)'}}>
+      <div style={{padding:'12px 16px 16px',overflowY:'auto',height:'calc(100dvh - 56px)',display:'flex',flexDirection:'column',boxSizing:'border-box',gap:12}}>
         {/* Month picker */}
-        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
-          <label style={{fontSize:'.72rem',fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.04em'}}>Month</label>
+        <div style={{display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
+          <label style={{fontSize:'.72rem',fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.04em',whiteSpace:'nowrap'}}>Month</label>
           <input type="month" value={month} onChange={e=>setMonth(e.target.value)}
-            style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:8,padding:'6px 10px',color:'var(--text)',fontSize:'.84rem',fontFamily:'inherit',outline:'none'}}/>
+            style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:8,padding:'6px 10px',color:'var(--text)',fontSize:'.84rem',fontFamily:'inherit',outline:'none',minWidth:160}}/>
           {loading&&<span style={{fontSize:'.72rem',color:'var(--muted)'}}>Loading...</span>}
         </div>
 
-        <div className="card" style={{marginBottom:80}}>
-          <div className="card-head"><h3>Expense Summary</h3></div>
+        {/* Expense Summary — section wrapper */}
+        <div style={{display:'flex',flexDirection:'column',gap:12}}>
 
-          <div style={{overflowY:'auto',overflowX:'hidden',maxHeight:'calc(100dvh - 260px)',WebkitOverflowScrolling:'touch'}}>
-            <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
-              <colgroup>
-                <col style={{width:'32%'}}/><col style={{width:'24%'}}/><col style={{width:'30%'}}/><col style={{width:'14%'}}/>
-              </colgroup>
-              <thead>
-                <tr>
-                  {['Date','Total','Top 3 Heads',''].map((h,i)=>(
-                    <th key={i} style={{
-                      padding:'9px 10px',textAlign:i===1?'right':'left',
-                      fontSize:'.6rem',fontWeight:700,color:'var(--muted)',
-                      textTransform:'uppercase',letterSpacing:'.04em',
-                      borderBottom:'1px solid var(--border)',
-                      position:'sticky',top:0,background:'rgba(13,15,24,.98)',zIndex:2
-                    }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {grouped.length===0&&!loading&&(
-                  <tr><td colSpan={4} style={{textAlign:'center',padding:40,color:'var(--muted)',fontSize:'.82rem'}}>No expenses recorded this month.</td></tr>
-                )}
-                {grouped.map((g,i)=>(
-                  <tr key={g.date} style={{borderBottom:i<grouped.length-1?'1px solid var(--border)':'none'}}>
-                    <td style={{padding:'11px 10px',fontSize:'.78rem',fontWeight:600,color:'var(--text)',whiteSpace:'nowrap'}}>{fmtDate(g.date)}</td>
-                    <td style={{padding:'11px 10px',textAlign:'right',fontSize:'.78rem',fontWeight:700,color:'var(--green)',whiteSpace:'nowrap'}}>{fmtBDT(g.total)}</td>
-                    <td style={{padding:'11px 10px'}}>
-                      <div style={{display:'flex',flexDirection:'column',gap:3}}>
-                        {g.top3.map((hd: string, j: number)=>(
-                          <span key={j} style={{
-                            fontSize:'.6rem',fontWeight:600,display:'block',
-                            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
-                            color:j===0?'var(--primary)':j===1?'var(--text)':'var(--muted)'
-                          }}>{sh(hd)}</span>
-                        ))}
-                      </div>
-                    </td>
-                    <td style={{padding:'6px 8px'}}>
-                      <div style={{display:'flex',justifyContent:'flex-end'}}>
-                        {iconBtn(()=>openManage(g),'var(--muted)','rgba(255,255,255,.06)','rgba(255,255,255,.12)',<IconList/>,'View entries')}
-                      </div>
-                    </td>
+          {/* TOP TABLE: Datewise Expense Summary */}
+          <div className="card" style={{display:'flex',flexDirection:'column',minWidth:0,marginBottom:0}}>
+            <div className="card-head" style={{flexShrink:0}}>
+              <h3 style={{fontSize:'.9rem'}}>Datewise Expense Summary</h3>
+            </div>
+            <div style={{overflowX:'auto',WebkitOverflowScrolling:'touch' as any}}>
+              <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed',minWidth:300}}>
+                <colgroup>
+                  <col style={{width:'28%'}}/><col style={{width:'26%'}}/><col style={{width:'32%'}}/><col style={{width:'14%'}}/>
+                </colgroup>
+                <thead>
+                  <tr>
+                    {['Date','Total','Top Heads',''].map((h,i)=>(
+                      <th key={i} style={{...thStyle,textAlign:i===1?'right':'left'}}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {grouped.length===0&&!loading&&(
+                    <tr><td colSpan={4} style={{textAlign:'center',padding:30,color:'var(--muted)',fontSize:'.82rem'}}>No expenses this month.</td></tr>
+                  )}
+                  {grouped.map((g,i)=>(
+                    <tr key={g.date} style={{borderBottom:i<grouped.length-1?'1px solid var(--border)':'none'}}>
+                      <td style={{...tdStyle,fontWeight:600}}>{fmtDate(g.date)}</td>
+                      <td style={{...tdStyle,textAlign:'right',fontWeight:700}}>{fmtBDT(g.total)}</td>
+                      <td style={{padding:'10px 10px'}}>
+                        <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                          {g.top3.map((hd: string, j: number)=>(
+                            <span key={j} style={{
+                              fontSize:'.6rem',fontWeight:600,display:'block',
+                              overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+                              color:'var(--text)'
+                            }}>{sh(hd)}</span>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{padding:'6px 8px'}}>
+                        <div style={{display:'flex',justifyContent:'flex-end'}}>
+                          {iconBtn(()=>openManage(g),'var(--muted)','rgba(255,255,255,.06)','rgba(255,255,255,.12)',<IconList/>,'View entries')}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{padding:'10px 16px',borderTop:'2px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',background:'rgba(0,0,0,.15)',flexShrink:0}}>
+              <span style={{fontSize:'.74rem',fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.04em'}}>Total</span>
+              <span style={{fontSize:'1.15rem',fontWeight:800,color:'var(--orange)'}}>{fmtBDT(monthTotal)}</span>
+            </div>
           </div>
 
-          <div style={{padding:'12px 16px',borderTop:'2px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',background:'rgba(0,0,0,.15)'}}>
-            <span style={{fontSize:'.74rem',fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.04em'}}>Monthly Total</span>
-            <span style={{fontSize:'1.25rem',fontWeight:800,color:'var(--orange)'}}>{fmtBDT(monthTotal)}</span>
+          {/* BOTTOM TABLE: Top Expense Heads */}
+          <div className="card" style={{display:'flex',flexDirection:'column',minWidth:0,marginBottom:0}}>
+            <div className="card-head" style={{flexShrink:0}}>
+              <h3 style={{fontSize:'.9rem'}}>Top Expense Heads</h3>
+            </div>
+            <div style={{overflowX:'auto',WebkitOverflowScrolling:'touch' as any}}>
+              <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed',minWidth:240}}>
+                <colgroup>
+                  <col style={{width:'12%'}}/><col style={{width:'58%'}}/><col style={{width:'30%'}}/>
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th style={{...thStyle,textAlign:'center'}}>#</th>
+                    <th style={thStyle}>Description</th>
+                    <th style={{...thStyle,textAlign:'right'}}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topHeads.length===0&&!loading&&(
+                    <tr><td colSpan={3} style={{textAlign:'center',padding:30,color:'var(--muted)',fontSize:'.82rem'}}>No data.</td></tr>
+                  )}
+                  {topHeads.map((r,i)=>(
+                    <tr key={r.head} style={{borderBottom:i<topHeads.length-1?'1px solid var(--border)':'none'}}>
+                      <td style={{...tdStyle,textAlign:'center',fontWeight:700,fontSize:'.7rem',color:'var(--muted)'}}>{r.sl}</td>
+                      <td style={{...tdStyle,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:'.72rem',fontWeight:600}}>{sh(r.head)}</td>
+                      <td style={{...tdStyle,textAlign:'right',fontWeight:700,fontSize:'.76rem'}}>{fmtBDT(r.amt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
+
         </div>
       </div>
 
@@ -365,7 +435,7 @@ export default function AccountsPage() {
                   padding:'12px 14px',display:'flex',alignItems:'center',gap:10
                 }}>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:'.8rem',fontWeight:700,color:'var(--green)',marginBottom:2}}>{fmtBDT(exp.amount)}</div>
+                    <div style={{fontSize:'.8rem',fontWeight:700,color:'var(--text)',marginBottom:2}}>{fmtBDT(exp.amount)}</div>
                     <div style={{fontSize:'.72rem',fontWeight:600,color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sh(exp.expense_head||'-')}</div>
                     {exp.description&&<div style={{fontSize:'.68rem',color:'var(--muted)',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{exp.description}</div>}
                     <div style={{fontSize:'.64rem',color:'var(--muted)',marginTop:3}}>{exp.company_name} · {exp.payment_method}</div>
@@ -396,7 +466,14 @@ export default function AccountsPage() {
             boxShadow:'0 -8px 40px rgba(0,0,0,.5)',
             animation:'slideSheet .22s ease-out'
           }}>
-            <EntrySheet/>
+            <EntrySheet
+              editId={editId}
+              form={form}
+              formLoading={formLoading}
+              onClose={() => setSheetOpen(false)}
+              onChange={handleChange}
+              onSubmit={handleSubmit}
+            />
           </div>
         </div>
       )}

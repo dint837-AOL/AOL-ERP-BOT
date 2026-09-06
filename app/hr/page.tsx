@@ -109,10 +109,10 @@ function getWorkingDaysInMonth(year: number, month: number): number {
 function getInitials(name: string): string {
   if (!name) return '??';
   const n = name.trim().toLowerCase();
-  if (n.includes('ahsan') || n.includes('kabir')) return 'MAK';
+  if (n.includes('ahsan') || n.includes('kabir')) return 'AK';
   if (n.includes('kamrul') || n.includes('islam')) return 'KI';
   if (n.includes('rafi') || n.includes('tajimur')) return 'TR';
-  if (n.includes('orko')) return 'O';
+  if (n.includes('orko')) return 'AO';
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return (parts[0] || '').slice(0, 1).toUpperCase();
   const first = parts[0] || '';
@@ -604,22 +604,24 @@ export default function HRPage() {
 
       <div className="scroll" style={{ overflowX: 'hidden', maxWidth: '100vw' }}>
 
-        {/* Date navigator & In/Out buttons — Top */}
+        {/* Date navigator — always visible; In/Out only on Employee tab */}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px 8px 6px', gap: 8, maxWidth: '100%', boxSizing: 'border-box' }}>
-          {/* In button — small left */}
-          <button
-            className="btn btn-green btn-sm"
-            disabled={attLoading || alreadyCheckedIn}
-            onClick={() => markAttendance('IN')}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 3,
-              fontSize: '.76rem', padding: '5px 10px', fontWeight: 700,
-              opacity: alreadyCheckedIn ? 0.45 : 1, transition: 'opacity .2s',
-              borderRadius: 7, flexShrink: 0
-            }}
-          >
-            <LogIn size={12} /> In
-          </button>
+          {/* In button — only on Employee (report) tab */}
+          {activeTab === 'report' && (
+            <button
+              className="btn btn-green btn-sm"
+              disabled={attLoading || alreadyCheckedIn}
+              onClick={() => markAttendance('IN')}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                fontSize: '.76rem', padding: '5px 10px', fontWeight: 700,
+                opacity: alreadyCheckedIn ? 0.45 : 1, transition: 'opacity .2s',
+                borderRadius: 7, flexShrink: 0
+              }}
+            >
+              <LogIn size={12} /> In
+            </button>
+          )}
 
           {/* Date navigator — center */}
           <div className="dnav" style={{ position: 'relative', flexShrink: 0 }}>
@@ -652,20 +654,22 @@ export default function HRPage() {
             </button>
           </div>
 
-          {/* Out button — small right */}
-          <button
-            className="btn btn-red btn-sm"
-            disabled={attLoading || !alreadyCheckedIn || alreadyCheckedOut}
-            onClick={() => markAttendance('OUT')}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 3,
-              fontSize: '.76rem', padding: '5px 10px', fontWeight: 700,
-              opacity: (!alreadyCheckedIn || alreadyCheckedOut) ? 0.45 : 1, transition: 'opacity .2s',
-              borderRadius: 7, flexShrink: 0
-            }}
-          >
-            <LogOut size={12} /> Out
-          </button>
+          {/* Out button — only on Employee (report) tab */}
+          {activeTab === 'report' && (
+            <button
+              className="btn btn-red btn-sm"
+              disabled={attLoading || !alreadyCheckedIn || alreadyCheckedOut}
+              onClick={() => markAttendance('OUT')}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                fontSize: '.76rem', padding: '5px 10px', fontWeight: 700,
+                opacity: (!alreadyCheckedIn || alreadyCheckedOut) ? 0.45 : 1, transition: 'opacity .2s',
+                borderRadius: 7, flexShrink: 0
+              }}
+            >
+              <LogOut size={12} /> Out
+            </button>
+          )}
         </div>
 
 
@@ -1124,18 +1128,18 @@ export default function HRPage() {
           );
         })()}
 
-        {/* Tabs: Team (admin only), Individual (all), Leave Request (all) */}
+        {/* Tabs: Summary (admin only), Employee (all), Leave Apply (all) */}
         <div className="tabs">
           {isAdmin && (
             <div className={'tab ' + (activeTab === 'att' ? 'on' : '')} onClick={() => setActiveTab('att')}>
-              Team
+              Summary
             </div>
           )}
           <div className={'tab ' + (activeTab === 'report' ? 'on' : '')} onClick={() => setActiveTab('report')}>
-            Individual
+            Employee
           </div>
           <div className={'tab ' + (activeTab === 'leave' ? 'on' : '')} onClick={() => setActiveTab('leave')}>
-            Leave Request
+            Leave Apply
             {pendingLeaves > 0 && isAdmin && (
               <span style={{ marginLeft: 6, background: 'var(--orange)', color: '#0d0f18', fontSize: '.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: 10, verticalAlign: 'middle' }}>
                 {pendingLeaves}
@@ -1144,7 +1148,7 @@ export default function HRPage() {
           </div>
         </div>
 
-        {/* Team tab — cumulative attendance table (Admin only) */}
+        {/* Summary tab — cumulative attendance table (Admin only) */}
         {activeTab === 'att' && isAdmin && (
           <div className="card">
             <div className="card-head" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
@@ -1244,6 +1248,25 @@ export default function HRPage() {
                   if (leave) ex.leave = `${leave.leave_type} (${leave.status})`;
                 });
 
+                // Compute monthly leave counts per member
+                const monthLeaveCounts = new Map<number, number>();
+                const curMonthPrefix = curDate.substring(0, 7);
+                leaves.forEach((lv: any) => {
+                  if (!lv.start_date || lv.status !== 'APPROVED') return;
+                  if (!lv.start_date.startsWith(curMonthPrefix) && !lv.end_date?.startsWith(curMonthPrefix)) return;
+                  const start = new Date(lv.start_date + 'T00:00:00');
+                  const end = new Date((lv.end_date || lv.start_date) + 'T00:00:00');
+                  let cnt = 0;
+                  for (const cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
+                    const ds = cur.toLocaleDateString('en-CA');
+                    if (!ds.startsWith(curMonthPrefix)) continue;
+                    const dow = cur.getDay();
+                    if (dow !== 5 && dow !== 6) cnt++;
+                  }
+                  const prev = monthLeaveCounts.get(lv.member_id) || 0;
+                  monthLeaveCounts.set(lv.member_id, prev + cnt);
+                });
+
                 const list = Array.from(agg.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
                 return (
@@ -1269,6 +1292,7 @@ export default function HRPage() {
                         ) : (
                           list.map((l, idx) => {
                             const stats = monthlyStats.get(l.member_id) || { daysPresent: 0, totalHours: 0 };
+                            const leaveCount = monthLeaveCounts.get(l.member_id) || 0;
                             return (
                               <tr key={idx}>
                                 {/* Emp Initials Avatar */}
@@ -1308,26 +1332,12 @@ export default function HRPage() {
                                   </span>
                                   <span style={{ color: 'var(--muted)', fontSize: '.64rem' }}>/{elapsedWorkingDays}</span>
                                 </td>
-                                {/* Leave badge */}
-                                <td style={{ padding: '6px 2px', textAlign: 'center' }}>
-                                  {l.leave ? (
-                                    <span
-                                      className="badge"
-                                      style={{
-                                        background: l.leave.includes('APPROVED') ? 'rgba(38,196,134,0.15)' : 'rgba(255,140,0,0.15)',
-                                        color: l.leave.includes('APPROVED') ? 'var(--green)' : '#FF8C00',
-                                        border: `1px solid ${l.leave.includes('APPROVED') ? 'rgba(38,196,134,0.3)' : 'rgba(255,140,0,0.3)'}`,
-                                        fontSize: '.62rem',
-                                        padding: '2px 4px',
-                                        borderRadius: '4px',
-                                        whiteSpace: 'nowrap',
-                                        display: 'inline-block'
-                                      }}
-                                    >
-                                      {l.leave.split(' ')[0]}
-                                    </span>
+                                {/* Leave: monthly approved leave day count */}
+                                <td style={{ padding: '6px 2px', textAlign: 'center', fontSize: '.72rem' }}>
+                                  {leaveCount > 0 ? (
+                                    <span style={{ fontWeight: 700, color: '#2979FF' }}>{leaveCount}</span>
                                   ) : (
-                                    <span style={{ color: 'var(--muted)', fontSize: '.7rem' }}>—</span>
+                                    <span style={{ color: 'var(--muted)' }}>—</span>
                                   )}
                                 </td>
                               </tr>
@@ -1343,20 +1353,20 @@ export default function HRPage() {
           </div>
         )}
 
-        {/* Leave Request tab (always visible to employee, or selected by admin) */}
+        {/* Leave Apply tab (always visible to employee, or selected by admin) */}
         {(activeTab === 'leave' || !isAdmin) && (
           <div className="card">
             <div className="card-head">
               <h3>{isAdmin ? 'All Leave Requests' : 'My Leave Requests'}</h3>
             </div>
-            <div style={{ width: '100%', overflowX: 'hidden' }}>
+            <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
               <table style={{ width: '100%', minWidth: '0px', maxWidth: '100%', fontSize: '.74rem', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
                 <colgroup>
-                  {isAdmin && <col style={{ width: '14%' }} />}
-                  <col style={{ width: isAdmin ? '26%' : '30%' }} />
-                  <col style={{ width: isAdmin ? '28%' : '46%' }} />
-                  <col style={{ width: isAdmin ? '16%' : '24%' }} />
-                  {isAdmin && <col style={{ width: '16%' }} />}
+                  {isAdmin && <col style={{ minWidth: '50px' }} />}
+                  <col style={{ minWidth: '90px' }} />
+                  <col style={{ minWidth: '120px' }} />
+                  <col style={{ minWidth: '60px' }} />
+                  {isAdmin && <col style={{ minWidth: '70px' }} />}
                 </colgroup>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -1477,18 +1487,17 @@ export default function HRPage() {
               {isAdmin ? (
                 <div>
                   <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Employee</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <select
                       className="cw-select"
-                      style={{ minWidth: 180 }}
+                      style={{ minWidth: 160, maxWidth: 200 }}
                       value={reportMemberId}
                       onChange={e => setReportMemberId(e.target.value)}
                     >
                       <option value="">Select employee...</option>
                       {members
-                        .filter(m => !(m.name.toLowerCase().includes('ahsan kabir') && m.role !== 'Admin'))
                         .sort((a,b) => a.name.localeCompare(b.name)).map(m => (
-                        <option key={m.id} value={m.id}>{m.name} - {m.role}</option>
+                        <option key={m.id} value={m.id}>{m.name}</option>
                       ))}
                     </select>
                     <button
@@ -1497,9 +1506,10 @@ export default function HRPage() {
                       title="Download Auto-Attendance Script"
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: 5,
-                        fontSize: '.76rem', padding: '6px 12px',
+                        fontSize: '.76rem', padding: '6px 14px',
                         background: 'rgba(79,126,255,0.12)', border: '1px solid rgba(79,126,255,0.25)',
-                        color: 'var(--primary)', borderRadius: 8, whiteSpace: 'nowrap', cursor: 'pointer'
+                        color: 'var(--primary)', borderRadius: 8, whiteSpace: 'nowrap', cursor: 'pointer',
+                        flexShrink: 0
                       }}
                     >
                       <Download size={13} /> Download
@@ -1551,7 +1561,7 @@ export default function HRPage() {
                     {members.find(m => String(m.id) === String(reportMemberId))?.name || user?.name || 'Employee'}
                   </h2>
                   <div style={{ fontSize: '.85rem', color: 'var(--muted)', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>
-                    {members.find(m => String(m.id) === String(reportMemberId))?.role || user?.role || ''} • {monthLabel(calYear, calMonth)}
+                    {monthLabel(calYear, calMonth)}
                   </div>
                 </div>
               )}
@@ -1634,15 +1644,15 @@ export default function HRPage() {
               })()}
             </div>
 
-            {/* Export as Picture button at the bottom */}
+            {/* Print button at the bottom */}
             {reportMemberId && calDays.length > 0 && (
               <div style={{ padding: '10px 18px 20px', display: 'flex', justifyContent: 'center' }}>
                 <button
                   className="btn btn-primary"
-                  onClick={downloadImage}
+                  onClick={() => window.print()}
                   style={{ width: '100%', maxWidth: '360px', justifyContent: 'center', gap: 8, padding: '12px 18px', fontSize: '.88rem' }}
                 >
-                  <ImageIcon size={15} /> Export as Picture (PNG)
+                  <ImageIcon size={15} /> Print
                 </button>
               </div>
             )}
@@ -1746,7 +1756,7 @@ export default function HRPage() {
                   >
                     <option value={user?.id || ''}>{user?.name} (You)</option>
                     {[...members].sort((a,b) => a.name.localeCompare(b.name)).map(m => (
-                      m.id !== user?.id && <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
+                      m.id !== user?.id && <option key={m.id} value={m.id}>{m.name}</option>
                     ))}
                   </select>
                 ) : (
@@ -1770,27 +1780,27 @@ export default function HRPage() {
                 </select>
               </div>
 
-              {/* From & To in the SAME ROW with Date & Time picker */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-                <div className="fg" style={{ marginBottom: 0 }}>
-                  <label>From (Date & Time)</label>
-                  <input
-                    type="datetime-local"
-                    value={leaveData.start_datetime}
-                    onChange={e => setLeaveData({ ...leaveData, start_datetime: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="fg" style={{ marginBottom: 0 }}>
-                  <label>To (Date & Time)</label>
-                  <input
-                    type="datetime-local"
-                    value={leaveData.end_datetime}
-                    min={leaveData.start_datetime}
-                    onChange={e => setLeaveData({ ...leaveData, end_datetime: e.target.value })}
-                    required
-                  />
-                </div>
+              {/* From & To — stacked vertically to avoid horizontal scroll */}
+              <div className="fg">
+                <label>From (Date &amp; Time)</label>
+                <input
+                  type="datetime-local"
+                  value={leaveData.start_datetime}
+                  onChange={e => setLeaveData({ ...leaveData, start_datetime: e.target.value })}
+                  required
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div className="fg">
+                <label>To (Date &amp; Time)</label>
+                <input
+                  type="datetime-local"
+                  value={leaveData.end_datetime}
+                  min={leaveData.start_datetime}
+                  onChange={e => setLeaveData({ ...leaveData, end_datetime: e.target.value })}
+                  required
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
               </div>
 
               {/* Remarks */}
