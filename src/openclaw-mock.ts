@@ -1187,6 +1187,14 @@ echo "======================================================"
       res.status(201).json(await dbGet('SELECT * FROM meetings WHERE id=?', [lastID]));
     });
     this.app.delete('/api/meetings/:id', async (req, res) => { await dbRun('DELETE FROM meetings WHERE id=?', [req.params.id]); res.json({ ok: true }); });
+    this.app.patch('/api/meetings/:id', async (req, res) => {
+      const { title, contact_name, scheduled_at, reminder_minutes_before } = req.body;
+      await dbRun(
+        `UPDATE meetings SET title=COALESCE(?,title), contact_name=COALESCE(?,contact_name), scheduled_at=COALESCE(?,scheduled_at), reminder_minutes_before=COALESCE(?,reminder_minutes_before) WHERE id=?`,
+        [title||null, contact_name??null, scheduled_at||null, reminder_minutes_before||null, req.params.id]
+      );
+      res.json(await dbGet('SELECT * FROM meetings WHERE id=?', [req.params.id]));
+    });
 
     // ── TENDERS ──────────────────────────────────────────────
     this.app.get('/api/tenders', async (_, res) => res.json(await dbAll('SELECT * FROM tenders ORDER BY submission_deadline ASC')));
