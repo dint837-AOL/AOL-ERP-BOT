@@ -56,11 +56,11 @@ function fmtDateShort(iso: string) {
 
 function getCountdown(deadline: string): { text: string; color: string; urgent: boolean } {
   const diff = new Date(deadline).getTime() - Date.now();
-  if (diff < 0) return { text: 'Expired', color: 'var(--red)', urgent: true };
+  if (diff < 0) return { text: 'Exp.', color: 'var(--red)', urgent: true };
   const days = Math.floor(diff / 86400000);
   const hours = Math.floor((diff % 86400000) / 3600000);
-  if (days === 0) return { text: `${hours}h left`, color: 'var(--orange)', urgent: true };
-  return { text: `${days}d left`, color: days <= 3 ? 'var(--orange)' : 'var(--green)', urgent: days <= 3 };
+  if (days === 0) return { text: `${hours}h`, color: 'var(--orange)', urgent: true };
+  return { text: `${days}d`, color: days <= 3 ? 'var(--orange)' : 'var(--green)', urgent: days <= 3 };
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -351,12 +351,12 @@ export default function TendersPage() {
                       {cd.text}
                     </td>
                     {/* Status dropdown */}
-                    <td style={{ ...td, padding: '6px 6px' }}>
+                    <td style={{ ...td, padding: '6px 8px 6px 14px' }}>
                       <select
                         value={t.status}
                         onChange={e => updateStatus(t.id, e.target.value)}
                         style={{
-                          width: '100%', padding: '5px 4px', borderRadius: 6, fontSize: '.68rem', fontWeight: 600,
+                          width: 'auto', padding: '5px 6px', borderRadius: 6, fontSize: '.68rem', fontWeight: 600,
                           border: '1px solid var(--border)', background: STATUS_BGS[t.status],
                           color: STATUS_COLORS[t.status], cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
                         }}
