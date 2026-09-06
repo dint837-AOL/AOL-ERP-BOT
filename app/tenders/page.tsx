@@ -287,24 +287,6 @@ export default function TendersPage() {
 
       <div style={{ padding: '12px 16px 100px', overflowY: 'auto', overflowX: 'hidden', height: 'calc(100dvh - 56px)', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        {/* Filter pills — Status */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {['ALL', 'UPCOMING', 'IN_PROGRESS', 'SUBMITTED', 'WON', 'LOST'].map(s => (
-            <button key={s} style={pill(fStatus === s)} onClick={() => setFStatus(s)}>
-              {s === 'ALL' ? 'All' : s === 'IN_PROGRESS' ? 'In Progress' : s.charAt(0) + s.slice(1).toLowerCase()}
-            </button>
-          ))}
-        </div>
-
-        {/* Filter pills — Type */}
-        <div style={{ display: 'flex', gap: 6 }}>
-          {['ALL', 'GOVT', 'PRIVATE'].map(t => (
-            <button key={t} style={pill(fType === t)} onClick={() => setFType(t)}>
-              {t === 'ALL' ? 'All Types' : t === 'GOVT' ? 'Government' : 'Private'}
-            </button>
-          ))}
-        </div>
-
         {/* Table card */}
         <div className="card" style={{ marginBottom: 0, flex: 1 }}>
           <div className="card-head">
@@ -315,17 +297,17 @@ export default function TendersPage() {
           {/* Fixed-layout table — fits viewport, zero horizontal scroll */}
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              {/* Title | Org | Deadline | Status | Actions */}
-              <col style={{ width: '28%' }} />
-              <col style={{ width: '20%' }} />
-              <col style={{ width: '18%' }} />
-              <col style={{ width: '20%' }} />
-              <col style={{ width: '14%' }} />
+              {/* Title | Type | Deadline | Status | Actions */}
+              <col style={{ width: '30%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '10%' }} />
             </colgroup>
             <thead>
               <tr>
                 <th style={th}>Title</th>
-                <th style={th}>Org / Type</th>
+                <th style={th}>Type</th>
                 <th style={th}>Deadline</th>
                 <th style={th}>Status</th>
                 <th style={{ ...th, textAlign: 'right' }}></th>
@@ -353,13 +335,10 @@ export default function TendersPage() {
                         </a>
                       )}
                     </td>
-                    {/* Org + type badge */}
+                    {/* Type badge */}
                     <td style={td}>
-                      <div style={{ fontSize: '.74rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' }}>
-                        {t.organization || '—'}
-                      </div>
                       <span style={{
-                        fontSize: '.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginTop: 2, display: 'inline-block',
+                        fontSize: '.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: 4, display: 'inline-block',
                         textTransform: 'uppercase', letterSpacing: '.04em',
                         color: t.tender_type === 'GOVT' ? 'var(--primary)' : 'var(--orange)',
                         background: t.tender_type === 'GOVT' ? 'rgba(79,126,255,.1)' : 'rgba(245,166,35,.1)',

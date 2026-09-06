@@ -106,7 +106,7 @@ function MeetingSheet({ editId, form, saving, onClose, onChange, onSubmit }: Mee
           </div>
         </div>
         <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: '.95rem', fontWeight: 700, borderRadius: 10 }} disabled={saving}>
-          {saving ? 'Saving...' : editId ? 'Update Meeting' : 'Schedule Meeting'}
+          {saving ? 'Saving...' : 'Save'}
         </button>
       </form>
     </>

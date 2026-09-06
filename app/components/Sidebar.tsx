@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, LayoutDashboard, Users, Wallet, FileText, Phone, Map, MessageCircle, Zap, Key, Shield, LogOut } from 'lucide-react';
+import { Home, LayoutDashboard, Users, Wallet, FileText, Phone, MessageCircle, Zap, Key, Shield, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Sidebar() {
@@ -78,8 +78,7 @@ export default function Sidebar() {
           </Link>
         )}
 
-        <a href="#" onClick={closeSide}><Map size={18} /> Roadmap <span className="soon">Soon</span></a>
-        
+
         <div className="nav-section">Bot</div>
         <a href="/chat.html" onClick={closeSide}><MessageCircle size={18} /> ERP Chat</a>
       </nav>
