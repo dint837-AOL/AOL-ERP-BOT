@@ -9,7 +9,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Globe, Key, Mail, Link as LinkIcon, Clock, Trash2, Edit3, RefreshCw } from 'lucide-react';
+import { Key, Clock, Trash2, Edit3 } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -243,19 +243,19 @@ export default function CredentialsPage() {
           {/* Fixed-layout table — fits viewport, zero horizontal scroll */}
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              {/* Name | Type | Remind | Expiry | Actions */}
-              <col style={{ width: '30%' }} />
-              <col style={{ width: '18%' }} />
+              {/* Name | Type | Expiry | Username | Actions */}
+              <col style={{ width: '28%' }} />
+              <col style={{ width: '16%' }} />
               <col style={{ width: '20%' }} />
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '10%' }} />
+              <col style={{ width: '28%' }} />
+              <col style={{ width: '8%' }} />
             </colgroup>
             <thead>
               <tr>
                 <th style={th}>Name</th>
                 <th style={th}>Type</th>
-                <th style={th}>Remind</th>
                 <th style={th}>Expiry</th>
+                <th style={th}>Username</th>
                 <th style={{ ...th, textAlign: 'right' }}></th>
               </tr>
             </thead>
@@ -274,28 +274,24 @@ export default function CredentialsPage() {
 
                 return (
                   <tr key={c.id} style={{ borderBottom: i < creds.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                    {/* Name + username */}
+                    {/* Name */}
                     <td style={td}>
                       <div style={{ fontWeight: 600, fontSize: '.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
-                      {c.username && (
-                        <div style={{ fontSize: '.68rem', color: 'var(--muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.username}</div>
-                      )}
                     </td>
                     {/* Type */}
                     <td style={{ ...td, fontSize: '.72rem', color: 'var(--muted)' }}>{typeLabel(c.cred_type)}</td>
-                    {/* Reminder days */}
-                    <td style={{ ...td, fontSize: '.72rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                      {c.reminder_days_before ? `${c.reminder_days_before}d` : '—'}
-                    </td>
                     {/* Expiry */}
                     <td style={{ ...td, fontSize: '.72rem', color: expiryColor, whiteSpace: 'nowrap', fontWeight: daysLeft !== null && daysLeft <= 7 ? 600 : 400 }}>
                       {expiryText}
+                    </td>
+                    {/* Username */}
+                    <td style={{ ...td, fontSize: '.72rem', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {c.username || '—'}
                     </td>
                     {/* Actions */}
                     <td style={{ ...td, textAlign: 'right', padding: '6px 8px' }}>
                       <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
                         <button onClick={() => openEdit(c)} title="Edit" style={iconBtn}><Edit3 size={13} /></button>
-                        <button onClick={() => openRotate(c)} title="Rotate" style={iconBtn}><RefreshCw size={13} /></button>
                         <button onClick={() => setDeleteTarget(c)} title="Delete" style={{ ...iconBtn, color: 'var(--red)' }}><Trash2 size={13} /></button>
                       </div>
                     </td>

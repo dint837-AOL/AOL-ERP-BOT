@@ -218,19 +218,19 @@ export default function MeetingsPage() {
           {/* Fixed-layout table — fits viewport, zero horizontal scroll */}
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              {/* Title/Contact | Date | Time | Remind | Actions */}
-              <col style={{ width: '35%' }} />
-              <col style={{ width: '22%' }} />
+              {/* Title | Contact | Date | Time | Actions */}
+              <col style={{ width: '28%' }} />
+              <col style={{ width: '26%' }} />
               <col style={{ width: '20%' }} />
-              <col style={{ width: '15%' }} />
+              <col style={{ width: '18%' }} />
               <col style={{ width: '8%' }} />
             </colgroup>
             <thead>
               <tr>
-                <th style={th}>Title / Contact</th>
+                <th style={th}>Title</th>
+                <th style={th}>Contact</th>
                 <th style={th}>Date</th>
                 <th style={th}>Time</th>
-                <th style={th}>Remind</th>
                 <th style={{ ...th, textAlign: 'right' }}></th>
               </tr>
             </thead>
@@ -244,30 +244,23 @@ export default function MeetingsPage() {
                 </td></tr>
               ) : meetings.map((m, i) => (
                 <tr key={m.id} style={{ borderBottom: i < meetings.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                  {/* Title + contact */}
+                  {/* Title */}
                   <td style={td}>
                     <div style={{ fontWeight: 600, fontSize: '.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.title}</div>
-                    {m.contact_name && (
-                      <div style={{ fontSize: '.68rem', color: 'var(--muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.contact_name}</div>
-                    )}
+                  </td>
+                  {/* Contact */}
+                  <td style={{ ...td, fontSize: '.76rem', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {m.contact_name || '—'}
                   </td>
                   {/* Date */}
                   <td style={{ ...td, fontSize: '.74rem', whiteSpace: 'nowrap' }}>{fmtDateShort(m.scheduled_at)}</td>
                   {/* Time */}
                   <td style={{ ...td, fontSize: '.74rem', whiteSpace: 'nowrap' }}>{fmtTime(m.scheduled_at)}</td>
-                  {/* Reminder */}
-                  <td style={{ ...td, fontSize: '.68rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                    {m.reminder_minutes_before ? `${m.reminder_minutes_before}m` : '—'}
-                  </td>
                   {/* Actions */}
                   <td style={{ ...td, textAlign: 'right', padding: '6px 8px' }}>
                     <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                      <button onClick={() => openEdit(m)} title="Edit" style={iconBtn}>
-                        <Edit3 size={13} />
-                      </button>
-                      <button onClick={() => setDeleteTarget(m)} title="Delete" style={{ ...iconBtn, color: 'var(--red)' }}>
-                        <Trash2 size={13} />
-                      </button>
+                      <button onClick={() => openEdit(m)} title="Edit" style={iconBtn}><Edit3 size={13} /></button>
+                      <button onClick={() => setDeleteTarget(m)} title="Delete" style={{ ...iconBtn, color: 'var(--red)' }}><Trash2 size={13} /></button>
                     </div>
                   </td>
                 </tr>
