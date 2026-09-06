@@ -8,12 +8,13 @@ export async function sendTelegramMessage(chatId: string, message: string): Prom
   const cleanChatId = chatId.trim();
   if (!cleanChatId) return { success: false, error: 'No Chat ID provided' };
 
-  // Fallback to the exact token provided by the user if Render env fails to load it
-  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim() || '8903234180:AAHCLBPu8xpqgI_1etFuiHYz5rW5QipxKYE';
+  // Read token from TELEGRAM_BOT_TOKEN or TELEGRAM_TOKEN, strip accidental quotes and whitespace
+  const rawToken = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_TOKEN || '';
+  const botToken = rawToken.replace(/^["']|["']$/g, '').trim();
 
   if (!botToken) {
     console.log(`🚀 [Telegram Placeholder] Message to Chat ID: ${cleanChatId}: ${message}`);
-    return { success: false, error: 'TELEGRAM_BOT_TOKEN is missing in Render Environment Variables. Please add it and deploy again.' }; 
+    return { success: false, error: 'TELEGRAM_BOT_TOKEN is missing in environment variables (.env / Render Environment). Please set TELEGRAM_BOT_TOKEN and restart/redeploy.' }; 
   }
 
   try {

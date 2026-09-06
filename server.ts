@@ -9,15 +9,13 @@
  * It initializes the OpenClaw (Mock AI engine for now), Database connection, 
  * and handles WhatsApp gateway configurations.
  */
+import 'dotenv/config';
 import express from 'express';
 import next from 'next';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { OpenClaw, WhatsAppGateway } from './src/openclaw-mock.js';
-import * as dotenv from 'dotenv';
 import { logAttendanceTool } from './src/tools/attendanceTool.js';
-
-dotenv.config();
 
 const dev = process.env.NODE_ENV !== 'production';
 const nextApp = next({ dev });

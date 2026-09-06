@@ -333,7 +333,8 @@ export class OpenClaw {
     });
 
     this.app.post('/api/debug-env', requireRole('Admin'), async (req, res) => {
-      res.json({ keys: Object.keys(process.env), hasToken: !!process.env.TELEGRAM_BOT_TOKEN });
+      const hasToken = !!((process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_BOT_TOKEN.trim()) || (process.env.TELEGRAM_TOKEN && process.env.TELEGRAM_TOKEN.trim()));
+      res.json({ keys: Object.keys(process.env), hasToken });
     });
 
     // ── ATTENDANCE ───────────────────────────────────────────
