@@ -15,6 +15,8 @@
  */
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
+
 import {
   ChevronLeft,
   ChevronRight,
@@ -224,10 +226,14 @@ function MobileAddSheet({ newRow, setNewRow, members, onSubmit, saving, onClose 
 
 /* ═══════════════════════════════════════════════════ */
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'Admin';
+
   const [tasks,         setTasks]         = useState<Task[]>([]);
   const [members,       setMembers]       = useState<Member[]>([]);
   const [currentDate,   setCurrentDate]   = useState(getLocalDateString());
-  const [tab,           setTab]           = useState<'admin' | 'team' | 'board'>('admin');
+  // Employees start on 'team' view (their own tasks); admins default to 'admin' full table
+  const [tab,           setTab]           = useState<'admin' | 'team' | 'board'>(isAdmin ? 'admin' : 'team');
   const [loading,       setLoading]       = useState(true);
   const [toastMsg,      setToastMsg]      = useState('');
   const [isMobile,      setIsMobile]      = useState(false);
@@ -660,21 +666,25 @@ export default function DashboardPage() {
               <ChevronRight size={18} />
             </button>
           </div>
-          {/* Archive icon button */}
+          {/* Archive icon button — Admin only */}
+          {isAdmin && (
           <button
             onClick={() => { setShowArchived(true); fetchArchivedTasks(); }}
             style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '10px', color: '#94a3b8', padding: '10px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
             title="View archived tasks">
             <Archive size={17} />
           </button>
+          )}
         </div>
 
         {/* ── Tab bar ─────────────────────────────── */}
         <div className="tabs dash-tabs" style={{ borderBottom: '1px solid #2a3050', marginBottom: 16, display: 'flex', overflowX: 'auto' }}>
-          {(['admin', 'team', 'board'] as const).map(t => (
+          {(['admin', 'team', 'board'] as const)
+            .filter(t => isAdmin || t !== 'admin') // Employees don't see Admin View tab
+            .map(t => (
             <div key={t} className={`tab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)}
               style={{ padding: '10px 20px', fontSize: '0.88rem', fontWeight: tab === t ? 600 : 500, color: tab === t ? '#38bdf8' : '#94a3b8', borderBottom: tab === t ? '2px solid #38bdf8' : '2px solid transparent', cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-              {t === 'admin' ? 'Admin View' : t === 'team' ? 'Team View' : 'Board View'}
+              {t === 'admin' ? 'Admin View' : t === 'team' ? isAdmin ? 'Team View' : 'My Tasks' : 'Board View'}
             </div>
           ))}
         </div>
@@ -1246,8 +1256,8 @@ export default function DashboardPage() {
         );
       })()}
 
-      {/* ── Mobile FAB: floating + button (Admin View only) ── */}
-      {isMobile && tab === 'admin' && (
+      {/* ── Mobile FAB: floating + button (Admin only) ── */}
+      {isMobile && isAdmin && tab === 'admin' && (
         <button
           onClick={() => setShowMobileAdd(true)}
           style={{ position: 'fixed', bottom: 24, right: 20, zIndex: 700, width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #4f7eff, #6c4fe3)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fabPulse 2.4s ease-in-out infinite', transition: 'transform 0.15s' }}
@@ -1255,6 +1265,7 @@ export default function DashboardPage() {
           <Plus size={24} />
         </button>
       )}
+
 
       {/* ── Mobile Add Task Bottom Sheet ── */}
       {showMobileAdd && (

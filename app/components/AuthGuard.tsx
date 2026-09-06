@@ -1,14 +1,16 @@
-"use client";
+﻿"use client";
 
 import React from "react";
 import { useAuth } from "../context/AuthContext";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
+
+// Routes that only Admins can access
+const ADMIN_ONLY_ROUTES = ['/accounts', '/credentials', '/meetings', '/tenders', '/admin'];
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, token, loading } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
 
   // Intercept all fetch requests to automatically add the Authorization header
   if (typeof window !== "undefined" && !(window as any).__fetchIntercepted) {
@@ -16,11 +18,11 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
       let [resource, config] = args;
-      if (typeof resource === 'string' && resource.startsWith('/api') && !resource.startsWith('/api/auth/login')) {
+      if (typeof resource === "string" && resource.startsWith("/api") && !resource.startsWith("/api/auth/login")) {
         config = config || {};
         config.headers = {
           ...config.headers,
-          'Authorization': `Bearer ${token || (document.cookie.match(/(?:^|; )token=([^;]*)/)?.[1])}`
+          Authorization: `Bearer ${token || (document.cookie.match(/(?:^|; )token=([^;]*)/)?.[1])}`,
         };
       }
       const response = await originalFetch(resource, config);
@@ -33,24 +35,24 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     };
   }
 
-  // While auth state is loading from cookies, show spinner — never redirect
+  // While auth state is loading from cookies, show spinner � never redirect
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'var(--bg)', color: 'var(--muted)' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 8, color: 'var(--primary)' }}>AlliedOne</div>
-          <div style={{ fontSize: '0.85rem' }}>Loading ERP System...</div>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: "var(--bg)", color: "var(--muted)" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: 8, color: "var(--primary)" }}>AlliedOne</div>
+          <div style={{ fontSize: "0.85rem" }}>Loading ERP System...</div>
         </div>
       </div>
     );
   }
 
-  // Login page — render without sidebar
+  // Login page � render without sidebar
   if (pathname === "/login") {
     return <>{children}</>;
   }
 
-  // Not authenticated — redirect to login
+  // Not authenticated � redirect to login
   if (!user) {
     if (typeof window !== "undefined") {
       window.location.href = "/login";
@@ -58,13 +60,19 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  // Authenticated — render with sidebar
+  // Non-admin trying to access an admin-only route � redirect to home
+  if (user.role !== "Admin" && ADMIN_ONLY_ROUTES.some((route) => pathname.startsWith(route))) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
+    }
+    return null;
+  }
+
+  // Authenticated � render with sidebar
   return (
     <div className="app">
       <Sidebar />
-      <div className="main">
-        {children}
-      </div>
+      <div className="main">{children}</div>
     </div>
   );
 }

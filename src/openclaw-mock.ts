@@ -239,12 +239,22 @@ export class OpenClaw {
 
     // ── TASKS ────────────────────────────────────────────────
     this.app.get('/api/tasks', async (req, res) => {
+      const requestingUser = (req as any).user;
       const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
       const includeArchived = req.query.archived === 'true';
       const archivedFilter = includeArchived ? 't.is_archived=1' : '(t.is_archived=0 OR t.is_archived IS NULL)';
+      // Employees only see their own assigned tasks
+      if (requestingUser?.role !== 'Admin') {
+        const memberId = requestingUser?.id;
+        return res.json(await dbAll(
+          `SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE (date(t.task_date) = date(?) OR (date(t.task_date) < date(?) AND t.status != 'DONE')) AND ${archivedFilter} AND t.assigned_to=? ORDER BY t.task_date DESC, t.created_at DESC`,
+          [date, date, memberId]
+        ));
+      }
       res.json(await dbAll(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE (date(t.task_date) = date(?) OR (date(t.task_date) < date(?) AND t.status != 'DONE')) AND ${archivedFilter} ORDER BY t.task_date DESC, t.created_at DESC`, [date, date]));
     });
-    this.app.post('/api/tasks', async (req, res) => {
+    // Only Admins can create tasks
+    this.app.post('/api/tasks', requireRole('Admin'), async (req, res) => {
       const { title, description, deadline, priority, assigned_to, task_date, action_type, recipient, status } = req.body;
       if (!title) return res.status(400).json({ error: 'Title required' });
       const date = task_date || new Date().toISOString().split('T')[0];
@@ -264,7 +274,18 @@ export class OpenClaw {
       res.status(201).json(newTask);
     });
     this.app.patch('/api/tasks/:id', async (req, res) => {
+      const requestingUser = (req as any).user;
       const oldTask = await dbGet(`SELECT t.*, m.name as assignee_name FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [req.params.id]) as any;
+
+      // Employees can only update status on tasks assigned to them
+      if (requestingUser?.role !== 'Admin') {
+        if (!oldTask || oldTask.assigned_to !== requestingUser?.id) {
+          return res.status(403).json({ error: 'You can only update tasks assigned to you.' });
+        }
+        if (Object.keys(req.body).some(k => k !== 'status')) {
+          return res.status(403).json({ error: 'Employees may only update task status.' });
+        }
+      }
 
       const allowed = ['status', 'priority', 'title', 'description', 'deadline', 'assigned_to', 'action_type', 'recipient', 'is_archived'];
       const updates: string[] = [];
@@ -283,7 +304,7 @@ export class OpenClaw {
       const updatedTask = await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [req.params.id]) as any;
       
       if (oldTask && updatedTask) {
-        const user = (req as any).user;
+        const user = requestingUser;
         
         // If status changed, notify admins and assignee
         if (req.body.status && req.body.status !== oldTask.status) {
@@ -299,7 +320,8 @@ export class OpenClaw {
 
       res.json(updatedTask);
     });
-    this.app.delete('/api/tasks/:id', async (req, res) => { await dbRun('DELETE FROM tasks WHERE id=?', [req.params.id]); res.json({ ok: true }); });
+    // Only Admins can delete tasks
+    this.app.delete('/api/tasks/:id', requireRole('Admin'), async (req, res) => { await dbRun('DELETE FROM tasks WHERE id=?', [req.params.id]); res.json({ ok: true }); });
 
     // ── TELEGRAM TEST ─────────────────────────────────────────
     this.app.post('/api/test-telegram', requireRole('Admin'), async (req, res) => {
@@ -1098,17 +1120,17 @@ echo "======================================================"
       res.json({ ok: true });
     });
 
-    // ── EXPENSES ─────────────────────────────────────────────
-    this.app.get('/api/expense-categories', async (_, res) => res.json(await dbAll('SELECT * FROM expense_categories ORDER BY name')));
-    this.app.get('/api/expenses', async (req, res) => {
+    // ── EXPENSES (Admin only) ─────────────────────────────────
+    this.app.get('/api/expense-categories', requireRole('Admin'), async (_, res) => res.json(await dbAll('SELECT * FROM expense_categories ORDER BY name')));
+    this.app.get('/api/expenses', requireRole('Admin'), async (req, res) => {
       const month = (req.query.month as string) || new Date().toISOString().substring(0, 7);
       res.json(await dbAll(`SELECT e.*,c.name as category_name,c.color as category_color,c.budget_limit,m.name as member_name FROM expenses e LEFT JOIN expense_categories c ON e.category_id=c.id LEFT JOIN members m ON e.entered_by=m.id WHERE e.expense_date LIKE ? ORDER BY e.expense_date DESC`, [month+'%']));
     });
-    this.app.get('/api/expenses/summary', async (req, res) => {
+    this.app.get('/api/expenses/summary', requireRole('Admin'), async (req, res) => {
       const month = (req.query.month as string) || new Date().toISOString().substring(0, 7);
       res.json(await dbAll(`SELECT c.id,c.name,c.color,c.budget_limit,COALESCE(SUM(e.amount),0) as total FROM expense_categories c LEFT JOIN expenses e ON e.category_id=c.id AND e.expense_date LIKE ? GROUP BY c.id ORDER BY total DESC`, [month+'%']));
     });
-    this.app.get('/api/expenses/daily-summary', async (req, res) => {
+    this.app.get('/api/expenses/daily-summary', requireRole('Admin'), async (req, res) => {
       const month = (req.query.month as string) || new Date().toISOString().substring(0, 7);
       // Get per-day totals and top-3 heads
       const days = await dbAll(
@@ -1125,7 +1147,7 @@ echo "======================================================"
       }
       res.json(result);
     });
-    this.app.post('/api/expenses', async (req, res) => {
+    this.app.post('/api/expenses', requireRole('Admin'), async (req, res) => {
       const { category_id, amount, description, entered_by, expense_date, company_name, expense_head, payment_method } = req.body;
       if (amount === undefined || amount === null) return res.status(400).json({ error: 'amount required' });
       const date = expense_date || new Date().toISOString().split('T')[0];
@@ -1137,7 +1159,7 @@ echo "======================================================"
 
       res.status(201).json(await dbGet('SELECT e.*,c.name as category_name FROM expenses e LEFT JOIN expense_categories c ON e.category_id=c.id WHERE e.id=?', [lastID]));
     });
-    this.app.patch('/api/expenses/:id', async (req, res) => {
+    this.app.patch('/api/expenses/:id', requireRole('Admin'), async (req, res) => {
       const { amount, description, expense_date, company_name, expense_head, payment_method } = req.body;
       const parts: string[] = [];
       const values: any[] = [];
@@ -1152,11 +1174,11 @@ echo "======================================================"
       await dbRun(`UPDATE expenses SET ${parts.join(',')} WHERE id=?`, values);
       res.json(await dbGet('SELECT * FROM expenses WHERE id=?', [req.params.id]));
     });
-    this.app.delete('/api/expenses/:id', async (req, res) => { await dbRun('DELETE FROM expenses WHERE id=?', [req.params.id]); res.json({ ok: true }); });
+    this.app.delete('/api/expenses/:id', requireRole('Admin'), async (req, res) => { await dbRun('DELETE FROM expenses WHERE id=?', [req.params.id]); res.json({ ok: true }); });
 
-    // ── CREDENTIALS ──────────────────────────────────────────
-    this.app.get('/api/credentials', async (_, res) => res.json(await dbAll('SELECT * FROM credentials ORDER BY created_at DESC')));
-    this.app.post('/api/credentials', async (req, res) => {
+    // ── CREDENTIALS (Admin only) ──────────────────────────────
+    this.app.get('/api/credentials', requireRole('Admin'), async (_, res) => res.json(await dbAll('SELECT * FROM credentials ORDER BY created_at DESC')));
+    this.app.post('/api/credentials', requireRole('Admin'), async (req, res) => {
       const { name, cred_type, url, username, cost, expiry_date, last_changed_date, reminder_days_before } = req.body;
       if (!name) return res.status(400).json({ error: 'Name is required' });
       const { lastID } = await dbRun(
@@ -1165,8 +1187,8 @@ echo "======================================================"
       );
       res.status(201).json(await dbGet('SELECT * FROM credentials WHERE id=?', [lastID]));
     });
-    this.app.delete('/api/credentials/:id', async (req, res) => { await dbRun('DELETE FROM credentials WHERE id=?', [req.params.id]); res.json({ ok: true }); });
-    this.app.patch('/api/credentials/:id', async (req, res) => {
+    this.app.delete('/api/credentials/:id', requireRole('Admin'), async (req, res) => { await dbRun('DELETE FROM credentials WHERE id=?', [req.params.id]); res.json({ ok: true }); });
+    this.app.patch('/api/credentials/:id', requireRole('Admin'), async (req, res) => {
       const { name, cred_type, url, username, cost, expiry_date, last_changed_date, reminder_days_before } = req.body;
       await dbRun(
         `UPDATE credentials SET name=COALESCE(?,name), cred_type=COALESCE(?,cred_type), url=COALESCE(?,url), username=COALESCE(?,username), cost=COALESCE(?,cost), expiry_date=?, last_changed_date=?, reminder_days_before=COALESCE(?,reminder_days_before) WHERE id=?`,
@@ -1175,9 +1197,9 @@ echo "======================================================"
       res.json(await dbGet('SELECT * FROM credentials WHERE id=?', [req.params.id]));
     });
 
-    // ── MEETINGS ─────────────────────────────────────────────
-    this.app.get('/api/meetings', async (_, res) => res.json(await dbAll('SELECT * FROM meetings ORDER BY scheduled_at ASC')));
-    this.app.post('/api/meetings', async (req, res) => {
+    // ── MEETINGS (Admin only) ─────────────────────────────────
+    this.app.get('/api/meetings', requireRole('Admin'), async (_, res) => res.json(await dbAll('SELECT * FROM meetings ORDER BY scheduled_at ASC')));
+    this.app.post('/api/meetings', requireRole('Admin'), async (req, res) => {
       const { title, contact_name, scheduled_at, reminder_minutes_before } = req.body;
       if (!title || !scheduled_at) return res.status(400).json({ error: 'Title and scheduled_at required' });
       const { lastID } = await dbRun(
@@ -1186,8 +1208,8 @@ echo "======================================================"
       );
       res.status(201).json(await dbGet('SELECT * FROM meetings WHERE id=?', [lastID]));
     });
-    this.app.delete('/api/meetings/:id', async (req, res) => { await dbRun('DELETE FROM meetings WHERE id=?', [req.params.id]); res.json({ ok: true }); });
-    this.app.patch('/api/meetings/:id', async (req, res) => {
+    this.app.delete('/api/meetings/:id', requireRole('Admin'), async (req, res) => { await dbRun('DELETE FROM meetings WHERE id=?', [req.params.id]); res.json({ ok: true }); });
+    this.app.patch('/api/meetings/:id', requireRole('Admin'), async (req, res) => {
       const { title, contact_name, scheduled_at, reminder_minutes_before } = req.body;
       await dbRun(
         `UPDATE meetings SET title=COALESCE(?,title), contact_name=COALESCE(?,contact_name), scheduled_at=COALESCE(?,scheduled_at), reminder_minutes_before=COALESCE(?,reminder_minutes_before) WHERE id=?`,
@@ -1196,9 +1218,9 @@ echo "======================================================"
       res.json(await dbGet('SELECT * FROM meetings WHERE id=?', [req.params.id]));
     });
 
-    // ── TENDERS ──────────────────────────────────────────────
-    this.app.get('/api/tenders', async (_, res) => res.json(await dbAll('SELECT * FROM tenders ORDER BY submission_deadline ASC')));
-    this.app.post('/api/tenders', async (req, res) => {
+    // ── TENDERS (Admin only) ──────────────────────────────────
+    this.app.get('/api/tenders', requireRole('Admin'), async (_, res) => res.json(await dbAll('SELECT * FROM tenders ORDER BY submission_deadline ASC')));
+    this.app.post('/api/tenders', requireRole('Admin'), async (req, res) => {
       const { title, organization, tender_type, published_date, submission_deadline, estimated_value, status, documents_url, notes, assigned_to } = req.body;
       if (!title || !submission_deadline) return res.status(400).json({ error: 'Title and deadline required' });
       const { lastID } = await dbRun(
@@ -1207,13 +1229,13 @@ echo "======================================================"
       );
       res.status(201).json(await dbGet('SELECT * FROM tenders WHERE id=?', [lastID]));
     });
-    this.app.patch('/api/tenders/:id/status', async (req, res) => {
+    this.app.patch('/api/tenders/:id/status', requireRole('Admin'), async (req, res) => {
       const { status } = req.body;
       await dbRun('UPDATE tenders SET status=? WHERE id=?', [status, req.params.id]);
       res.json(await dbGet('SELECT * FROM tenders WHERE id=?', [req.params.id]));
     });
-    this.app.delete('/api/tenders/:id', async (req, res) => { await dbRun('DELETE FROM tenders WHERE id=?', [req.params.id]); res.json({ ok: true }); });
-    this.app.patch('/api/tenders/:id', async (req, res) => {
+    this.app.delete('/api/tenders/:id', requireRole('Admin'), async (req, res) => { await dbRun('DELETE FROM tenders WHERE id=?', [req.params.id]); res.json({ ok: true }); });
+    this.app.patch('/api/tenders/:id', requireRole('Admin'), async (req, res) => {
       const { title, organization, tender_type, published_date, submission_deadline, estimated_value, documents_url, notes } = req.body;
       await dbRun(
         `UPDATE tenders SET title=COALESCE(?,title), organization=COALESCE(?,organization), tender_type=COALESCE(?,tender_type), published_date=?, submission_deadline=COALESCE(?,submission_deadline), estimated_value=COALESCE(?,estimated_value), documents_url=COALESCE(?,documents_url), notes=COALESCE(?,notes) WHERE id=?`,

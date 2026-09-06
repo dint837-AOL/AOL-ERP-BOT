@@ -42,20 +42,25 @@ export default function Sidebar() {
       <nav className="nav" style={{ flex: 1, overflowY: 'auto' }}>
         <div className="nav-section">Workspace</div>
 
-        {/* Home */}
+        {/* Home — visible to all */}
         <Link href="/" className={pathname === '/' ? 'on' : ''} onClick={closeSide}>
           <Home size={18} /> Home
         </Link>
 
-        {/* Alphabetical order */}
-        <Link href="/accounts" className={pathname === '/accounts' ? 'on' : ''} onClick={closeSide}>
-          <Wallet size={18} /> Accounts
-        </Link>
+        {/* Admin-only sections */}
+        {user?.role === 'Admin' && (
+          <>
+            <Link href="/accounts" className={pathname === '/accounts' ? 'on' : ''} onClick={closeSide}>
+              <Wallet size={18} /> Accounts
+            </Link>
 
-        <Link href="/credentials" className={pathname === '/credentials' ? 'on' : ''} onClick={closeSide}>
-          <Key size={18} /> Credentials
-        </Link>
+            <Link href="/credentials" className={pathname === '/credentials' ? 'on' : ''} onClick={closeSide}>
+              <Key size={18} /> Credentials
+            </Link>
+          </>
+        )}
 
+        {/* Visible to all authenticated users */}
         <Link href="/dashboard" className={pathname === '/dashboard' ? 'on' : ''} onClick={closeSide}>
           <LayoutDashboard size={18} /> Daily Tasks
         </Link>
@@ -64,18 +69,21 @@ export default function Sidebar() {
           <Users size={18} /> HR & Attendance
         </Link>
 
-        <Link href="/meetings" className={pathname === '/meetings' ? 'on' : ''} onClick={closeSide}>
-          <Phone size={18} /> Meetings
-        </Link>
-
-        <Link href="/tenders" className={pathname === '/tenders' ? 'on' : ''} onClick={closeSide}>
-          <FileText size={18} /> Tenders
-        </Link>
-
+        {/* Admin-only sections */}
         {user?.role === 'Admin' && (
-          <Link href="/admin" className={pathname === '/admin' ? 'on' : ''} onClick={closeSide}>
-            <Shield size={18} /> Admin Section
-          </Link>
+          <>
+            <Link href="/meetings" className={pathname === '/meetings' ? 'on' : ''} onClick={closeSide}>
+              <Phone size={18} /> Meetings
+            </Link>
+
+            <Link href="/tenders" className={pathname === '/tenders' ? 'on' : ''} onClick={closeSide}>
+              <FileText size={18} /> Tenders
+            </Link>
+
+            <Link href="/admin" className={pathname === '/admin' ? 'on' : ''} onClick={closeSide}>
+              <Shield size={18} /> Admin Section
+            </Link>
+          </>
         )}
 
 

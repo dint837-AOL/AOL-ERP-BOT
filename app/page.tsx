@@ -2,19 +2,29 @@
 import Link from 'next/link';
 import { LayoutDashboard, Users, Wallet, FileText, Phone, Home, MessageCircle, Zap, Key, Shield } from 'lucide-react';
 import Topbar from './components/Topbar';
+import { useAuth } from './context/AuthContext';
 
-const modules = [
+const ADMIN_MODULES = [
   { href: '/accounts',    icon: Wallet,          title: 'Accounts',        desc: 'Track expenses and billing',               color: '#eab308' },
   { href: '/credentials', icon: Key,             title: 'Credentials',     desc: 'Securely store and share access keys',     color: '#a855f7' },
   { href: '/dashboard',   icon: LayoutDashboard, title: 'Daily Tasks',     desc: 'Manage daily status and assignments',      color: '#4f7eff' },
   { href: '/hr',          icon: Users,           title: 'HR & Attendance',  desc: 'Mark attendance and leave requests',       color: '#22c55e' },
   { href: '/meetings',    icon: Phone,           title: 'Meetings',         desc: 'Schedule and track client calls',          color: '#f97316' },
-  { href: '/tenders',     icon: FileText,        title: 'Tenders',          desc: 'Manage tender documents and status',      color: '#0ea5e9' },
+  { href: '/tenders',     icon: FileText,        title: 'Tenders',          desc: 'Manage tender documents and status',       color: '#0ea5e9' },
   { href: '/admin',       icon: Shield,          title: 'Admin Panel',      desc: 'System settings and member management',   color: '#ef4444' },
   { href: '/chat.html',   icon: MessageCircle,   title: 'ERP Chat',         desc: 'Talk to the automated ERP Bot',           color: '#14b8a6' },
 ];
 
+const EMPLOYEE_MODULES = [
+  { href: '/dashboard',   icon: LayoutDashboard, title: 'Daily Tasks',     desc: 'View your assigned tasks',                 color: '#4f7eff' },
+  { href: '/hr',          icon: Users,           title: 'HR & Attendance',  desc: 'Mark attendance and leave requests',       color: '#22c55e' },
+  { href: '/chat.html',   icon: MessageCircle,   title: 'ERP Chat',         desc: 'Talk to the automated ERP Bot',           color: '#14b8a6' },
+];
+
 export default function HomePage() {
+  const { user } = useAuth();
+  const modules = user?.role === 'Admin' ? ADMIN_MODULES : EMPLOYEE_MODULES;
+
   return (
     <>
       <Topbar title="Home" />
@@ -29,7 +39,7 @@ export default function HomePage() {
             <Zap size={28} color="#4f7eff" />
           </div>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text)', marginBottom: 8, margin: '0 0 8px' }}>
-            Welcome to AlliedOne ERP
+            Welcome{user?.name ? `, ${user.name}` : ' to AlliedOne ERP'}
           </h1>
           <p style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>
             Select a module below to navigate
