@@ -219,11 +219,11 @@ export default function MeetingsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
               {/* Title | Contact | Date | Time | Actions */}
-              <col style={{ width: '28%' }} />
               <col style={{ width: '26%' }} />
-              <col style={{ width: '20%' }} />
+              <col style={{ width: '22%' }} />
               <col style={{ width: '18%' }} />
-              <col style={{ width: '8%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '16%' }} />
             </colgroup>
             <thead>
               <tr>

@@ -1213,6 +1213,14 @@ echo "======================================================"
       res.json(await dbGet('SELECT * FROM tenders WHERE id=?', [req.params.id]));
     });
     this.app.delete('/api/tenders/:id', async (req, res) => { await dbRun('DELETE FROM tenders WHERE id=?', [req.params.id]); res.json({ ok: true }); });
+    this.app.patch('/api/tenders/:id', async (req, res) => {
+      const { title, organization, tender_type, published_date, submission_deadline, estimated_value, documents_url, notes } = req.body;
+      await dbRun(
+        `UPDATE tenders SET title=COALESCE(?,title), organization=COALESCE(?,organization), tender_type=COALESCE(?,tender_type), published_date=?, submission_deadline=COALESCE(?,submission_deadline), estimated_value=COALESCE(?,estimated_value), documents_url=COALESCE(?,documents_url), notes=COALESCE(?,notes) WHERE id=?`,
+        [title||null, organization||null, tender_type||null, published_date||null, submission_deadline||null, estimated_value??null, documents_url||null, notes||null, req.params.id]
+      );
+      res.json(await dbGet('SELECT * FROM tenders WHERE id=?', [req.params.id]));
+    });
 
     // ── CHAT (Attendance Simulator) ──────────────────────────
     this.app.post('/api/chat', async (req, res) => {

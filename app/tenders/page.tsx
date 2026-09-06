@@ -1,119 +1,183 @@
 /**
  * Tender Management Module
- * 
- * Tracks Govt/Private tenders, their submission pipelines, and valuations.
- * Features a dynamic countdown timer for approaching deadlines.
- * Uses /api/tenders for backend data manipulation.
+ *
+ * Tracks Govt/Private tenders, submission pipelines, and valuations.
+ * Features countdown timer for approaching deadlines.
+ * Layout: Mobile-first table (fixed layout, no horizontal scroll).
+ * Pattern: Matches Meetings / Credentials pages (FAB + bottom sheet).
+ * Preserves all original functionality + status/type filter buttons.
  */
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, X, Briefcase, Calendar, CheckCircle2, AlertCircle, FileText, DownloadCloud } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Briefcase, DownloadCloud, Trash2, AlertCircle } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Tender {
+  id: string;
+  title: string;
+  organization?: string;
+  tender_type: 'GOVT' | 'PRIVATE';
+  published_date?: string;
+  submission_deadline: string;
+  estimated_value: number;
+  status: 'UPCOMING' | 'IN_PROGRESS' | 'SUBMITTED' | 'WON' | 'LOST';
+  documents_url?: string;
+  notes?: string;
+}
+
+type TenderForm = {
+  title: string;
+  organization: string;
+  tender_type: string;
+  published_date: string;
+  submission_deadline: string;
+  estimated_value: string;
+  documents_url: string;
+  notes: string;
+};
+
+const BLANK: TenderForm = {
+  title: '', organization: '', tender_type: 'GOVT',
+  published_date: '', submission_deadline: '',
+  estimated_value: '', documents_url: '', notes: '',
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtDateShort(iso: string) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
+  } catch { return iso; }
+}
+
+function getCountdown(deadline: string): { text: string; color: string; urgent: boolean } {
+  const diff = new Date(deadline).getTime() - Date.now();
+  if (diff < 0) return { text: 'Expired', color: 'var(--red)', urgent: true };
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  if (days === 0) return { text: `${hours}h left`, color: 'var(--orange)', urgent: true };
+  return { text: `${days}d left`, color: days <= 3 ? 'var(--orange)' : 'var(--green)', urgent: days <= 3 };
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  UPCOMING: 'Upcoming', IN_PROGRESS: 'In Progress',
+  SUBMITTED: 'Submitted', WON: 'Won', LOST: 'Lost',
+};
+const STATUS_COLORS: Record<string, string> = {
+  UPCOMING: 'var(--primary)', IN_PROGRESS: 'var(--orange)',
+  SUBMITTED: 'var(--muted)', WON: 'var(--green)', LOST: 'var(--red)',
+};
+const STATUS_BGS: Record<string, string> = {
+  UPCOMING: 'rgba(79,126,255,.1)', IN_PROGRESS: 'rgba(245,166,35,.1)',
+  SUBMITTED: 'rgba(106,117,144,.1)', WON: 'rgba(38,196,134,.1)', LOST: 'rgba(242,92,122,.1)',
+};
+
+// ─── Tender Sheet ─────────────────────────────────────────────────────────────
+
+interface TenderSheetProps {
+  editId: string | null;
+  form: TenderForm;
+  saving: boolean;
+  onClose: () => void;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
+  onSubmit: (e: React.FormEvent) => void;
+}
+
+function TenderSheet({ editId, form, saving, onClose, onChange, onSubmit }: TenderSheetProps) {
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
+        <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border)' }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 12px' }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>{editId ? 'Edit Tender' : 'Add Tender'}</h3>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1, padding: 4 }}>X</button>
+      </div>
+      <form onSubmit={onSubmit} style={{ padding: '0 20px 24px' }}>
+        <div className="fg">
+          <label>Tender Title</label>
+          <input name="title" placeholder="e.g. IT Equipment Supply" value={form.title} onChange={onChange} required />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 13 }}>
+          <div className="fg" style={{ marginBottom: 0 }}>
+            <label>Organization</label>
+            <input name="organization" placeholder="e.g. Ministry of ICT" value={form.organization} onChange={onChange} />
+          </div>
+          <div className="fg" style={{ marginBottom: 0 }}>
+            <label>Type</label>
+            <select name="tender_type" value={form.tender_type} onChange={onChange}>
+              <option value="GOVT">Government</option>
+              <option value="PRIVATE">Private</option>
+            </select>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 13 }}>
+          <div className="fg" style={{ marginBottom: 0 }}>
+            <label>Published Date</label>
+            <input type="date" name="published_date" value={form.published_date} onChange={onChange} />
+          </div>
+          <div className="fg" style={{ marginBottom: 0 }}>
+            <label>Deadline</label>
+            <input type="datetime-local" name="submission_deadline" value={form.submission_deadline} onChange={onChange} required />
+          </div>
+        </div>
+        <div className="fg">
+          <label>Estimated Value (৳)</label>
+          <input type="number" name="estimated_value" placeholder="0" value={form.estimated_value} onChange={onChange} min="0" />
+        </div>
+        <div className="fg">
+          <label>Documents URL <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
+          <input name="documents_url" placeholder="https://drive.google.com/..." value={form.documents_url} onChange={onChange} />
+        </div>
+        <div className="fg">
+          <label>Notes <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
+          <textarea name="notes" placeholder="Additional notes..." value={form.notes} onChange={onChange} rows={2} style={{ width: '100%', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', color: 'var(--text)', fontSize: '.84rem', fontFamily: 'inherit', outline: 'none', resize: 'vertical' }} />
+        </div>
+        <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: '.95rem', fontWeight: 700, borderRadius: 10 }} disabled={saving}>
+          {saving ? 'Saving...' : editId ? 'Update Tender' : 'Save Tender'}
+        </button>
+      </form>
+    </>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function TendersPage() {
-  const [tenders, setTenders] = useState<any[]>([]);
+  const [tenders, setTenders] = useState<Tender[]>([]);
   const [loading, setLoading] = useState(true);
-  const [toastMsg, setToastMsg] = useState('');
+  const [toast, setToast] = useState('');
 
   // Filters
   const [fStatus, setFStatus] = useState('ALL');
   const [fType, setFType] = useState('ALL');
 
-  // Modal State
-  const [showModal, setShowModal] = useState(false);
-  const [mTitle, setMTitle] = useState('');
-  const [mOrg, setMOrg] = useState('');
-  const [mType, setMType] = useState('GOVT');
-  const [mPub, setMPub] = useState('');
-  const [mSub, setMSub] = useState('');
-  const [mVal, setMVal] = useState('');
-  const [mDocs, setMDocs] = useState('');
+  // Sheet
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<TenderForm>(BLANK);
+  const [saving, setSaving] = useState(false);
 
-  function showToast(m: string) {
-    setToastMsg(m);
-    setTimeout(() => setToastMsg(''), 2500);
-  }
+  // Delete confirm
+  const [deleteTarget, setDeleteTarget] = useState<Tender | null>(null);
 
-  const fetchTenders = async () => {
+  function showToast(m: string) { setToast(m); setTimeout(() => setToast(''), 2600); }
+
+  const fetchTenders = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/tenders');
       const data = await res.json();
-      setTenders(data);
-    } catch (e) {
-      showToast('Error loading tenders.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTenders();
+      setTenders(Array.isArray(data) ? data : []);
+    } catch { showToast('Error loading tenders.'); }
+    finally { setLoading(false); }
   }, []);
 
-  const addTender = async () => {
-    if (!mTitle || !mSub) {
-      showToast('Title and Deadline required.');
-      return;
-    }
-    try {
-      await fetch('/api/tenders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: mTitle, organization: mOrg, tender_type: mType,
-          published_date: mPub, submission_deadline: mSub,
-          estimated_value: parseFloat(mVal) || 0,
-          documents_url: mDocs, status: 'UPCOMING'
-        })
-      });
-      setShowModal(false);
-      setMTitle(''); setMOrg(''); setMPub(''); setMSub(''); setMVal(''); setMDocs('');
-      showToast('Tender saved!');
-      fetchTenders();
-    } catch (e) {
-      showToast('Error saving tender.');
-    }
-  };
-
-  const updateStatus = async (id: string, newStatus: string) => {
-    try {
-      await fetch(`/api/tenders/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      });
-      showToast('Status updated.');
-      fetchTenders();
-    } catch (e) {
-      showToast('Error updating status.');
-    }
-  };
-
-  const deleteTender = async (id: string) => {
-    if (!confirm('Delete this tender?')) return;
-    try {
-      await fetch('/api/tenders/' + id, { method: 'DELETE' });
-      showToast('Tender deleted.');
-      fetchTenders();
-    } catch (e) {
-      showToast('Error deleting.');
-    }
-  };
-
-  const getCountdown = (deadline: string) => {
-    const end = new Date(deadline).getTime();
-    const now = new Date().getTime();
-    const diff = end - now;
-    if (diff < 0) return { text: 'Expired', color: 'var(--red)', urgent: true };
-    
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    
-    if (days === 0) return { text: `${hours}h left`, color: 'var(--orange)', urgent: true };
-    return { text: `${days}d left`, color: days <= 3 ? 'var(--orange)' : 'var(--green)', urgent: days <= 3 };
-  };
+  useEffect(() => { fetchTenders(); }, [fetchTenders]);
 
   const filtered = tenders.filter(t => {
     if (fStatus !== 'ALL' && t.status !== fStatus) return false;
@@ -121,154 +185,284 @@ export default function TendersPage() {
     return true;
   });
 
+  function openAdd() { setEditId(null); setForm(BLANK); setSheetOpen(true); }
+
+  function openEdit(t: Tender) {
+    setEditId(t.id);
+    // Convert ISO deadline to datetime-local format
+    const dl = t.submission_deadline ? new Date(t.submission_deadline).toISOString().slice(0, 16) : '';
+    setForm({
+      title: t.title,
+      organization: t.organization || '',
+      tender_type: t.tender_type,
+      published_date: t.published_date || '',
+      submission_deadline: dl,
+      estimated_value: String(t.estimated_value || ''),
+      documents_url: t.documents_url || '',
+      notes: t.notes || '',
+    });
+    setSheetOpen(true);
+  }
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.title.trim() || !form.submission_deadline) { showToast('Title and deadline are required.'); return; }
+    setSaving(true);
+    try {
+      const url = editId ? `/api/tenders/${editId}` : '/api/tenders';
+      const method = editId ? 'PATCH' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: form.title, organization: form.organization,
+          tender_type: form.tender_type, published_date: form.published_date || null,
+          submission_deadline: new Date(form.submission_deadline).toISOString(),
+          estimated_value: parseFloat(form.estimated_value) || 0,
+          documents_url: form.documents_url, notes: form.notes,
+          ...(editId ? {} : { status: 'UPCOMING' }),
+        }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      showToast(editId ? 'Tender updated.' : 'Tender saved!');
+      setSheetOpen(false);
+      fetchTenders();
+    } catch { showToast('Error saving tender.'); }
+    finally { setSaving(false); }
+  }
+
+  const updateStatus = async (id: string, newStatus: string) => {
+    try {
+      await fetch(`/api/tenders/${id}/status`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      showToast('Status updated.');
+      fetchTenders();
+    } catch { showToast('Error updating status.'); }
+  };
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    try {
+      await fetch(`/api/tenders/${deleteTarget.id}`, { method: 'DELETE' });
+      showToast('Tender deleted.');
+      setDeleteTarget(null);
+      fetchTenders();
+    } catch { showToast('Error deleting.'); }
+  }
+
+  // ── table styles ──────────────────────────────────────────────────────────
+  const th: React.CSSProperties = {
+    padding: '8px 10px', fontSize: '.62rem', fontWeight: 700, color: 'var(--muted)',
+    textTransform: 'uppercase', letterSpacing: '.04em',
+    borderBottom: '1px solid var(--border)',
+    background: 'rgba(0,0,0,.1)', textAlign: 'left', whiteSpace: 'nowrap',
+  };
+  const td: React.CSSProperties = {
+    padding: '10px 10px', fontSize: '.78rem', color: 'var(--text)', verticalAlign: 'middle',
+  };
+
+  // ── filter pill style ─────────────────────────────────────────────────────
+  const pill = (active: boolean): React.CSSProperties => ({
+    padding: '5px 12px', borderRadius: 20, fontSize: '.74rem', fontWeight: 600, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
+    background: active ? 'var(--primary)' : 'var(--card)',
+    color: active ? '#fff' : 'var(--muted)',
+    transition: 'all .15s',
+  });
+
   return (
     <>
-      <Topbar title="Tender Management">
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-          <Plus size={15} /> Add Tender
-        </button>
-      </Topbar>
+      <Topbar title="Tender Management" />
 
-      <div className="scroll">
-        <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
-          <select value={fStatus} onChange={e => setFStatus(e.target.value)} style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)' }}>
-            <option value="ALL">All Statuses</option>
-            <option value="UPCOMING">Upcoming</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="SUBMITTED">Submitted</option>
-            <option value="WON">Won</option>
-            <option value="LOST">Lost</option>
-          </select>
-          <select value={fType} onChange={e => setFType(e.target.value)} style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)' }}>
-            <option value="ALL">All Types</option>
-            <option value="GOVT">Government</option>
-            <option value="PRIVATE">Private</option>
-          </select>
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 88, left: '50%', transform: 'translateX(-50%)', background: '#1d2133', border: '1px solid #2a3050', borderRadius: 10, padding: '10px 20px', fontSize: '.84rem', zIndex: 999, color: '#dde2f0', whiteSpace: 'nowrap', boxShadow: '0 4px 20px rgba(0,0,0,.4)' }}>
+          {toast}
+        </div>
+      )}
+
+      <div style={{ padding: '12px 16px 100px', overflowY: 'auto', overflowX: 'hidden', height: 'calc(100dvh - 56px)', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+        {/* Filter pills — Status */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {['ALL', 'UPCOMING', 'IN_PROGRESS', 'SUBMITTED', 'WON', 'LOST'].map(s => (
+            <button key={s} style={pill(fStatus === s)} onClick={() => setFStatus(s)}>
+              {s === 'ALL' ? 'All' : s === 'IN_PROGRESS' ? 'In Progress' : s.charAt(0) + s.slice(1).toLowerCase()}
+            </button>
+          ))}
         </div>
 
-        <div className="card">
+        {/* Filter pills — Type */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          {['ALL', 'GOVT', 'PRIVATE'].map(t => (
+            <button key={t} style={pill(fType === t)} onClick={() => setFType(t)}>
+              {t === 'ALL' ? 'All Types' : t === 'GOVT' ? 'Government' : 'Private'}
+            </button>
+          ))}
+        </div>
+
+        {/* Table card */}
+        <div className="card" style={{ marginBottom: 0, flex: 1 }}>
           <div className="card-head">
             <h3>Tender Registry</h3>
+            <span style={{ fontSize: '.75rem', color: 'var(--muted)' }}>{filtered.length} of {tenders.length}</span>
           </div>
-          <div className="table-scroll"><table>
+
+          {/* Fixed-layout table — fits viewport, zero horizontal scroll */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <colgroup>
+              {/* Title | Org | Deadline | Status | Actions */}
+              <col style={{ width: '28%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '14%' }} />
+            </colgroup>
             <thead>
               <tr>
-                <th>Tender Details</th>
-                <th>Deadline & Status</th>
-                <th>Value</th>
-                <th>Actions</th>
+                <th style={th}>Title</th>
+                <th style={th}>Org / Type</th>
+                <th style={th}>Deadline</th>
+                <th style={th}>Status</th>
+                <th style={{ ...th, textAlign: 'right' }}></th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr className="empty-r"><td colSpan={4}>Loading...</td></tr>
+                <tr><td colSpan={5} style={{ textAlign: 'center', padding: '36px', color: 'var(--muted)', fontSize: '.82rem' }}>Loading...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr className="empty-r"><td colSpan={4}>No tenders found.</td></tr>
-              ) : (
-                filtered.map(t => {
-                  const cd = getCountdown(t.submission_deadline);
-                  const isDone = t.status === 'SUBMITTED' || t.status === 'WON' || t.status === 'LOST';
-                  return (
-                    <tr key={t.id}>
-                      <td>
-                        <div className="av-cell">
-                          <div className="av" style={{ background: t.tender_type === 'GOVT' ? 'rgba(79,126,255,.1)' : 'rgba(255,159,64,.1)', color: t.tender_type === 'GOVT' ? 'var(--primary)' : 'var(--orange)' }}>
-                            <Briefcase size={14} />
+                <tr><td colSpan={5} style={{ textAlign: 'center', padding: '36px', color: 'var(--muted)', fontSize: '.82rem' }}>
+                  <Briefcase size={22} style={{ opacity: .3, display: 'block', margin: '0 auto 8px' }} />
+                  No tenders found.
+                </td></tr>
+              ) : filtered.map((t, i) => {
+                const cd = getCountdown(t.submission_deadline);
+                const isDone = ['SUBMITTED', 'WON', 'LOST'].includes(t.status);
+                return (
+                  <tr key={t.id} style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                    {/* Title */}
+                    <td style={td}>
+                      <div style={{ fontWeight: 600, fontSize: '.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
+                      {t.documents_url && (
+                        <a href={t.documents_url} target="_blank" rel="noreferrer" style={{ fontSize: '.66rem', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                          <DownloadCloud size={10} /> Docs
+                        </a>
+                      )}
+                    </td>
+                    {/* Org + type badge */}
+                    <td style={td}>
+                      <div style={{ fontSize: '.74rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' }}>
+                        {t.organization || '—'}
+                      </div>
+                      <span style={{
+                        fontSize: '.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginTop: 2, display: 'inline-block',
+                        textTransform: 'uppercase', letterSpacing: '.04em',
+                        color: t.tender_type === 'GOVT' ? 'var(--primary)' : 'var(--orange)',
+                        background: t.tender_type === 'GOVT' ? 'rgba(79,126,255,.1)' : 'rgba(245,166,35,.1)',
+                      }}>
+                        {t.tender_type === 'GOVT' ? 'Govt' : 'Private'}
+                      </span>
+                    </td>
+                    {/* Deadline / countdown */}
+                    <td style={td}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {!isDone && cd.urgent && <AlertCircle size={11} color={cd.color} style={{ flexShrink: 0 }} />}
+                        <div>
+                          <div style={{ fontSize: '.76rem', fontWeight: 600, color: isDone ? 'var(--muted)' : cd.color, whiteSpace: 'nowrap' }}>
+                            {isDone ? fmtDateShort(t.submission_deadline) : cd.text}
                           </div>
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: '.9rem' }}>{t.title}</div>
-                            <div style={{ fontSize: '.7rem', color: 'var(--muted)', marginTop: '2px' }}>
-                              {t.organization} • {t.tender_type}
-                            </div>
-                            {t.documents_url && (
-                              <a href={t.documents_url} target="_blank" rel="noreferrer" style={{ fontSize: '.7rem', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                                <DownloadCloud size={10} /> Docs
-                              </a>
-                            )}
+                          <div style={{ fontSize: '.64rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                            {fmtDateShort(t.submission_deadline)}
                           </div>
                         </div>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {!isDone && cd.urgent && <AlertCircle size={14} color={cd.color} />}
-                          <div>
-                            <div style={{ fontWeight: 600, color: isDone ? 'var(--muted)' : cd.color, fontSize: '.9rem' }}>
-                              {isDone ? new Date(t.submission_deadline).toLocaleDateString() : cd.text}
-                            </div>
-                            <div style={{ fontSize: '.7rem', color: 'var(--muted)', marginTop: '2px' }}>
-                              Deadline: {new Date(t.submission_deadline).toLocaleString()}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>৳ {t.estimated_value.toLocaleString('en-BD')}</div>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <select 
-                            value={t.status} 
-                            onChange={e => updateStatus(t.id, e.target.value)}
-                            style={{ 
-                              padding: '4px 8px', borderRadius: '6px', fontSize: '.75rem', 
-                              border: '1px solid var(--border)', background: 'var(--bg)',
-                              color: t.status === 'WON' ? 'var(--green)' : t.status === 'LOST' ? 'var(--red)' : 'inherit'
-                            }}
-                          >
-                            <option value="UPCOMING">Upcoming</option>
-                            <option value="IN_PROGRESS">In Progress</option>
-                            <option value="SUBMITTED">Submitted</option>
-                            <option value="WON">Won</option>
-                            <option value="LOST">Lost</option>
-                          </select>
-                          <button onClick={() => deleteTender(t.id)} style={{ color: 'var(--red)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                            <X size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+                      </div>
+                    </td>
+                    {/* Status dropdown */}
+                    <td style={{ ...td, padding: '6px 8px' }}>
+                      <select
+                        value={t.status}
+                        onChange={e => updateStatus(t.id, e.target.value)}
+                        style={{
+                          width: '100%', padding: '4px 6px', borderRadius: 6, fontSize: '.72rem', fontWeight: 600,
+                          border: '1px solid var(--border)', background: STATUS_BGS[t.status],
+                          color: STATUS_COLORS[t.status], cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
+                        }}
+                      >
+                        {Object.entries(STATUS_LABELS).map(([v, l]) => (
+                          <option key={v} value={v}>{l}</option>
+                        ))}
+                      </select>
+                    </td>
+                    {/* Actions */}
+                    <td style={{ ...td, textAlign: 'right', padding: '6px 8px' }}>
+                      <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                        <button onClick={() => openEdit(t)} title="Edit" style={iconBtn}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button onClick={() => setDeleteTarget(t)} title="Delete" style={{ ...iconBtn, color: 'var(--red)' }}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
-          </table></div>
+          </table>
         </div>
       </div>
 
-      {showModal && (
-        <div className="veil on" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}>
-          <div className="modal">
-            <div className="mhead">
-              <h3>Add Tender</h3>
-              <button className="xbtn" onClick={() => setShowModal(false)}><X size={16} /></button>
-            </div>
-            <div className="fg"><label>Tender Title</label><input placeholder="e.g. IT Equipment Supply" value={mTitle} onChange={e => setMTitle(e.target.value)} /></div>
-            <div className="drow">
-              <div className="fg"><label>Organization</label><input placeholder="e.g. Ministry of ICT" value={mOrg} onChange={e => setMOrg(e.target.value)} /></div>
-              <div className="fg">
-                <label>Type</label>
-                <select value={mType} onChange={e => setMType(e.target.value)}>
-                  <option value="GOVT">Government</option>
-                  <option value="PRIVATE">Private</option>
-                </select>
+      {/* FAB */}
+      <button id="tender-fab" onClick={openAdd} style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 800, width: 56, height: 56, borderRadius: '50%', background: 'var(--primary)', color: '#fff', border: 'none', fontSize: '1.8rem', cursor: 'pointer', boxShadow: '0 4px 20px rgba(79,126,255,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        +
+      </button>
+
+      {/* Add/Edit bottom sheet */}
+      {sheetOpen && (
+        <div onClick={e => { if (e.target === e.currentTarget) setSheetOpen(false); }} style={{ position: 'fixed', inset: 0, zIndex: 910, background: 'rgba(0,0,0,.65)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 560, paddingBottom: 'env(safe-area-inset-bottom,12px)', maxHeight: '92dvh', overflowY: 'auto', boxShadow: '0 -8px 40px rgba(0,0,0,.5)', animation: 'slideSheet .22s ease-out' }}>
+            <TenderSheet editId={editId} form={form} saving={saving} onClose={() => setSheetOpen(false)} onChange={handleChange} onSubmit={handleSubmit} />
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {deleteTarget && (
+        <div onClick={e => { if (e.target === e.currentTarget) setDeleteTarget(null); }} style={{ position: 'fixed', inset: 0, zIndex: 950, background: 'rgba(0,0,0,.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, width: '100%', maxWidth: 340, padding: 24, boxShadow: '0 8px 40px rgba(0,0,0,.5)' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+              <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(242,92,122,.12)', border: '1px solid rgba(242,92,122,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red)' }}>
+                <Trash2 size={22} />
               </div>
             </div>
-            <div className="drow">
-              <div className="fg"><label>Published Date</label><input type="date" value={mPub} onChange={e => setMPub(e.target.value)} /></div>
-              <div className="fg"><label>Deadline</label><input type="datetime-local" value={mSub} onChange={e => setMSub(e.target.value)} /></div>
-            </div>
-            <div className="fg"><label>Estimated Value (৳)</label><input type="number" placeholder="0" value={mVal} onChange={e => setMVal(e.target.value)} /></div>
-            <div className="fg"><label>Documents URL</label><input placeholder="https://drive.google.com/..." value={mDocs} onChange={e => setMDocs(e.target.value)} /></div>
-            
-            <div className="mfooter">
-              <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={addTender}>Save</button>
+            <h3 style={{ textAlign: 'center', fontSize: '1rem', fontWeight: 700, marginBottom: 8 }}>Delete Tender?</h3>
+            <p style={{ textAlign: 'center', fontSize: '.88rem', fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{deleteTarget.title}</p>
+            <p style={{ textAlign: 'center', fontSize: '.76rem', color: 'var(--muted)', marginBottom: 22 }}>{deleteTarget.organization || ''}</p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setDeleteTarget(null)} style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text)', fontSize: '.88rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={confirmDelete} style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', background: 'var(--red)', color: '#fff', fontSize: '.88rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Delete</button>
             </div>
           </div>
         </div>
       )}
 
-      {toastMsg && <div className="toast on">{toastMsg}</div>}
+      <style>{`
+        @keyframes slideSheet{from{transform:translateY(50px);opacity:0}to{transform:translateY(0);opacity:1}}
+      `}</style>
     </>
   );
 }
+
+// Also need PATCH endpoint for tenders — handled in openclaw-mock already via /api/tenders/:id/status
+// For full edit, we'll need to add PATCH /api/tenders/:id in openclaw-mock.ts
+
+const iconBtn: React.CSSProperties = {
+  background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer',
+  borderRadius: 6, width: 28, height: 28,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  transition: 'background .12s', fontFamily: 'inherit',
+};
