@@ -10,7 +10,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Briefcase, DownloadCloud, Trash2, AlertCircle } from 'lucide-react';
+import { Briefcase, DownloadCloud, Trash2 } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -298,11 +298,11 @@ export default function TendersPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
               {/* Title | Type | Deadline | Status | Actions */}
-              <col style={{ width: '30%' }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '13%' }} />
               <col style={{ width: '16%' }} />
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '10%' }} />
+              <col style={{ width: '35%' }} />
+              <col style={{ width: '14%' }} />
             </colgroup>
             <thead>
               <tr>
@@ -346,27 +346,17 @@ export default function TendersPage() {
                         {t.tender_type === 'GOVT' ? 'Govt' : 'Private'}
                       </span>
                     </td>
-                    {/* Deadline / countdown */}
-                    <td style={td}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        {!isDone && cd.urgent && <AlertCircle size={11} color={cd.color} style={{ flexShrink: 0 }} />}
-                        <div>
-                          <div style={{ fontSize: '.76rem', fontWeight: 600, color: isDone ? 'var(--muted)' : cd.color, whiteSpace: 'nowrap' }}>
-                            {isDone ? fmtDateShort(t.submission_deadline) : cd.text}
-                          </div>
-                          <div style={{ fontSize: '.64rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                            {fmtDateShort(t.submission_deadline)}
-                          </div>
-                        </div>
-                      </div>
+                    {/* Deadline — countdown only */}
+                    <td style={{ ...td, fontSize: '.76rem', fontWeight: 600, whiteSpace: 'nowrap', color: isDone ? 'var(--muted)' : cd.color }}>
+                      {cd.text}
                     </td>
                     {/* Status dropdown */}
-                    <td style={{ ...td, padding: '6px 8px' }}>
+                    <td style={{ ...td, padding: '6px 6px' }}>
                       <select
                         value={t.status}
                         onChange={e => updateStatus(t.id, e.target.value)}
                         style={{
-                          width: '100%', padding: '4px 6px', borderRadius: 6, fontSize: '.72rem', fontWeight: 600,
+                          width: '100%', padding: '5px 4px', borderRadius: 6, fontSize: '.68rem', fontWeight: 600,
                           border: '1px solid var(--border)', background: STATUS_BGS[t.status],
                           color: STATUS_COLORS[t.status], cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
                         }}
