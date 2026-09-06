@@ -1353,8 +1353,8 @@ export default function HRPage() {
           </div>
         )}
 
-        {/* Leave Apply tab (always visible to employee, or selected by admin) */}
-        {(activeTab === 'leave' || !isAdmin) && (
+        {/* Leave Apply tab — shown only when explicitly selected */}
+        {activeTab === 'leave' && (
           <div className="card">
             <div className="card-head">
               <h3>{isAdmin ? 'All Leave Requests' : 'My Leave Requests'}</h3>
@@ -1661,8 +1661,8 @@ export default function HRPage() {
 
       </div>
 
-      {/* FAB for Leave Request */}
-      {(!isAdmin || activeTab === 'leave') && (
+      {/* FAB for Leave Request — shown only on Leave Apply tab */}
+      {activeTab === 'leave' && (
         <button
           id="leave-fab"
           onClick={() => {
