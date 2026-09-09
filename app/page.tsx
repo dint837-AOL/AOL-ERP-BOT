@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { LayoutDashboard, Users, Wallet, FileText, Phone, Home, MessageCircle, Zap, Key, Shield, LogIn, LogOut, CheckCircle, Clock } from 'lucide-react';
+import { LayoutDashboard, Users, Wallet, FileText, Phone, Home, MessageCircle, Zap, Key, Shield, LogIn, LogOut } from 'lucide-react';
 import Topbar from './components/Topbar';
 import { useAuth } from './context/AuthContext';
 import Cookies from 'js-cookie';
@@ -125,102 +125,62 @@ export default function HomePage() {
     }
   };
 
-  const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Dhaka' });
-
   return (
     <>
       <Topbar title="Home" />
       <div className="scroll">
 
-        {/* ── Check-In & Check-Out Widget (Before welcoming message) ── */}
+        {/* ── In & Out Buttons (Before welcoming message) ── */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
+          justifyContent: 'center',
           gap: '12px',
-          background: 'linear-gradient(135deg, rgba(22, 27, 46, 0.95), rgba(15, 20, 36, 0.95))',
-          border: '1px solid rgba(79, 126, 255, 0.22)',
-          borderRadius: '16px',
-          padding: '14px 18px',
-          marginBottom: '24px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.25)'
+          marginBottom: '20px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              background: attStatus.checkedIn && !attStatus.checkedOut ? 'rgba(34, 197, 94, 0.15)' : 'rgba(79, 126, 255, 0.12)',
-              border: `1px solid ${attStatus.checkedIn && !attStatus.checkedOut ? 'rgba(34, 197, 94, 0.3)' : 'rgba(79, 126, 255, 0.25)'}`,
-              display: 'flex',
+          <button
+            className="btn btn-green"
+            disabled={attLoading || attStatus.checkedIn}
+            onClick={() => markAttendance('IN')}
+            title="Check In"
+            style={{
+              display: 'inline-flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              color: attStatus.checkedIn && !attStatus.checkedOut ? 'var(--green)' : 'var(--primary)'
-            }}>
-              <Clock size={20} />
-            </div>
-            <div>
-              <div style={{ fontSize: '.76rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>
-                {todayStr} • Attendance
-              </div>
-              <div style={{ fontSize: '.92rem', fontWeight: 700, color: 'var(--text)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {attStatus.checkedIn && attStatus.checkedOut ? (
-                  <span style={{ color: 'var(--muted)' }}>Checked Out ({attStatus.outTime})</span>
-                ) : attStatus.checkedIn ? (
-                  <span style={{ color: 'var(--green)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
-                    Active • In at {attStatus.inTime}
-                  </span>
-                ) : (
-                  <span style={{ color: 'var(--text)' }}>Not checked in today</span>
-                )}
-              </div>
-            </div>
-          </div>
+              gap: '6px',
+              padding: '8px 22px',
+              fontSize: '.88rem',
+              fontWeight: 700,
+              borderRadius: '9px',
+              opacity: attStatus.checkedIn ? 0.45 : 1,
+              cursor: attStatus.checkedIn ? 'not-allowed' : 'pointer',
+              boxShadow: '0 2px 8px rgba(34, 197, 94, 0.25)',
+              transition: 'all .2s ease'
+            }}
+          >
+            <LogIn size={15} /> In
+          </button>
 
-          {/* Quick Check-In and Check-Out Action Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              className="btn btn-green btn-sm"
-              disabled={attLoading || attStatus.checkedIn}
-              onClick={() => markAttendance('IN')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 16px',
-                fontSize: '.85rem',
-                fontWeight: 700,
-                borderRadius: '9px',
-                opacity: attStatus.checkedIn ? 0.45 : 1,
-                cursor: attStatus.checkedIn ? 'not-allowed' : 'pointer',
-                transition: 'all .2s ease'
-              }}
-            >
-              <LogIn size={15} /> Check In
-            </button>
-
-            <button
-              className="btn btn-red btn-sm"
-              disabled={attLoading || !attStatus.checkedIn || attStatus.checkedOut}
-              onClick={() => markAttendance('OUT')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 16px',
-                fontSize: '.85rem',
-                fontWeight: 700,
-                borderRadius: '9px',
-                opacity: (!attStatus.checkedIn || attStatus.checkedOut) ? 0.45 : 1,
-                cursor: (!attStatus.checkedIn || attStatus.checkedOut) ? 'not-allowed' : 'pointer',
-                transition: 'all .2s ease'
-              }}
-            >
-              <LogOut size={15} /> Check Out
-            </button>
-          </div>
+          <button
+            className="btn btn-red"
+            disabled={attLoading || !attStatus.checkedIn || attStatus.checkedOut}
+            onClick={() => markAttendance('OUT')}
+            title="Check Out"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 22px',
+              fontSize: '.88rem',
+              fontWeight: 700,
+              borderRadius: '9px',
+              opacity: (!attStatus.checkedIn || attStatus.checkedOut) ? 0.45 : 1,
+              cursor: (!attStatus.checkedIn || attStatus.checkedOut) ? 'not-allowed' : 'pointer',
+              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.25)',
+              transition: 'all .2s ease'
+            }}
+          >
+            <LogOut size={15} /> Out
+          </button>
         </div>
 
         {/* Welcome Header */}
