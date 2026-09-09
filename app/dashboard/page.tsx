@@ -717,7 +717,7 @@ export default function DashboardPage() {
             .map(t => (
             <div key={t} className={`tab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)}
               style={{ padding: '10px 20px', fontSize: '0.88rem', fontWeight: tab === t ? 600 : 500, color: tab === t ? '#38bdf8' : '#94a3b8', borderBottom: tab === t ? '2px solid #38bdf8' : '2px solid transparent', cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-              {t === 'admin' ? 'Summary' : t === 'team' ? 'Employee' : 'Board View'}
+              {t === 'admin' ? 'Admin View' : t === 'team' ? (isAdmin ? 'Team View' : 'My Tasks') : 'Board View'}
             </div>
           ))}
         </div>
