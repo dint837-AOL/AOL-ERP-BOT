@@ -56,6 +56,8 @@ export default function AdminPage() {
   const [loadingTgStatus, setLoadingTgStatus] = useState(false);
   const [testChatId, setTestChatId] = useState('');
   const [testingTg, setTestingTg] = useState(false);
+  const [botTokenInput, setBotTokenInput] = useState('');
+  const [savingBotToken, setSavingBotToken] = useState(false);
 
   const loadTelegramStatus = async () => {
     try {
@@ -108,6 +110,41 @@ export default function AdminPage() {
       showToast('Failed to reach server.');
     } finally {
       setTestingTg(false);
+    }
+  };
+
+  const handleSaveBotToken = async () => {
+    if (!botTokenInput.trim()) {
+      showToast('Please enter a Bot Token');
+      return;
+    }
+    setSavingBotToken(true);
+    showToast('Saving and connecting...');
+    try {
+      const token = getAuthToken();
+      const res = await fetch('/api/settings/telegram', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ token: botTokenInput.trim() })
+      });
+      const data = await res.json();
+      if (data.botInfo?.success) {
+        showToast(`✅ Saved & Connected as @${data.botInfo.bot?.username}!`);
+        setBotTokenInput('');
+        loadTelegramStatus();
+      } else if (data.success) {
+        showToast(`⚠️ Token saved, but Telegram returned: ${data.botInfo?.error || 'Invalid token'}`);
+        loadTelegramStatus();
+      } else {
+        showToast('Failed to save token');
+      }
+    } catch {
+      showToast('Failed to reach server');
+    } finally {
+      setSavingBotToken(false);
     }
   };
 
@@ -504,6 +541,36 @@ export default function AdminPage() {
                     ⚠️ No Chat ID configured! Edit an Admin above to add their Telegram Chat ID.
                   </span>
                 )}
+              </div>
+            </div>
+
+            {/* Direct Bot Token Input / Override */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '18px', padding: '14px 16px', background: 'rgba(255,255,255,.02)', border: '1px solid var(--border)', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <label style={{ fontSize: '.82rem', fontWeight: 600, color: 'var(--text)' }}>
+                  🔑 Set / Update Telegram Bot Token Directly
+                </label>
+                <span style={{ fontSize: '.72rem', color: 'var(--muted)' }}>
+                  Saves instantly to database — bypasses Render environment variable delays
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <input
+                  type="password"
+                  placeholder="Paste your bot token here (e.g. 1234567890:AA...)"
+                  value={botTokenInput}
+                  onChange={e => setBotTokenInput(e.target.value)}
+                  style={{ flex: 1, minWidth: '240px', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text)', fontSize: '.82rem' }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSaveBotToken}
+                  disabled={savingBotToken}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Save size={14} /> {savingBotToken ? 'Saving...' : 'Save & Connect'}
+                </button>
               </div>
             </div>
 

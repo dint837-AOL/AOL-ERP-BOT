@@ -604,26 +604,8 @@ export default function HRPage() {
 
       <div className="scroll" style={{ overflowX: 'hidden', maxWidth: '100vw' }}>
 
-        {/* Date navigator — always visible; In/Out only on Employee tab */}
+        {/* Date navigator — centered */}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px 8px 6px', gap: 8, maxWidth: '100%', boxSizing: 'border-box' }}>
-          {/* In button — only on Employee (report) tab */}
-          {activeTab === 'report' && (
-            <button
-              className="btn btn-green btn-sm"
-              disabled={attLoading || alreadyCheckedIn}
-              onClick={() => markAttendance('IN')}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 3,
-                fontSize: '.76rem', padding: '5px 10px', fontWeight: 700,
-                opacity: alreadyCheckedIn ? 0.45 : 1, transition: 'opacity .2s',
-                borderRadius: 7, flexShrink: 0
-              }}
-            >
-              <LogIn size={12} /> In
-            </button>
-          )}
-
-          {/* Date navigator — center */}
           <div className="dnav" style={{ position: 'relative', flexShrink: 0 }}>
             <button onClick={() => setCurDate(s => shiftDateStr(s, -1))} aria-label="Previous day" style={{ padding: '4px 6px' }}>
               <ChevronLeft size={15} />
@@ -653,23 +635,6 @@ export default function HRPage() {
               <ChevronRight size={15} />
             </button>
           </div>
-
-          {/* Out button — only on Employee (report) tab */}
-          {activeTab === 'report' && (
-            <button
-              className="btn btn-red btn-sm"
-              disabled={attLoading || !alreadyCheckedIn || alreadyCheckedOut}
-              onClick={() => markAttendance('OUT')}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 3,
-                fontSize: '.76rem', padding: '5px 10px', fontWeight: 700,
-                opacity: (!alreadyCheckedIn || alreadyCheckedOut) ? 0.45 : 1, transition: 'opacity .2s',
-                borderRadius: 7, flexShrink: 0
-              }}
-            >
-              <LogOut size={12} /> Out
-            </button>
-          )}
         </div>
 
 
@@ -1456,11 +1421,11 @@ export default function HRPage() {
                               }}
                               style={{
                                 background: 'var(--card)', border: '1px solid var(--border)',
-                                color: 'var(--text)', borderRadius: 6, padding: '3px 2px',
-                                fontSize: '.68rem', cursor: 'pointer', maxWidth: 64, width: '100%'
+                                color: 'var(--text)', borderRadius: 6, padding: '3px 4px',
+                                fontSize: '.68rem', cursor: 'pointer', maxWidth: 74, width: '100%'
                               }}
                             >
-                              <option value="">...</option>
+                              <option value="" disabled>Action</option>
                               {l.status === 'PENDING' && <option value="approve">✓ Appr</option>}
                               {l.status === 'PENDING' && <option value="decline">✗ Decl</option>}
                               {l.status === 'APPROVED' && <option value="cancel">⊘ Canc</option>}

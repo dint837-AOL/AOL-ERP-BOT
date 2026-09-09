@@ -89,6 +89,7 @@ export async function initDB() {
         status TEXT DEFAULT 'DONE',
         assigned_to INTEGER REFERENCES members(id) ON DELETE SET NULL,
         is_archived INTEGER DEFAULT 0,
+        notify_telegram INTEGER DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -194,6 +195,7 @@ export async function initDB() {
     try { await pgPool.query("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS company_name TEXT DEFAULT ''"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS expense_head TEXT DEFAULT ''"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'Cash'"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS notify_telegram INTEGER DEFAULT 0"); } catch (e) {}
 
   } else {
     isPg = false;
@@ -236,6 +238,7 @@ export async function initDB() {
         status TEXT DEFAULT 'DONE',
         assigned_to INTEGER REFERENCES members(id),
         is_archived INTEGER DEFAULT 0,
+        notify_telegram INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -341,6 +344,7 @@ export async function initDB() {
     try { await sqliteDb.exec("ALTER TABLE expenses ADD COLUMN company_name TEXT DEFAULT ''"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE expenses ADD COLUMN expense_head TEXT DEFAULT ''"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE expenses ADD COLUMN payment_method TEXT DEFAULT 'Cash'"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE tasks ADD COLUMN notify_telegram INTEGER DEFAULT 0"); } catch (e) {}
   }
 
   // Seed default admin and employee accounts

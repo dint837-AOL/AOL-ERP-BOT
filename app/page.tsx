@@ -1,8 +1,10 @@
 'use client';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { LayoutDashboard, Users, Wallet, FileText, Phone, Home, MessageCircle, Zap, Key, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, Wallet, FileText, Phone, Home, MessageCircle, Zap, Key, Shield, LogIn, LogOut, CheckCircle, Clock } from 'lucide-react';
 import Topbar from './components/Topbar';
 import { useAuth } from './context/AuthContext';
+import Cookies from 'js-cookie';
 
 const ADMIN_MODULES = [
   { href: '/accounts',    icon: Wallet,          title: 'Accounts',        desc: 'Track expenses and billing',               color: '#eab308' },
@@ -21,14 +23,206 @@ const EMPLOYEE_MODULES = [
   { href: '/chat.html',   icon: MessageCircle,   title: 'ERP Chat',         desc: 'Talk to the automated ERP Bot',           color: '#14b8a6' },
 ];
 
+function nowDhaka(): string {
+  return new Date().toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Dhaka'
+  });
+}
+
+function parseTimestamp(ts: string): Date {
+  if (!ts) return new Date();
+  const s = String(ts).trim();
+  if (s.endsWith('Z') || s.includes('+') || (s.includes('-') && s.lastIndexOf('-') > 10)) {
+    return new Date(s);
+  }
+  if (s.includes('T')) return new Date(s + 'Z');
+  return new Date(s.replace(' ', 'T') + 'Z');
+}
+
 export default function HomePage() {
-  const { user } = useAuth();
+  const { user, token: ctxToken } = useAuth();
   const modules = user?.role === 'Admin' ? ADMIN_MODULES : EMPLOYEE_MODULES;
+
+  const getAuthToken = useCallback(() => {
+    return ctxToken || Cookies.get('token') || (typeof window !== 'undefined' ? (localStorage.getItem('erp_token') || localStorage.getItem('token')) : '') || '';
+  }, [ctxToken]);
+
+  const [attStatus, setAttStatus] = useState<{ checkedIn: boolean; checkedOut: boolean; inTime?: string | undefined; outTime?: string | undefined }>({
+    checkedIn: false,
+    checkedOut: false
+  });
+
+  const [attLoading, setAttLoading] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 3000);
+  };
+
+  const loadAttendance = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const token = getAuthToken();
+      const res = await fetch('/api/attendance', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const myAtt = data.filter((a: any) => String(a.member_id) === String(user.id));
+        const inRec = myAtt.find((a: any) => a.action_type === 'IN');
+        const outRec = myAtt.find((a: any) => a.action_type === 'OUT');
+        
+        const inTimeStr = inRec ? parseTimestamp(inRec.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Dhaka' }) : undefined;
+        const outTimeStr = outRec ? parseTimestamp(outRec.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Dhaka' }) : undefined;
+
+        setAttStatus({
+          checkedIn: !!inRec,
+          checkedOut: !!outRec,
+          inTime: inTimeStr,
+          outTime: outTimeStr
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [user?.id, getAuthToken]);
+
+  useEffect(() => {
+    loadAttendance();
+  }, [loadAttendance]);
+
+  const markAttendance = async (type: 'IN' | 'OUT') => {
+    if (!user?.id) {
+      showToast('Not logged in.');
+      return;
+    }
+    setAttLoading(true);
+    try {
+      const token = getAuthToken();
+      const res = await fetch('/api/attendance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ member_id: user.id, action_type: type })
+      });
+      if (res.ok) {
+        showToast(`✅ ${type === 'IN' ? 'Checked In' : 'Checked Out'} at ${nowDhaka()}`);
+        await loadAttendance();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast('❌ ' + (err.error || 'Failed to record attendance'));
+      }
+    } catch (e) {
+      showToast('Failed to reach server.');
+    } finally {
+      setAttLoading(false);
+    }
+  };
+
+  const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Dhaka' });
 
   return (
     <>
       <Topbar title="Home" />
       <div className="scroll">
+
+        {/* ── Check-In & Check-Out Widget (Before welcoming message) ── */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          background: 'linear-gradient(135deg, rgba(22, 27, 46, 0.95), rgba(15, 20, 36, 0.95))',
+          border: '1px solid rgba(79, 126, 255, 0.22)',
+          borderRadius: '16px',
+          padding: '14px 18px',
+          marginBottom: '24px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.25)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '12px',
+              background: attStatus.checkedIn && !attStatus.checkedOut ? 'rgba(34, 197, 94, 0.15)' : 'rgba(79, 126, 255, 0.12)',
+              border: `1px solid ${attStatus.checkedIn && !attStatus.checkedOut ? 'rgba(34, 197, 94, 0.3)' : 'rgba(79, 126, 255, 0.25)'}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: attStatus.checkedIn && !attStatus.checkedOut ? 'var(--green)' : 'var(--primary)'
+            }}>
+              <Clock size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '.76rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                {todayStr} • Attendance
+              </div>
+              <div style={{ fontSize: '.92rem', fontWeight: 700, color: 'var(--text)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {attStatus.checkedIn && attStatus.checkedOut ? (
+                  <span style={{ color: 'var(--muted)' }}>Checked Out ({attStatus.outTime})</span>
+                ) : attStatus.checkedIn ? (
+                  <span style={{ color: 'var(--green)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
+                    Active • In at {attStatus.inTime}
+                  </span>
+                ) : (
+                  <span style={{ color: 'var(--text)' }}>Not checked in today</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Check-In and Check-Out Action Buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              className="btn btn-green btn-sm"
+              disabled={attLoading || attStatus.checkedIn}
+              onClick={() => markAttendance('IN')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 16px',
+                fontSize: '.85rem',
+                fontWeight: 700,
+                borderRadius: '9px',
+                opacity: attStatus.checkedIn ? 0.45 : 1,
+                cursor: attStatus.checkedIn ? 'not-allowed' : 'pointer',
+                transition: 'all .2s ease'
+              }}
+            >
+              <LogIn size={15} /> Check In
+            </button>
+
+            <button
+              className="btn btn-red btn-sm"
+              disabled={attLoading || !attStatus.checkedIn || attStatus.checkedOut}
+              onClick={() => markAttendance('OUT')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 16px',
+                fontSize: '.85rem',
+                fontWeight: 700,
+                borderRadius: '9px',
+                opacity: (!attStatus.checkedIn || attStatus.checkedOut) ? 0.45 : 1,
+                cursor: (!attStatus.checkedIn || attStatus.checkedOut) ? 'not-allowed' : 'pointer',
+                transition: 'all .2s ease'
+              }}
+            >
+              <LogOut size={15} /> Check Out
+            </button>
+          </div>
+        </div>
+
         {/* Welcome Header */}
         <div style={{ textAlign: 'center', marginBottom: '32px', paddingTop: '8px' }}>
           <div style={{
@@ -45,6 +239,7 @@ export default function HomePage() {
             Select a module below to navigate
           </p>
         </div>
+
 
         {/* Module Grid */}
         <div style={{
@@ -105,6 +300,7 @@ export default function HomePage() {
           ))}
         </div>
       </div>
+      {toastMsg && <div className="toast on">{toastMsg}</div>}
     </>
   );
 }

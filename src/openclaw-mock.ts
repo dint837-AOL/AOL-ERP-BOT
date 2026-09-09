@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { initDB, dbAll, dbGet, dbRun, isPostgres } from './db.js';
-import { sendTelegramMessage, getTelegramBotInfo } from './telegram.js';
+import { sendTelegramMessage, getTelegramBotInfo, setRuntimeBotToken, getBotToken } from './telegram.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -122,6 +122,22 @@ export class OpenClaw {
 
   async start(port: number, listen = true) {
     await initDB();
+
+    // Load any Telegram configurations saved in database settings
+    try {
+      const savedTokenRow = await dbGet("SELECT value FROM settings WHERE key = 'telegram_bot_token'") as any;
+      if (savedTokenRow?.value) {
+        setRuntimeBotToken(savedTokenRow.value);
+        console.log('[Telegram] Loaded TELEGRAM_BOT_TOKEN from database settings.');
+      }
+      const savedChatRow = await dbGet("SELECT value FROM settings WHERE key = 'telegram_chat_id'") as any;
+      if (savedChatRow?.value && !process.env.TELEGRAM_CHAT_ID) {
+        process.env.TELEGRAM_CHAT_ID = savedChatRow.value;
+        console.log('[Telegram] Loaded TELEGRAM_CHAT_ID from database settings.');
+      }
+    } catch (e) {
+      console.error('[Telegram] Settings load error:', e);
+    }
 
     // ── AUTH MIDDLEWARES ─────────────────────────────────────
     const authenticateToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -264,24 +280,38 @@ export class OpenClaw {
     });
     // Only Admins can create tasks
     this.app.post('/api/tasks', requireRole('Admin'), async (req, res) => {
-      const { title, description, deadline, priority, assigned_to, task_date, action_type, recipient, status } = req.body;
+      const { title, description, deadline, priority, assigned_to, task_date, action_type, recipient, status, notify_telegram } = req.body;
       if (!title) return res.status(400).json({ error: 'Title required' });
       const date = task_date || new Date().toISOString().split('T')[0];
-      const { lastID } = await dbRun(`INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date,action_type,recipient,status) VALUES(?,?,?,?,?,?,?,?,?)`,
-        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'STUDY', recipient||'', status||'DONE']);
+      const shouldNotifyTg = notify_telegram ? 1 : 0;
+      const initialStatus = status || 'DONE';
       
-      const newTask = await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]);
+      const { lastID } = await dbRun(
+        `INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date,action_type,recipient,status,notify_telegram) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'STUDY', recipient||'', initialStatus, shouldNotifyTg]
+      );
       
+      const newTask = await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]) as any;
+      
+      // Always store in-app notifications
       if (assigned_to) {
         const assignee = await dbGet('SELECT name FROM members WHERE id=?', [assigned_to]) as any;
-        await notifyMember(assigned_to, `📋 New Task Assigned: "${title}"`, '/dashboard');
-        await notifyAdmins(`📋 New Task: "${title}" (Assigned to ${assignee?.name || 'employee'}).`, '/dashboard');
+        await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [assigned_to, `📋 New Task Assigned: "${title}"`, '/dashboard']);
+        
+        // Telegram notification: ONLY if bell is on AND status is NOT done!
+        if (shouldNotifyTg && initialStatus !== 'DONE') {
+          await notifyMember(assigned_to, `📋 New Task Assigned: "${title}"`, '/dashboard');
+          await notifyAdmins(`📋 New Task: "${title}" (Assigned to ${assignee?.name || 'employee'}).`, '/dashboard');
+        }
       } else {
-        await notifyAdmins(`📋 New Task Created: "${title}" (Unassigned).`, '/dashboard');
+        if (shouldNotifyTg && initialStatus !== 'DONE') {
+          await notifyAdmins(`📋 New Task Created: "${title}" (Unassigned).`, '/dashboard');
+        }
       }
 
       res.status(201).json(newTask);
     });
+
     this.app.patch('/api/tasks/:id', async (req, res) => {
       const requestingUser = (req as any).user;
       const oldTask = await dbGet(`SELECT t.*, m.name as assignee_name FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [req.params.id]) as any;
@@ -296,7 +326,7 @@ export class OpenClaw {
         }
       }
 
-      const allowed = ['status', 'priority', 'title', 'description', 'deadline', 'assigned_to', 'action_type', 'recipient', 'is_archived'];
+      const allowed = ['status', 'priority', 'title', 'description', 'deadline', 'assigned_to', 'action_type', 'recipient', 'is_archived', 'notify_telegram'];
       const updates: string[] = [];
       const values: any[] = [];
       for (const key of allowed) {
@@ -314,16 +344,33 @@ export class OpenClaw {
       
       if (oldTask && updatedTask) {
         const user = requestingUser;
+        const isTelegramEnabled = !!updatedTask.notify_telegram;
         
-        // If status changed, notify admins and assignee
+        // If status changed
         if (req.body.status && req.body.status !== oldTask.status) {
-          const statusIcon = req.body.status === 'DONE' ? '✅' : '🔄';
-          await notifyAdmins(`${statusIcon} Task Status: "${updatedTask.title}" marked as ${req.body.status} by ${user?.name || 'employee'}.`, '/dashboard');
+          const newStatus = req.body.status;
+          const statusIcon = newStatus === 'DONE' ? '✅' : '🔄';
+          const msg = `${statusIcon} Task Status: "${updatedTask.title}" marked as ${newStatus} by ${user?.name || 'employee'}.`;
+          
+          // Always log in-app notification for admins
+          const admins = await dbAll("SELECT id FROM members WHERE role = 'Admin'") as any[];
+          for (const a of admins) {
+            await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [a.id, msg, '/dashboard']);
+          }
+          
+          // Telegram Rule: Do NOT send if task is DONE, and ONLY send if bell notification is enabled!
+          if (isTelegramEnabled && newStatus !== 'DONE') {
+            await notifyAdmins(msg, '/dashboard');
+          }
         }
         
         // If task was re-assigned to someone else
         if (req.body.assigned_to && req.body.assigned_to !== oldTask.assigned_to) {
-          await notifyMember(req.body.assigned_to, `📋 You have been assigned a task: "${updatedTask.title}"`, '/dashboard');
+          const assignMsg = `📋 You have been assigned a task: "${updatedTask.title}"`;
+          await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [req.body.assigned_to, assignMsg, '/dashboard']);
+          if (isTelegramEnabled && updatedTask.status !== 'DONE') {
+            await notifyMember(req.body.assigned_to, assignMsg, '/dashboard');
+          }
         }
       }
 
@@ -332,7 +379,39 @@ export class OpenClaw {
     // Only Admins can delete tasks
     this.app.delete('/api/tasks/:id', requireRole('Admin'), async (req, res) => { await dbRun('DELETE FROM tasks WHERE id=?', [req.params.id]); res.json({ ok: true }); });
 
-    // ── TELEGRAM TEST ─────────────────────────────────────────
+    // ── TELEGRAM TEST & CONFIGURATION ─────────────────────────
+    this.app.post('/api/settings/telegram', requireRole('Admin'), async (req, res) => {
+      const { token, chat_id } = req.body;
+      if (token !== undefined) {
+        const cleanToken = token.trim();
+        try {
+          if (isPostgres()) {
+            await dbRun("INSERT INTO settings(key, value) VALUES('telegram_bot_token', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [cleanToken]);
+          } else {
+            await dbRun("INSERT OR REPLACE INTO settings(key, value) VALUES('telegram_bot_token', ?)", [cleanToken]);
+          }
+        } catch (e) {
+          await dbRun("INSERT OR REPLACE INTO settings(key, value) VALUES('telegram_bot_token', ?)", [cleanToken]).catch(console.error);
+        }
+        setRuntimeBotToken(cleanToken);
+      }
+      if (chat_id !== undefined) {
+        const cleanChatId = chat_id.trim();
+        try {
+          if (isPostgres()) {
+            await dbRun("INSERT INTO settings(key, value) VALUES('telegram_chat_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [cleanChatId]);
+          } else {
+            await dbRun("INSERT OR REPLACE INTO settings(key, value) VALUES('telegram_chat_id', ?)", [cleanChatId]);
+          }
+        } catch (e) {
+          await dbRun("INSERT OR REPLACE INTO settings(key, value) VALUES('telegram_chat_id', ?)", [cleanChatId]).catch(console.error);
+        }
+        process.env.TELEGRAM_CHAT_ID = cleanChatId;
+      }
+      const botInfo = await getTelegramBotInfo();
+      res.json({ success: true, botInfo, hasToken: !!getBotToken() });
+    });
+
     this.app.post('/api/test-telegram', requireRole('Admin'), async (req, res) => {
       const { chat_id } = req.body;
       if (!chat_id) return res.status(400).json({ error: 'chat_id is required' });
@@ -342,7 +421,8 @@ export class OpenClaw {
     });
 
     this.app.post('/api/debug-env', requireRole('Admin'), async (req, res) => {
-      const hasToken = !!((process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_BOT_TOKEN.trim()) || (process.env.TELEGRAM_TOKEN && process.env.TELEGRAM_TOKEN.trim()));
+      const token = getBotToken();
+      const hasToken = !!token;
       const botInfo = await getTelegramBotInfo();
       res.json({ keys: Object.keys(process.env), hasToken, botInfo, telegramChatIdEnv: process.env.TELEGRAM_CHAT_ID || '' });
     });
@@ -354,7 +434,8 @@ export class OpenClaw {
       res.json({
         ...botInfo,
         defaultChatId,
-        adminMembers
+        adminMembers,
+        hasToken: !!getBotToken()
       });
     });
 

@@ -27,6 +27,8 @@ import {
   Users,
   Calendar,
   Bell,
+  BellOff,
+  Check,
   Plus,
   Pencil,
   Archive,
@@ -63,6 +65,7 @@ type Task = {
   task_date: string;
   deadline?: string;
   is_archived?: number;
+  notify_telegram?: number;
 };
 
 type Member = { id: number; name: string; avatar_color: string; role: string; };
@@ -115,7 +118,7 @@ function DeadlineEditor({ defaultValue, onSave }: { defaultValue: string; onSave
   );
 }
 
-function CompactMobileTaskCard({ task, onClick }: { task: any; onClick: () => void }) {
+function CompactMobileTaskCard({ task, onClick, onToggleBell }: { task: any; onClick: () => void; onToggleBell?: (e: React.MouseEvent) => void }) {
   const dl = task.deadline ? new Date(task.deadline) : null;
   const shortName = task.assignee_name ? task.assignee_name.split(' ').map((n:string)=>n[0]).join('').substring(0,2).toUpperCase() : 'U';
   const st = getStatusStyle(task.status);
@@ -126,6 +129,15 @@ function CompactMobileTaskCard({ task, onClick }: { task: any; onClick: () => vo
       <div style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.9rem', color: '#f8fafc', fontWeight: 500 }}>
         {task.title || 'Untitled Task'}
       </div>
+      {onToggleBell && (
+        <button
+          onClick={e => { e.stopPropagation(); onToggleBell(e); }}
+          style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', color: task.notify_telegram ? '#eab308' : '#64748b', display: 'flex', alignItems: 'center' }}
+          title={task.notify_telegram ? 'Telegram notification ON (click to turn off)' : 'Telegram notification OFF (click to turn on)'}
+        >
+          {task.notify_telegram ? <Bell size={15} /> : <BellOff size={15} />}
+        </button>
+      )}
       <div style={{ width: 22, height: 22, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
         {shortName}
       </div>
@@ -139,7 +151,7 @@ function CompactMobileTaskCard({ task, onClick }: { task: any; onClick: () => vo
 }
 
 /* ─── Blank new-task row shape ─────────────────────── */
-const BLANK_ROW = { action_type: '', title: '', recipient: '', assigned_to: '', status: 'DONE', deadline: '' };
+const BLANK_ROW = { action_type: '', title: '', recipient: '', assigned_to: '', status: 'DONE', deadline: '', notify_telegram: 0 };
 
 /* ─── Shared inline field styles ─── */
 const fieldInputSt: React.CSSProperties = {
@@ -419,6 +431,7 @@ export default function DashboardPage() {
           status: newRow.status || 'DONE',
           deadline: newRow.deadline || null,
           task_date: currentDate,
+          notify_telegram: (newRow as any).notify_telegram || 0,
         }),
       });
       setNewRow({ ...BLANK_ROW });
@@ -429,6 +442,26 @@ export default function DashboardPage() {
       showToast('Failed to add task.');
     } finally {
       setSavingNew(false);
+    }
+  };
+
+  /* ─── Toggle Telegram Notification for Task ──────── */
+  const toggleTelegramNotification = async (task: Task) => {
+    const nextVal = task.notify_telegram ? 0 : 1;
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notify_telegram: nextVal }),
+      });
+      if (res.ok) {
+        showToast(nextVal ? '🔔 Telegram alert enabled for this task' : '🔕 Telegram alert disabled');
+        fetchTasks();
+      } else {
+        showToast('Failed to update task');
+      }
+    } catch {
+      showToast('Cannot reach server');
     }
   };
 
@@ -684,7 +717,7 @@ export default function DashboardPage() {
             .map(t => (
             <div key={t} className={`tab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)}
               style={{ padding: '10px 20px', fontSize: '0.88rem', fontWeight: tab === t ? 600 : 500, color: tab === t ? '#38bdf8' : '#94a3b8', borderBottom: tab === t ? '2px solid #38bdf8' : '2px solid transparent', cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-              {t === 'admin' ? 'Admin View' : t === 'team' ? isAdmin ? 'Team View' : 'My Tasks' : 'Board View'}
+              {t === 'admin' ? 'Summary' : t === 'team' ? 'Employee' : 'Board View'}
             </div>
           ))}
         </div>
@@ -712,6 +745,7 @@ export default function DashboardPage() {
                       key={task.id} 
                       task={task} 
                       onClick={() => handleMobileClick(task, 'admin')}
+                      onToggleBell={() => toggleTelegramNotification(task)}
                     />
                   ))}
                 </div>
@@ -745,7 +779,20 @@ export default function DashboardPage() {
                             <td style={{ padding: '12px 16px' }}>{renderCell(task, 'recipient')}</td>
                             <td style={{ padding: '12px 16px' }}>{renderCell(task, 'deadline')}</td>
                             <td style={{ padding: '12px 16px' }}>{renderCell(task, 'status')}</td>
-                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            <td style={{ padding: '12px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <button
+                                onClick={() => toggleTelegramNotification(task)}
+                                style={{
+                                  background: 'none', border: 'none',
+                                  color: task.notify_telegram ? '#eab308' : '#64748b',
+                                  cursor: 'pointer', padding: '6px', borderRadius: '6px',
+                                  display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s',
+                                  marginRight: '6px'
+                                }}
+                                title={task.notify_telegram ? 'Telegram notification ON (click to turn off)' : 'Telegram notification OFF (click to turn on)'}
+                              >
+                                {task.notify_telegram ? <Bell size={16} /> : <BellOff size={16} />}
+                              </button>
                               <button onClick={() => setTaskToDelete(task)}
                                 style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s' }}
                                 onMouseOver={e => (e.currentTarget.style.color = '#ef4444')}
@@ -819,7 +866,21 @@ export default function DashboardPage() {
                               <option value="PENDING">Pending</option>
                             </select>
                           </td>
-                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                          <td style={{ padding: '12px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <button
+                              type="button"
+                              onClick={() => setNewRow({ ...newRow, notify_telegram: (newRow as any).notify_telegram ? 0 : 1 })}
+                              style={{
+                                background: 'none', border: 'none',
+                                color: (newRow as any).notify_telegram ? '#eab308' : '#64748b',
+                                cursor: 'pointer', padding: '6px', borderRadius: '6px',
+                                display: 'inline-flex', alignItems: 'center',
+                                marginRight: '6px'
+                              }}
+                              title={(newRow as any).notify_telegram ? 'Telegram notification will be sent (click to disable)' : 'Telegram notification OFF (click to enable)'}
+                            >
+                              {(newRow as any).notify_telegram ? <Bell size={16} /> : <BellOff size={16} />}
+                            </button>
                             <button onClick={submitNewRow} disabled={savingNew}
                               style={{
                                 background: '#4f7eff',
@@ -895,7 +956,7 @@ export default function DashboardPage() {
                       <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#94a3b8' }}>No tasks match selected filters</div>
                     </div>
                   ) : filteredTasks.map(task => {
-                    return <CompactMobileTaskCard key={task.id} task={task} onClick={() => handleMobileClick(task, 'employee')} />;
+                    return <CompactMobileTaskCard key={task.id} task={task} onClick={() => handleMobileClick(task, 'employee')} onToggleBell={() => toggleTelegramNotification(task)} />;
                   })}
                 </div>
               ) : (

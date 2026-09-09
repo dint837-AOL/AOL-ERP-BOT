@@ -4,8 +4,15 @@
  * To activate, set TELEGRAM_BOT_TOKEN in your environment.
  */
 
+let cachedBotToken = '';
+
+export function setRuntimeBotToken(token: string) {
+  cachedBotToken = token.trim();
+  process.env.TELEGRAM_BOT_TOKEN = cachedBotToken;
+}
+
 export function getBotToken(): string {
-  const rawToken = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_TOKEN || '';
+  const rawToken = cachedBotToken || process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_TOKEN || '';
   let botToken = rawToken.replace(/^["']|["']$/g, '').trim();
   if (botToken.toLowerCase().startsWith('bot') && botToken.length > 3 && !botToken.startsWith('bot:')) {
     const candidate = botToken.substring(3).trim();
@@ -15,6 +22,7 @@ export function getBotToken(): string {
   }
   return botToken;
 }
+
 
 export async function getTelegramBotInfo(): Promise<{ success: boolean; bot?: any; error?: string }> {
   const botToken = getBotToken();
