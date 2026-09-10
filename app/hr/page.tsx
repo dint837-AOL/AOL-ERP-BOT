@@ -1491,20 +1491,6 @@ export default function HRPage() {
                         <option key={m.id} value={m.id}>{m.name}</option>
                       ))}
                     </select>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => setShowSetupModal(true)}
-                      title="Download Auto-Attendance Script"
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                        fontSize: '.76rem', padding: '6px 14px',
-                        background: 'rgba(79,126,255,0.12)', border: '1px solid rgba(79,126,255,0.25)',
-                        color: 'var(--primary)', borderRadius: 8, whiteSpace: 'nowrap', cursor: 'pointer',
-                        flexShrink: 0
-                      }}
-                    >
-                      <Download size={13} /> Download
-                    </button>
                   </div>
                 </div>
               ) : (
@@ -1512,19 +1498,6 @@ export default function HRPage() {
                   <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Employee</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div className="dchip" style={{ fontWeight: 600, fontSize: '.84rem' }}>{user?.name}</div>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => setShowSetupModal(true)}
-                      title="Download Auto-Attendance Script"
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                        fontSize: '.76rem', padding: '6px 12px',
-                        background: 'rgba(79,126,255,0.12)', border: '1px solid rgba(79,126,255,0.25)',
-                        color: 'var(--primary)', borderRadius: 8, whiteSpace: 'nowrap', cursor: 'pointer'
-                      }}
-                    >
-                      <Download size={13} /> Download
-                    </button>
                   </div>
                 </div>
               )}

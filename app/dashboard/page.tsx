@@ -121,29 +121,59 @@ function DeadlineEditor({ defaultValue, onSave }: { defaultValue: string; onSave
 
 function CompactMobileTaskCard({ task, onClick, onToggleBell }: { task: any; onClick: () => void; onToggleBell?: (e: React.MouseEvent) => void }) {
   const dl = task.deadline ? new Date(task.deadline) : null;
-  const shortName = task.assignee_name ? task.assignee_name.split(' ').map((n:string)=>n[0]).join('').substring(0,2).toUpperCase() : 'U';
+  const shortName = task.assignee_name
+    ? task.assignee_name.trim().split(/\s+/).map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
+    : 'U';
   const st = getStatusStyle(task.status);
-  
+  const hasNotify = Boolean(task.notify_telegram || task.notify_email);
+
   return (
-    <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#161926', border: '1px solid #2a3050', borderRadius: '10px', padding: '12px 14px', marginBottom: 10, cursor: 'pointer' }}>
-      <div style={{ width: 6, height: 6, borderRadius: '50%', background: st.color, boxShadow: st.dotGlow, flexShrink: 0 }} />
-      <div style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.9rem', color: '#f8fafc', fontWeight: 500 }}>
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        background: '#161926',
+        border: '1px solid #2a3050',
+        borderRadius: '12px',
+        padding: '13px 16px',
+        marginBottom: 10,
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        userSelect: 'none'
+      }}
+      onMouseOver={e => { e.currentTarget.style.borderColor = '#4f7eff'; e.currentTarget.style.background = 'rgba(79,126,255,0.04)'; }}
+      onMouseOut={e => { e.currentTarget.style.borderColor = '#2a3050'; e.currentTarget.style.background = '#161926'; }}
+    >
+      {/* Status glowing dot */}
+      <div style={{ width: 8, height: 8, borderRadius: '50%', background: st.color, boxShadow: st.dotGlow, flexShrink: 0 }} />
+
+      {/* Title */}
+      <div style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.92rem', color: '#f8fafc', fontWeight: 600 }}>
         {task.title || 'Untitled Task'}
       </div>
-      {onToggleBell && (
-        <button
-          onClick={e => { e.stopPropagation(); onToggleBell(e); }}
-          style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', color: task.notify_telegram ? '#eab308' : '#64748b', display: 'flex', alignItems: 'center' }}
-          title={task.notify_telegram ? 'Telegram notification ON (click to turn off)' : 'Telegram notification OFF (click to turn on)'}
-        >
-          {task.notify_telegram ? <Bell size={15} /> : <BellOff size={15} />}
-        </button>
+
+      {/* Bell icon */}
+      <button
+        type="button"
+        onClick={e => { e.stopPropagation(); onToggleBell && onToggleBell(e); }}
+        style={{ background: 'none', border: 'none', padding: '4px 6px', cursor: 'pointer', color: hasNotify ? '#eab308' : '#475569', display: 'flex', alignItems: 'center' }}
+        title={hasNotify ? 'Notifications ON (click to turn off)' : 'Notifications OFF (click to turn on)'}
+      >
+        {hasNotify ? <Bell size={15} /> : <BellOff size={15} />}
+      </button>
+
+      {/* Assignee Avatar */}
+      {task.assignee_name && (
+        <div style={{ width: 26, height: 26, borderRadius: '50%', background: task.assignee_color || '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+          {shortName}
+        </div>
       )}
-      <div style={{ width: 22, height: 22, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-        {shortName}
-      </div>
+
+      {/* Deadline badge */}
       {dl && (
-        <div style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: '0.78rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
           {dl.toLocaleString('en-GB', { day: 'numeric', month: 'short' })}
         </div>
       )}
@@ -275,6 +305,7 @@ export default function DashboardPage() {
   const [currentDate,   setCurrentDate]   = useState(getLocalDateString());
   // Employees start on 'team' view (their own tasks); admins default to 'admin' full table
   const [tab,           setTab]           = useState<'admin' | 'team' | 'board'>(isAdmin ? 'admin' : 'team');
+  const [viewLayout,    setViewLayout]    = useState<'cards' | 'table'>('cards');
   const [loading,       setLoading]       = useState(true);
   const [toastMsg,      setToastMsg]      = useState('');
   const [isMobile,      setIsMobile]      = useState(false);
@@ -760,8 +791,63 @@ export default function DashboardPage() {
           /* TAB 1 – ADMIN VIEW                        */
           /* ══════════════════════════════════════════ */
           tab === 'admin' ? (
-            <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
-              <div className="table-scroll">
+            <>
+              {/* Desktop view switcher toggle */}
+              {!isMobile && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                  <div style={{ display: 'inline-flex', background: '#161926', border: '1px solid #2a3050', borderRadius: 8, padding: 3, gap: 4 }}>
+                    <button
+                      type="button"
+                      onClick={() => setViewLayout('cards')}
+                      style={{
+                        padding: '5px 14px', borderRadius: 6, border: 'none',
+                        background: viewLayout === 'cards' ? '#4f7eff' : 'transparent',
+                        color: viewLayout === 'cards' ? '#fff' : '#94a3b8',
+                        fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit'
+                      }}
+                    >
+                      Cards View
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewLayout('table')}
+                      style={{
+                        padding: '5px 14px', borderRadius: 6, border: 'none',
+                        background: viewLayout === 'table' ? '#4f7eff' : 'transparent',
+                        color: viewLayout === 'table' ? '#fff' : '#94a3b8',
+                        fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit'
+                      }}
+                    >
+                      Table View
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {(isMobile || viewLayout === 'cards') ? (
+                /* Card List View (matches mobile picture) */
+                <div>
+                  {tasks.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '52px 20px', color: '#64748b' }}>
+                      <div style={{ fontSize: '2.8rem', marginBottom: 12 }}>📋</div>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: 6, color: '#94a3b8' }}>No tasks for {currentDate}</div>
+                      <div style={{ fontSize: '0.82rem' }}>Tap the <strong style={{ color: '#4f7eff' }}>+</strong> button below to add a task</div>
+                    </div>
+                  ) : (
+                    tasks.map(task => (
+                      <CompactMobileTaskCard
+                        key={task.id}
+                        task={task}
+                        onClick={() => handleMobileClick(task, 'admin')}
+                        onToggleBell={() => toggleTelegramNotification(task)}
+                      />
+                    ))
+                  )}
+                </div>
+              ) : (
+                /* Desktop Table View */
+                <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
+                  <div className="table-scroll">
                     <table style={{ width: '100%', minWidth: '920px', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
@@ -915,6 +1001,8 @@ export default function DashboardPage() {
                     </table>
                   </div>
                 </div>
+              )}
+            </>
 
           /* ══════════════════════════════════════════ */
           /* TAB 2 – TEAM VIEW                         */
@@ -954,69 +1042,90 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* Team table (same on PC and mobile) */}
-              <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
-                <div className="table-scroll">
-                  <table style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
-                        <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action</th>
-                        <th style={{ padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity Name</th>
-                        <th style={{ width: '170px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recipient</th>
-                        <th style={{ width: '170px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Assignee</th>
-                        <th style={{ width: '125px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
-                        <th style={{ width: '180px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deadline</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredTasks.length === 0 && (
-                        <tr className="empty-r"><td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>No tasks match the selected filters on {currentDate}.</td></tr>
-                      )}
-                      {filteredTasks.map(task => {
-                        const am = getActionMeta(task.action_type);
-                        const dl = task.deadline ? new Date(task.deadline) : null;
-                        const st = getStatusStyle(task.status);
-                        return (
-                          <tr key={task.id} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)' }}>
-                            <td style={{ padding: '12px 16px' }}>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#e2e8f0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', fontWeight: 600, fontSize: '0.78rem', padding: '4px 10px', borderRadius: '6px' }}>
-                                <span style={{ color: '#94a3b8' }}>{am.icon}</span>
-                                <span>{am.label}</span>
-                              </span>
-                            </td>
-                            <td style={{ padding: '12px 16px', fontWeight: 500, color: '#f8fafc', fontSize: '0.86rem' }}>{task.title}</td>
-                            <td style={{ padding: '12px 16px', color: task.recipient ? '#f1f5f9' : '#64748b', fontSize: '0.84rem' }}>{task.recipient || '—'}</td>
-                            <td style={{ padding: '12px 16px' }}>
-                              {task.assignee_name ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <div style={{ width: 24, height: 24, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                                    {(task.assignee_name[0] || 'U').toUpperCase()}
-                                  </div>
-                                  <span style={{ fontSize: '0.84rem', color: '#f1f5f9', fontWeight: 500 }}>{task.assignee_name}</span>
-                                </div>
-                              ) : <span style={{ color: '#64748b', fontSize: '0.82rem' }}>—</span>}
-                            </td>
-                            <td style={{ padding: '12px 16px' }}>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700, background: st.bg, color: st.color, border: `1px solid ${st.color}35` }}>
-                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.color, boxShadow: st.dotGlow }} />
-                                <span>{st.label}</span>
-                              </span>
-                            </td>
-                            <td style={{ padding: '12px 16px', fontSize: '0.82rem', color: dl ? '#e2e8f0' : '#64748b', whiteSpace: 'nowrap' }}>
-                              {dl ? (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                  <Calendar size={13} style={{ color: '#38bdf8' }} />
-                                  <span>{dl.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                                </span>
-                              ) : '—'}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+              {(isMobile || viewLayout === 'cards') ? (
+                /* Card List in Team View */
+                <div>
+                  {filteredTasks.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '52px 20px', color: '#64748b' }}>
+                      <div style={{ fontSize: '2.8rem', marginBottom: 12 }}>🔍</div>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#94a3b8' }}>No tasks match selected filters on {currentDate}</div>
+                    </div>
+                  ) : (
+                    filteredTasks.map(task => (
+                      <CompactMobileTaskCard
+                        key={task.id}
+                        task={task}
+                        onClick={() => handleMobileClick(task, 'employee')}
+                        onToggleBell={() => toggleTelegramNotification(task)}
+                      />
+                    ))
+                  )}
                 </div>
-              </div>
+              ) : (
+                /* Team table */
+                <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
+                  <div className="table-scroll">
+                    <table style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
+                          <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action</th>
+                          <th style={{ padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Activity Name</th>
+                          <th style={{ width: '170px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recipient</th>
+                          <th style={{ width: '170px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Assignee</th>
+                          <th style={{ width: '125px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                          <th style={{ width: '180px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deadline</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredTasks.length === 0 && (
+                          <tr className="empty-r"><td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>No tasks match the selected filters on {currentDate}.</td></tr>
+                        )}
+                        {filteredTasks.map(task => {
+                          const am = getActionMeta(task.action_type);
+                          const dl = task.deadline ? new Date(task.deadline) : null;
+                          const st = getStatusStyle(task.status);
+                          return (
+                            <tr key={task.id} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)' }}>
+                              <td style={{ padding: '12px 16px' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#e2e8f0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', fontWeight: 600, fontSize: '0.78rem', padding: '4px 10px', borderRadius: '6px' }}>
+                                  <span style={{ color: '#94a3b8' }}>{am.icon}</span>
+                                  <span>{am.label}</span>
+                                </span>
+                              </td>
+                              <td style={{ padding: '12px 16px', fontWeight: 500, color: '#f8fafc', fontSize: '0.86rem' }}>{task.title}</td>
+                              <td style={{ padding: '12px 16px', color: task.recipient ? '#f1f5f9' : '#64748b', fontSize: '0.84rem' }}>{task.recipient || '—'}</td>
+                              <td style={{ padding: '12px 16px' }}>
+                                {task.assignee_name ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <div style={{ width: 24, height: 24, borderRadius: '50%', background: task.assignee_color || '#4f7eff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                                      {(task.assignee_name[0] || 'U').toUpperCase()}
+                                    </div>
+                                    <span style={{ fontSize: '0.84rem', color: '#f1f5f9', fontWeight: 500 }}>{task.assignee_name}</span>
+                                  </div>
+                                ) : <span style={{ color: '#64748b', fontSize: '0.82rem' }}>—</span>}
+                              </td>
+                              <td style={{ padding: '12px 16px' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700, background: st.bg, color: st.color, border: `1px solid ${st.color}35` }}>
+                                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.color, boxShadow: st.dotGlow }} />
+                                  <span>{st.label}</span>
+                                </span>
+                              </td>
+                              <td style={{ padding: '12px 16px', fontSize: '0.82rem', color: dl ? '#e2e8f0' : '#64748b', whiteSpace: 'nowrap' }}>
+                                {dl ? (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                    <Calendar size={13} style={{ color: '#38bdf8' }} />
+                                    <span>{dl.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                                  </span>
+                                ) : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </>
 
           /* ══════════════════════════════════════════ */
@@ -1299,12 +1408,51 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {mobileEditMode && (
-                <button 
-                  onClick={saveMobileDraft}
-                  style={{ width: '100%', padding: '14px', marginTop: 10, background: 'linear-gradient(135deg, #4f7eff, #6c4fe3)', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', boxShadow: '0 4px 15px rgba(79,126,255,0.3)' }}>
-                  Save Changes
-                </button>
+              {!mobileEditMode ? (
+                <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? '1fr 1fr 1fr' : '1fr 1fr', gap: 10, marginTop: 14 }}>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedMobileTask(null); setMobileEditMode(false); }}
+                    style={{ padding: '12px', borderRadius: 10, border: '1px solid #2a3050', background: '#131722', color: '#f1f5f9', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    Close
+                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setMobileEditMode(true)}
+                      style={{ padding: '12px', borderRadius: 10, border: '1px solid #4f7eff', background: 'rgba(79,126,255,0.12)', color: '#4f7eff', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit' }}
+                    >
+                      <Pencil size={15} /> Edit
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => { setTaskToDelete(activeTask); setSelectedMobileTask(null); }}
+                      style={{ padding: '12px', borderRadius: 10, border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit' }}
+                    >
+                      <Trash2 size={15} /> Delete
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+                  <button
+                    type="button"
+                    onClick={() => setMobileEditMode(false)}
+                    style={{ padding: '12px', borderRadius: 10, border: '1px solid #2a3050', background: '#131722', color: '#f1f5f9', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={saveMobileDraft}
+                    style={{ padding: '12px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #4f7eff, #6c4fe3)', color: '#fff', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 15px rgba(79,126,255,0.3)' }}
+                  >
+                    Save Changes
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1312,7 +1460,7 @@ export default function DashboardPage() {
       })()}
 
       {/* ── Floating + button (PC and Mobile) ── */}
-      {isAdmin && tab === 'admin' && (
+      {isAdmin && (
         <button
           onClick={() => setShowMobileAdd(true)}
           style={{ position: 'fixed', bottom: 24, right: 20, zIndex: 700, width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #4f7eff, #6c4fe3)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fabPulse 2.4s ease-in-out infinite', boxShadow: '0 6px 22px rgba(79,126,255,0.45)', transition: 'transform 0.15s' }}

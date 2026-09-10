@@ -392,7 +392,7 @@ export async function initDB() {
   const defaultAccounts = [
     { name: 'Ahsan Kabir', email: 'admin@alliedone.com', role: 'Admin', color: '#ff4d4f', hash: adminHash, notify_email: 'ahsankabir13@gmail.com' },
     { name: 'Tajimur Rafi', email: 'rafi@alliedone.com', role: 'Employee', color: '#4f7eff', hash: employeeHash, notify_email: 'tajimurrafi@gmail.com' },
-    { name: 'Orko', email: 'orko@alliedone.com', role: 'Employee', color: '#26c486', hash: employeeHash, notify_email: 'orko552@gmail.com' },
+    { name: 'Arijit Orko', email: 'orko@alliedone.com', role: 'Employee', color: '#26c486', hash: employeeHash, notify_email: 'orko552@gmail.com' },
     { name: 'Kamrul Islam', email: 'kamrul@alliedone.com', role: 'Employee', color: '#f5a623', hash: employeeHash, notify_email: '' },
   ];
 
