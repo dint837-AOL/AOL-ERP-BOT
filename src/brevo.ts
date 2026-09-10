@@ -283,6 +283,86 @@ export async function schedule24And15HourReminders(params: {
 }
 
 /**
+ * Schedule 3-day and 1-day reminder email jobs specifically for Tenders
+ */
+export async function scheduleTender3And1DayReminders(params: {
+  entityId: number;
+  closingDateTime: string | Date;
+  recipientEmails: string[];
+  title: string;
+  rows: Array<{ label: string; value: string }>;
+}) {
+  const target = new Date(params.closingDateTime);
+  if (isNaN(target.getTime())) {
+    console.warn(`[Brevo] Invalid closing date for tender reminder: ${params.closingDateTime}`);
+    return;
+  }
+
+  const now = Date.now();
+  const targetMs = target.getTime();
+
+  // 3 days prior
+  const time3d = new Date(targetMs - 3 * 24 * 60 * 60 * 1000);
+  // 1 day prior
+  const time1d = new Date(targetMs - 1 * 24 * 60 * 60 * 1000);
+
+  // Clear any existing pending jobs for this tender
+  try {
+    await dbRun('DELETE FROM email_jobs WHERE entity_type = ? AND entity_id = ? AND status = ?', ['tender', params.entityId, 'PENDING']);
+  } catch (err) {
+    console.error('[Brevo] Error clearing previous tender jobs:', err);
+  }
+
+  for (const email of params.recipientEmails) {
+    // 3-day job
+    const html3d = buildAolErpHtml(
+      `Tender Closing Reminder: ${params.title} (3 Days Left)`,
+      params.rows,
+      'This is an automated 3-day reminder before the tender closing deadline.'
+    );
+    const sendAt3d = time3d.getTime() <= now ? new Date(now + 10000) : time3d;
+
+    await dbRun(`
+      INSERT INTO email_jobs (entity_type, entity_id, job_type, scheduled_at, recipient_email, subject, html_content, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
+    `, [
+      'tender',
+      params.entityId,
+      '3d',
+      sendAt3d.toISOString(),
+      email,
+      `AOL_ERP: 3-Day Reminder - Tender Closing: ${params.title}`,
+      html3d
+    ]);
+
+    // 1-day job
+    const html1d = buildAolErpHtml(
+      `Tender Closing Final Reminder: ${params.title} (1 Day Left)`,
+      params.rows,
+      'This is an urgent 1-day final reminder before the tender closing deadline.'
+    );
+    const sendAt1d = time1d.getTime() <= now ? new Date(now + 20000) : time1d;
+
+    if (sendAt1d.getTime() > sendAt3d.getTime() || time1d.getTime() > now) {
+      await dbRun(`
+        INSERT INTO email_jobs (entity_type, entity_id, job_type, scheduled_at, recipient_email, subject, html_content, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
+      `, [
+        'tender',
+        params.entityId,
+        '1d',
+        sendAt1d.toISOString(),
+        email,
+        `AOL_ERP: 1-Day Final Reminder - Tender Closing: ${params.title}`,
+        html1d
+      ]);
+    }
+  }
+
+  console.log(`[Brevo] Scheduled 3-day & 1-day reminders for tender #${params.entityId} to [${params.recipientEmails.join(', ')}]`);
+}
+
+/**
  * Process due email jobs from the database (Called in openclaw-mock cron loop)
  */
 export async function processDueEmailJobs() {

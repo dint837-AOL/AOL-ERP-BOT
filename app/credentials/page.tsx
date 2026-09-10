@@ -9,7 +9,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Key, Clock, Trash2, Edit3, Bell, BellOff } from 'lucide-react';
+import { Key, Clock, Trash2, Edit3, Bell, BellOff, Plus } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -294,89 +294,151 @@ export default function CredentialsPage() {
         </div>
       )}
 
-      <div style={{ padding: '12px 16px 100px', overflowY: 'auto', overflowX: 'hidden', height: 'calc(100dvh - 56px)', boxSizing: 'border-box' }}>
-
-        <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-head">
-            <h3>Credential Vault</h3>
-            <span style={{ fontSize: '.75rem', color: 'var(--muted)' }}>{creds.length} total</span>
+      <div className="scroll" style={{ padding: '20px 24px 100px' }}>
+        {/* Table card */}
+        <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
+          <div className="card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #2a3050' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>Credential Vault</h3>
+            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>{creds.length} total</span>
           </div>
 
-          {/* Fixed-layout table — fits viewport, zero horizontal scroll */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-            <colgroup>
-              {/* Name | Type | Expiry | Username | Actions */}
-              <col style={{ width: '28%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '20%' }} />
-              <col style={{ width: '28%' }} />
-              <col style={{ width: '8%' }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th style={th}>Name</th>
-                <th style={th}>Type</th>
-                <th style={th}>Expiry</th>
-                <th style={th}>Username</th>
-                <th style={{ ...th, textAlign: 'right' }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: '36px', color: 'var(--muted)', fontSize: '.82rem' }}>Loading...</td></tr>
-              ) : creds.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: '36px', color: 'var(--muted)', fontSize: '.82rem' }}>
-                  <Key size={22} style={{ opacity: .3, display: 'block', margin: '0 auto 8px' }} />
-                  No credentials saved yet.
-                </td></tr>
-              ) : creds.map((c, i) => {
-                const daysLeft = getDaysUntilExpiry(c.expiry_date);
-                const expiryColor = daysLeft === null ? 'var(--muted)' : daysLeft <= 0 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : 'var(--text)';
-                const expiryText = daysLeft === null ? '—' : daysLeft <= 0 ? 'Expired' : daysLeft <= 30 ? `${daysLeft}d left` : fmtDate(c.expiry_date);
-
-                return (
-                  <tr key={c.id} style={{ borderBottom: i < creds.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                    {/* Name */}
-                    <td style={td}>
-                      <div style={{ fontWeight: 600, fontSize: '.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
-                    </td>
-                    {/* Type */}
-                    <td style={{ ...td, fontSize: '.72rem', color: 'var(--muted)' }}>{typeLabel(c.cred_type)}</td>
-                    {/* Expiry */}
-                    <td style={{ ...td, fontSize: '.72rem', color: expiryColor, whiteSpace: 'nowrap', fontWeight: daysLeft !== null && daysLeft <= 7 ? 600 : 400 }}>
-                      {expiryText}
-                    </td>
-                    {/* Username */}
-                    <td style={{ ...td, fontSize: '.72rem', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {c.username || '—'}
-                    </td>
-                    {/* Actions */}
-                    <td style={{ ...td, textAlign: 'right', padding: '6px 8px' }}>
-                      <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end', alignItems: 'center' }}>
-                        <button onClick={() => toggleCredNotify(c)} title={c.notify_email ? 'Notifications ON (click to mute)' : 'Notifications OFF (click to enable)'} style={{ ...iconBtn, color: c.notify_email ? '#eab308' : 'var(--muted)' }}>
-                          {c.notify_email ? <Bell size={13} /> : <BellOff size={13} />}
-                        </button>
-                        <button onClick={() => openEdit(c)} title="Edit" style={iconBtn}><Edit3 size={13} /></button>
-                        <button onClick={() => setDeleteTarget(c)} title="Delete" style={{ ...iconBtn, color: 'var(--red)' }}><Trash2 size={13} /></button>
-                      </div>
+          <div className="table-scroll">
+            <table style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
+                  <th style={{ minWidth: '220px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left' }}>Name</th>
+                  <th style={{ width: '140px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left' }}>Type</th>
+                  <th style={{ width: '150px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left' }}>Expiry</th>
+                  <th style={{ width: '190px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left' }}>Username</th>
+                  <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left' }}>Remind</th>
+                  <th style={{ width: '110px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8', fontSize: '0.84rem' }}>Loading credentials…</td></tr>
+                ) : creds.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '44px 20px', color: '#94a3b8', fontSize: '0.85rem' }}>
+                      <Key size={26} style={{ opacity: 0.35, display: 'block', margin: '0 auto 10px' }} />
+                      No credentials saved yet. Click the + button at bottom right to add one.
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ) : creds.map(c => {
+                  const daysLeft = getDaysUntilExpiry(c.expiry_date);
+                  const expiryColor = daysLeft === null ? '#94a3b8' : daysLeft <= 0 ? '#ef4444' : daysLeft <= 7 ? '#f59e0b' : '#f1f5f9';
+                  const expiryText = daysLeft === null ? '—' : daysLeft <= 0 ? 'Expired' : daysLeft <= 30 ? `${daysLeft}d left` : fmtDate(c.expiry_date);
+
+                  return (
+                    <tr key={c.id} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)', transition: 'background 0.15s' }}>
+                      {/* Name */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.86rem', color: '#f1f5f9' }}>{c.name}</div>
+                        {c.url && (
+                          <a href={c.url} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', color: '#4f7eff', display: 'inline-block', marginTop: 2, textDecoration: 'none' }}>
+                            {c.url.replace(/^https?:\/\//, '').slice(0, 30)}
+                          </a>
+                        )}
+                      </td>
+                      {/* Type */}
+                      <td style={{ padding: '12px 16px', fontSize: '0.82rem' }}>
+                        <span style={{
+                          padding: '3px 8px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600,
+                          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#cbd5e1'
+                        }}>
+                          {typeLabel(c.cred_type)}
+                        </span>
+                      </td>
+                      {/* Expiry */}
+                      <td style={{ padding: '12px 16px', fontSize: '0.82rem', color: expiryColor, whiteSpace: 'nowrap', fontWeight: daysLeft !== null && daysLeft <= 7 ? 700 : 400 }}>
+                        {expiryText}
+                      </td>
+                      {/* Username */}
+                      <td style={{ padding: '12px 16px', fontSize: '0.82rem', color: '#94a3b8' }}>
+                        {c.username || <span style={{ color: '#64748b', fontStyle: 'italic' }}>—</span>}
+                      </td>
+                      {/* Reminder */}
+                      <td style={{ padding: '12px 16px', fontSize: '0.78rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6 }}>
+                          <Clock size={12} style={{ color: '#eab308' }} />
+                          <span>{c.reminder_days_before || '5, 2, 1'}d</span>
+                        </div>
+                      </td>
+                      {/* Actions */}
+                      <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => toggleCredNotify(c)}
+                            title={c.notify_email ? 'Notifications ON (click to mute)' : 'Notifications OFF (click to enable)'}
+                            style={{
+                              background: 'none', border: 'none',
+                              color: c.notify_email ? '#eab308' : '#64748b',
+                              cursor: 'pointer', padding: '6px', borderRadius: '6px',
+                              display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s'
+                            }}
+                          >
+                            {c.notify_email ? <Bell size={16} /> : <BellOff size={16} />}
+                          </button>
+                          <button
+                            onClick={() => openEdit(c)}
+                            title="Edit Credential"
+                            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s' }}
+                            onMouseOver={e => (e.currentTarget.style.color = '#38bdf8')}
+                            onMouseOut={e => (e.currentTarget.style.color = '#94a3b8')}
+                          >
+                            <Edit3 size={15} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(c)}
+                            title="Delete Credential"
+                            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s' }}
+                            onMouseOver={e => (e.currentTarget.style.color = '#ef4444')}
+                            onMouseOut={e => (e.currentTarget.style.color = '#64748b')}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      {/* FAB */}
-      <button id="cred-fab" onClick={openAdd} style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 800, width: 56, height: 56, borderRadius: '50%', background: 'var(--primary)', color: '#fff', border: 'none', fontSize: '1.8rem', cursor: 'pointer', boxShadow: '0 4px 20px rgba(79,126,255,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        +
+      {/* FAB matching Daily Task View */}
+      <button
+        id="cred-fab"
+        onClick={openAdd}
+        title="Add Credential"
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          zIndex: 800,
+          width: 56,
+          height: 56,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #4f7eff, #6c4fe3)',
+          color: '#fff',
+          border: 'none',
+          cursor: 'pointer',
+          boxShadow: '0 4px 20px rgba(79,126,255,0.55)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'transform 0.15s'
+        }}
+      >
+        <Plus size={24} />
       </button>
 
       {/* Add/Edit bottom sheet */}
       {sheetOpen && (
         <div onClick={e => { if (e.target === e.currentTarget) setSheetOpen(false); }} style={{ position: 'fixed', inset: 0, zIndex: 910, background: 'rgba(0,0,0,.65)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 560, paddingBottom: 'env(safe-area-inset-bottom,12px)', maxHeight: '92dvh', overflowY: 'auto', boxShadow: '0 -8px 40px rgba(0,0,0,.5)', animation: 'slideSheet .22s ease-out' }}>
+          <div style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 560, paddingBottom: 'env(safe-area-inset-bottom,12px)', maxHeight: '92dvh', overflowY: 'auto', boxShadow: '0 -8px 40px rgba(0,0,0,.5)', animation: 'slideSheet .22s ease-out' }}>
             <CredSheet editId={editId} form={form} saving={saving} onClose={() => setSheetOpen(false)} onChange={handleChange} onToggleNotify={handleToggleNotify} onSubmit={handleSubmit} />
           </div>
         </div>
@@ -385,17 +447,17 @@ export default function CredentialsPage() {
       {/* Delete confirm */}
       {deleteTarget && (
         <div onClick={e => { if (e.target === e.currentTarget) setDeleteTarget(null); }} style={{ position: 'fixed', inset: 0, zIndex: 950, background: 'rgba(0,0,0,.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, width: '100%', maxWidth: 340, padding: 24, boxShadow: '0 8px 40px rgba(0,0,0,.5)' }}>
+          <div style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: 16, width: '100%', maxWidth: 340, padding: 24, boxShadow: '0 8px 40px rgba(0,0,0,.5)' }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
               <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(242,92,122,.12)', border: '1px solid rgba(242,92,122,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red)' }}>
                 <Trash2 size={22} />
               </div>
             </div>
-            <h3 style={{ textAlign: 'center', fontSize: '1rem', fontWeight: 700, marginBottom: 8 }}>Delete Credential?</h3>
-            <p style={{ textAlign: 'center', fontSize: '.88rem', fontWeight: 600, color: 'var(--text)', marginBottom: 20 }}>{deleteTarget.name}</p>
+            <h3 style={{ textAlign: 'center', fontSize: '1rem', fontWeight: 700, marginBottom: 8, color: '#f8fafc' }}>Delete Credential?</h3>
+            <p style={{ textAlign: 'center', fontSize: '.88rem', fontWeight: 600, color: '#f1f5f9', marginBottom: 20 }}>{deleteTarget.name}</p>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setDeleteTarget(null)} style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text)', fontSize: '.88rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-              <button onClick={confirmDelete} style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', background: 'var(--red)', color: '#fff', fontSize: '.88rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Delete</button>
+              <button onClick={() => setDeleteTarget(null)} style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1px solid #2a3050', background: '#131722', color: '#f1f5f9', fontSize: '.88rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={confirmDelete} style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', background: '#ef4444', color: '#fff', fontSize: '.88rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Delete</button>
             </div>
           </div>
         </div>

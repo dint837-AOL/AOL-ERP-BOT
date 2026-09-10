@@ -9,6 +9,7 @@ import {
   sendBrevoEmail,
   resolveMemberNotificationEmails,
   schedule24And15HourReminders,
+  scheduleTender3And1DayReminders,
   processDueEmailJobs,
   buildAolErpHtml
 } from './brevo.js';
@@ -1486,16 +1487,15 @@ echo "======================================================"
 
       if (shouldNotify) {
         const emails = await resolveMemberNotificationEmails(assigned_to || 'Admin');
-        schedule24And15HourReminders({
-          entityType: 'tender',
+        scheduleTender3And1DayReminders({
           entityId: lastID,
-          targetDateTime: `${submission_deadline}T17:00:00+06:00`,
+          closingDateTime: submission_deadline.includes('T') ? submission_deadline : `${submission_deadline}T17:00:00+06:00`,
           recipientEmails: emails,
-          title: `Tender Deadline: ${title}`,
+          title: `Tender Closing: ${title}`,
           rows: [
             { label: 'Tender', value: title },
             { label: 'Organization', value: organization || '—' },
-            { label: 'Deadline', value: submission_deadline }
+            { label: 'Closing Date', value: submission_deadline }
           ]
         }).catch(console.error);
       }
@@ -1514,7 +1514,22 @@ echo "======================================================"
         `UPDATE tenders SET title=COALESCE(?,title), organization=COALESCE(?,organization), tender_type=COALESCE(?,tender_type), published_date=?, submission_deadline=COALESCE(?,submission_deadline), estimated_value=COALESCE(?,estimated_value), documents_url=COALESCE(?,documents_url), notes=COALESCE(?,notes), notify_email=COALESCE(?,notify_email) WHERE id=?`,
         [title||null, organization||null, tender_type||null, published_date||null, submission_deadline||null, estimated_value??null, documents_url||null, notes||null, notify_email !== undefined ? (notify_email ? 1 : 0) : null, req.params.id]
       );
-      res.json(await dbGet('SELECT * FROM tenders WHERE id=?', [req.params.id]));
+      const updatedTender = await dbGet('SELECT * FROM tenders WHERE id=?', [req.params.id]) as any;
+      if (updatedTender && updatedTender.notify_email && updatedTender.submission_deadline) {
+        const emails = await resolveMemberNotificationEmails(updatedTender.assigned_to || 'Admin');
+        scheduleTender3And1DayReminders({
+          entityId: Number(req.params.id),
+          closingDateTime: updatedTender.submission_deadline.includes('T') ? updatedTender.submission_deadline : `${updatedTender.submission_deadline}T17:00:00+06:00`,
+          recipientEmails: emails,
+          title: `Tender Closing: ${updatedTender.title}`,
+          rows: [
+            { label: 'Tender', value: updatedTender.title },
+            { label: 'Organization', value: updatedTender.organization || '—' },
+            { label: 'Closing Date', value: updatedTender.submission_deadline }
+          ]
+        }).catch(console.error);
+      }
+      res.json(updatedTender);
     });
 
     // ── CHAT (Attendance Simulator) ──────────────────────────

@@ -10,7 +10,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Briefcase, DownloadCloud, Trash2, Bell, BellOff } from 'lucide-react';
+import { Briefcase, DownloadCloud, Trash2, Bell, BellOff, Plus, Calendar, Edit3 } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,20 +50,30 @@ const BLANK: TenderForm = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmtDateShort(iso: string) {
+function fmtDateShort(iso?: string) {
+  if (!iso) return '—';
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch { return iso; }
+}
+
+function fmtDateTime(iso?: string) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   } catch { return iso; }
 }
 
 function getCountdown(deadline: string): { text: string; color: string; urgent: boolean } {
   const diff = new Date(deadline).getTime() - Date.now();
-  if (diff < 0) return { text: 'Exp.', color: 'var(--red)', urgent: true };
+  if (diff < 0) return { text: 'Expired', color: '#ef4444', urgent: true };
   const days = Math.floor(diff / 86400000);
   const hours = Math.floor((diff % 86400000) / 3600000);
-  if (days === 0) return { text: `${hours}h`, color: 'var(--orange)', urgent: true };
-  return { text: `${days}d`, color: days <= 3 ? 'var(--orange)' : 'var(--green)', urgent: days <= 3 };
+  if (days === 0) return { text: `${hours}h left`, color: '#eab308', urgent: true };
+  if (days === 1) return { text: '1d left (Urgent)', color: '#ef4444', urgent: true };
+  return { text: `${days}d left`, color: days <= 3 ? '#eab308' : '#22c55e', urgent: days <= 3 };
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -71,12 +81,12 @@ const STATUS_LABELS: Record<string, string> = {
   SUBMITTED: 'Submitted', WON: 'Won', LOST: 'Lost',
 };
 const STATUS_COLORS: Record<string, string> = {
-  UPCOMING: 'var(--primary)', IN_PROGRESS: 'var(--orange)',
-  SUBMITTED: 'var(--muted)', WON: 'var(--green)', LOST: 'var(--red)',
+  UPCOMING: '#38bdf8', IN_PROGRESS: '#eab308',
+  SUBMITTED: '#94a3b8', WON: '#22c55e', LOST: '#ef4444',
 };
 const STATUS_BGS: Record<string, string> = {
-  UPCOMING: 'rgba(79,126,255,.1)', IN_PROGRESS: 'rgba(245,166,35,.1)',
-  SUBMITTED: 'rgba(106,117,144,.1)', WON: 'rgba(38,196,134,.1)', LOST: 'rgba(242,92,122,.1)',
+  UPCOMING: 'rgba(56,189,248,0.12)', IN_PROGRESS: 'rgba(234,179,8,0.12)',
+  SUBMITTED: 'rgba(148,163,184,0.12)', WON: 'rgba(34,197,94,0.12)', LOST: 'rgba(239,68,68,0.12)',
 };
 
 // ─── Tender Sheet ─────────────────────────────────────────────────────────────
@@ -97,60 +107,60 @@ function TenderSheet({ editId, form, saving, onClose, onChange, onToggleNotify, 
       <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
         <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border)' }} />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 12px' }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>{editId ? 'Edit Tender' : 'Add Tender'}</h3>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1, padding: 4 }}>X</button>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px 14px', borderBottom: '1px solid #2a3050' }}>
+        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>{editId ? 'Edit Tender' : 'Add Tender'}</h3>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1, padding: 4 }}>X</button>
       </div>
-      <form onSubmit={onSubmit} style={{ padding: '0 20px 24px' }}>
-        <div className="fg">
-          <label>Tender Title</label>
-          <input name="title" placeholder="e.g. IT Equipment Supply" value={form.title} onChange={onChange} required />
+      <form onSubmit={onSubmit} style={{ padding: '18px 20px 24px' }}>
+        <div className="fg" style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600, display: 'block', marginBottom: 5 }}>Tender Title *</label>
+          <input name="title" placeholder="e.g. IT Equipment Supply" value={form.title} onChange={onChange} required style={{ width: '100%', background: '#131722', border: '1px solid #2a3050', borderRadius: 8, padding: '10px 12px', color: '#f1f5f9', fontSize: '0.9rem', outline: 'none' }} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 13 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
           <div className="fg" style={{ marginBottom: 0 }}>
-            <label>Organization</label>
-            <input name="organization" placeholder="e.g. Ministry of ICT" value={form.organization} onChange={onChange} />
+            <label style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600, display: 'block', marginBottom: 5 }}>Organization (Org)</label>
+            <input name="organization" placeholder="e.g. Ministry of ICT" value={form.organization} onChange={onChange} style={{ width: '100%', background: '#131722', border: '1px solid #2a3050', borderRadius: 8, padding: '10px 12px', color: '#f1f5f9', fontSize: '0.88rem', outline: 'none' }} />
           </div>
           <div className="fg" style={{ marginBottom: 0 }}>
-            <label>Type</label>
-            <select name="tender_type" value={form.tender_type} onChange={onChange}>
+            <label style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600, display: 'block', marginBottom: 5 }}>Type</label>
+            <select name="tender_type" value={form.tender_type} onChange={onChange} style={{ width: '100%', background: '#131722', border: '1px solid #2a3050', borderRadius: 8, padding: '10px 12px', color: '#f1f5f9', fontSize: '0.88rem', outline: 'none', cursor: 'pointer' }}>
               <option value="GOVT">Government</option>
               <option value="PRIVATE">Private</option>
             </select>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 13 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
           <div className="fg" style={{ marginBottom: 0 }}>
-            <label>Published Date</label>
-            <input type="date" name="published_date" value={form.published_date} onChange={onChange} />
+            <label style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600, display: 'block', marginBottom: 5 }}>Published Date (Pub)</label>
+            <input type="date" name="published_date" value={form.published_date} onChange={onChange} style={{ width: '100%', background: '#131722', border: '1px solid #2a3050', borderRadius: 8, padding: '10px 12px', color: '#f1f5f9', fontSize: '0.88rem', outline: 'none', colorScheme: 'dark', cursor: 'pointer' }} />
           </div>
           <div className="fg" style={{ marginBottom: 0 }}>
-            <label>Deadline</label>
-            <input type="datetime-local" name="submission_deadline" value={form.submission_deadline} onChange={onChange} required />
+            <label style={{ fontSize: '0.74rem', color: '#38bdf8', fontWeight: 700, display: 'block', marginBottom: 5 }}>Closing Date *</label>
+            <input type="datetime-local" name="submission_deadline" value={form.submission_deadline} onChange={onChange} required style={{ width: '100%', background: '#131722', border: '1px solid #38bdf8', borderRadius: 8, padding: '10px 12px', color: '#f1f5f9', fontSize: '0.88rem', outline: 'none', colorScheme: 'dark', cursor: 'pointer' }} />
           </div>
-        </div>
-        <div className="fg">
-          <label>Estimated Value (৳)</label>
-          <input type="number" name="estimated_value" placeholder="0" value={form.estimated_value} onChange={onChange} min="0" />
-        </div>
-        <div className="fg">
-          <label>Documents URL <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
-          <input name="documents_url" placeholder="https://drive.google.com/..." value={form.documents_url} onChange={onChange} />
         </div>
         <div className="fg" style={{ marginBottom: 14 }}>
-          <label>Notes <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
-          <textarea name="notes" placeholder="Additional notes..." value={form.notes} onChange={onChange} rows={2} style={{ width: '100%', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', color: 'var(--text)', fontSize: '.84rem', fontFamily: 'inherit', outline: 'none', resize: 'vertical' }} />
+          <label style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600, display: 'block', marginBottom: 5 }}>Estimated Value (৳)</label>
+          <input type="number" name="estimated_value" placeholder="0" value={form.estimated_value} onChange={onChange} min="0" style={{ width: '100%', background: '#131722', border: '1px solid #2a3050', borderRadius: 8, padding: '10px 12px', color: '#f1f5f9', fontSize: '0.88rem', outline: 'none' }} />
+        </div>
+        <div className="fg" style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600, display: 'block', marginBottom: 5 }}>Documents URL <span style={{ color: '#64748b', fontWeight: 400 }}>(optional)</span></label>
+          <input name="documents_url" placeholder="https://drive.google.com/..." value={form.documents_url} onChange={onChange} style={{ width: '100%', background: '#131722', border: '1px solid #2a3050', borderRadius: 8, padding: '10px 12px', color: '#f1f5f9', fontSize: '0.88rem', outline: 'none' }} />
+        </div>
+        <div className="fg" style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600, display: 'block', marginBottom: 5 }}>Notes <span style={{ color: '#64748b', fontWeight: 400 }}>(optional)</span></label>
+          <textarea name="notes" placeholder="Additional notes..." value={form.notes} onChange={onChange} rows={2} style={{ width: '100%', background: '#131722', border: '1px solid #2a3050', borderRadius: 8, padding: '10px 12px', color: '#f1f5f9', fontSize: '0.84rem', fontFamily: 'inherit', outline: 'none', resize: 'vertical' }} />
         </div>
 
         {/* Notifications Bell */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card, #131722)', border: '1px solid var(--border, #2a3050)', borderRadius: '10px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: '#131722', border: '1px solid #2a3050', borderRadius: '10px', marginBottom: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: form.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: form.notify_email ? '#eab308' : '#64748b' }}>
-              {form.notify_email ? <Bell size={16} /> : <BellOff size={16} />}
+            <div style={{ width: 34, height: 34, borderRadius: '50%', background: form.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: form.notify_email ? '#eab308' : '#64748b' }}>
+              {form.notify_email ? <Bell size={17} /> : <BellOff size={17} />}
             </div>
             <div>
-              <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text, #f1f5f9)' }}>Notifications</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--muted, #64748b)' }}>Telegram &amp; Brevo reminders (24h &amp; 15h)</div>
+              <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#f1f5f9' }}>Notifications</div>
+              <div style={{ fontSize: '0.72rem', color: '#38bdf8' }}>Reminders sent 3 days &amp; 1 day before closing date</div>
             </div>
           </div>
           <button
@@ -160,7 +170,7 @@ function TenderSheet({ editId, form, saving, onClose, onChange, onToggleNotify, 
               background: form.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)',
               border: `1px solid ${form.notify_email ? '#eab308' : '#334155'}`,
               color: form.notify_email ? '#eab308' : '#94a3b8',
-              borderRadius: '8px', padding: '6px 14px', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
+              borderRadius: '8px', padding: '7px 14px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 5
             }}
           >
@@ -169,7 +179,7 @@ function TenderSheet({ editId, form, saving, onClose, onChange, onToggleNotify, 
           </button>
         </div>
 
-        <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: '.95rem', fontWeight: 700, borderRadius: 10 }} disabled={saving}>
+        <button type="submit" style={{ width: '100%', background: 'linear-gradient(135deg, #4f7eff, #6c4fe3)', border: 'none', color: '#fff', borderRadius: '12px', padding: '14px', fontSize: '0.98rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: saving ? 0.6 : 1, transition: 'opacity 0.15s', boxShadow: '0 4px 15px rgba(79,126,255,0.3)' }} disabled={saving}>
           {saving ? 'Saving...' : editId ? 'Update Tender' : 'Save Tender'}
         </button>
       </form>
@@ -221,7 +231,6 @@ export default function TendersPage() {
 
   function openEdit(t: Tender) {
     setEditId(t.id);
-    // Convert ISO deadline to datetime-local format
     const dl = t.submission_deadline ? new Date(t.submission_deadline).toISOString().slice(0, 16) : '';
     setForm({
       title: t.title,
@@ -262,7 +271,7 @@ export default function TendersPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.title.trim() || !form.submission_deadline) { showToast('Title and deadline are required.'); return; }
+    if (!form.title.trim() || !form.submission_deadline) { showToast('Title and closing date are required.'); return; }
     setSaving(true);
     try {
       const url = editId ? `/api/tenders/${editId}` : '/api/tenders';
@@ -309,28 +318,9 @@ export default function TendersPage() {
     } catch { showToast('Error deleting.'); }
   }
 
-  // ── table styles ──────────────────────────────────────────────────────────
-  const th: React.CSSProperties = {
-    padding: '8px 10px', fontSize: '.62rem', fontWeight: 700, color: 'var(--muted)',
-    textTransform: 'uppercase', letterSpacing: '.04em',
-    borderBottom: '1px solid var(--border)',
-    background: 'rgba(0,0,0,.1)', textAlign: 'left', whiteSpace: 'nowrap',
-  };
-  const td: React.CSSProperties = {
-    padding: '10px 10px', fontSize: '.78rem', color: 'var(--text)', verticalAlign: 'middle',
-  };
-
-  // ── filter pill style ─────────────────────────────────────────────────────
-  const pill = (active: boolean): React.CSSProperties => ({
-    padding: '5px 12px', borderRadius: 20, fontSize: '.74rem', fontWeight: 600, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
-    background: active ? 'var(--primary)' : 'var(--card)',
-    color: active ? '#fff' : 'var(--muted)',
-    transition: 'all .15s',
-  });
-
   return (
     <>
-      <Topbar title="Tender Management" />
+      <Topbar title="Tender Details" />
 
       {toast && (
         <div style={{ position: 'fixed', bottom: 88, left: '50%', transform: 'translateX(-50%)', background: '#1d2133', border: '1px solid #2a3050', borderRadius: 10, padding: '10px 20px', fontSize: '.84rem', zIndex: 999, color: '#dde2f0', whiteSpace: 'nowrap', boxShadow: '0 4px 20px rgba(0,0,0,.4)' }}>
@@ -338,80 +328,143 @@ export default function TendersPage() {
         </div>
       )}
 
-      <div style={{ padding: '12px 16px 100px', overflowY: 'auto', overflowX: 'hidden', height: 'calc(100dvh - 56px)', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="scroll" style={{ padding: '20px 24px 100px' }}>
+        {/* Filters bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filter:</span>
+            {['ALL', 'GOVT', 'PRIVATE'].map(tp => (
+              <button
+                key={tp}
+                onClick={() => setFType(tp)}
+                style={{
+                  padding: '5px 12px', borderRadius: '20px', fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
+                  background: fType === tp ? '#4f7eff' : '#161926',
+                  color: fType === tp ? '#fff' : '#94a3b8',
+                  borderWidth: 1, borderStyle: 'solid', borderColor: fType === tp ? '#4f7eff' : '#2a3050',
+                  transition: 'all 0.15s'
+                }}
+              >
+                {tp === 'ALL' ? 'All Types' : tp === 'GOVT' ? 'Govt' : 'Private'}
+              </button>
+            ))}
+            <div style={{ width: 1, height: 16, background: '#2a3050', margin: '0 4px' }} />
+            {['ALL', 'UPCOMING', 'IN_PROGRESS', 'SUBMITTED', 'WON', 'LOST'].map(st => (
+              <button
+                key={st}
+                onClick={() => setFStatus(st)}
+                style={{
+                  padding: '5px 12px', borderRadius: '20px', fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
+                  background: fStatus === st ? '#4f7eff' : '#161926',
+                  color: fStatus === st ? '#fff' : '#94a3b8',
+                  borderWidth: 1, borderStyle: 'solid', borderColor: fStatus === st ? '#4f7eff' : '#2a3050',
+                  transition: 'all 0.15s'
+                }}
+              >
+                {st === 'ALL' ? 'All Statuses' : STATUS_LABELS[st] || st}
+              </button>
+            ))}
+          </div>
+          <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>{filtered.length} of {tenders.length} tenders</span>
+        </div>
 
-        {/* Table card */}
-        <div className="card" style={{ marginBottom: 0, flex: 1 }}>
-          <div className="card-head">
-            <h3>Tender Registry</h3>
-            <span style={{ fontSize: '.75rem', color: 'var(--muted)' }}>{filtered.length} of {tenders.length}</span>
+        {/* Table card — styled identically to Daily Tasks Admin View */}
+        <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
+          <div className="card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #2a3050' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>Tender Details</h3>
+            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Active Registry</span>
           </div>
 
-          {/* Fixed-layout table — fits viewport, zero horizontal scroll */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-            <colgroup>
-              {/* Title | Type | Deadline | Status | Actions */}
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '35%' }} />
-              <col style={{ width: '14%' }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th style={th}>Title</th>
-                <th style={th}>Type</th>
-                <th style={{ ...th, textAlign: 'center' }}>Deadline</th>
-                <th style={{ ...th, textAlign: 'center' }}>Status</th>
-                <th style={{ ...th, textAlign: 'right' }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: '36px', color: 'var(--muted)', fontSize: '.82rem' }}>Loading...</td></tr>
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: '36px', color: 'var(--muted)', fontSize: '.82rem' }}>
-                  <Briefcase size={22} style={{ opacity: .3, display: 'block', margin: '0 auto 8px' }} />
-                  No tenders found.
-                </td></tr>
-              ) : filtered.map((t, i) => {
-                const cd = getCountdown(t.submission_deadline);
-                const isDone = ['SUBMITTED', 'WON', 'LOST'].includes(t.status);
-                return (
-                  <tr key={t.id} style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                    {/* Title */}
-                    <td style={td}>
-                      <div style={{ fontWeight: 600, fontSize: '.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
-                      {t.documents_url && (
-                        <a href={t.documents_url} target="_blank" rel="noreferrer" style={{ fontSize: '.66rem', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
-                          <DownloadCloud size={10} /> Docs
-                        </a>
-                      )}
+          <div className="table-scroll">
+            <table style={{ width: '100%', minWidth: '920px', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
+                  <th style={{ minWidth: '220px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left' }}>Title</th>
+                  <th style={{ width: '180px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left' }}>Org</th>
+                  <th style={{ width: '120px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left' }}>Pub</th>
+                  <th style={{ width: '130px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Close</th>
+                  <th style={{ width: '180px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left' }}>Deadline</th>
+                  <th style={{ width: '140px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Status</th>
+                  <th style={{ width: '110px', padding: '12px 16px', color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8', fontSize: '0.84rem' }}>Loading tenders…</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '44px 20px', color: '#94a3b8', fontSize: '0.85rem' }}>
+                      <Briefcase size={26} style={{ opacity: 0.35, display: 'block', margin: '0 auto 10px' }} />
+                      No tenders found. Click the + button at bottom right to add a tender.
                     </td>
-                    {/* Type badge */}
-                    <td style={td}>
-                      <span style={{
-                        fontSize: '.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: 4, display: 'inline-block',
-                        textTransform: 'uppercase', letterSpacing: '.04em',
-                        color: t.tender_type === 'GOVT' ? 'var(--primary)' : 'var(--orange)',
-                        background: t.tender_type === 'GOVT' ? 'rgba(79,126,255,.1)' : 'rgba(245,166,35,.1)',
-                      }}>
-                        {t.tender_type === 'GOVT' ? 'Govt' : 'Private'}
-                      </span>
-                    </td>
-                    {/* Deadline — centered countdown */}
-                    <td style={{ ...td, textAlign: 'center', fontSize: '.76rem', fontWeight: 700, whiteSpace: 'nowrap', color: isDone ? 'var(--muted)' : cd.color }}>
-                      {cd.text}
-                    </td>
-                    {/* Status dropdown — centered with left gap */}
-                    <td style={{ ...td, padding: '6px 8px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'center', paddingLeft: 10 }}>
+                  </tr>
+                ) : filtered.map(t => {
+                  const cd = getCountdown(t.submission_deadline);
+                  const isDone = ['SUBMITTED', 'WON', 'LOST'].includes(t.status);
+                  return (
+                    <tr key={t.id} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)', transition: 'background 0.15s' }}>
+                      {/* Title */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.86rem', color: '#f1f5f9' }}>{t.title}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                          <span style={{
+                            fontSize: '0.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: 4, display: 'inline-block',
+                            textTransform: 'uppercase', letterSpacing: '.04em',
+                            color: t.tender_type === 'GOVT' ? '#38bdf8' : '#f59e0b',
+                            background: t.tender_type === 'GOVT' ? 'rgba(56,189,248,0.12)' : 'rgba(245,158,11,0.12)',
+                          }}>
+                            {t.tender_type === 'GOVT' ? 'Govt' : 'Private'}
+                          </span>
+                          {t.documents_url && (
+                            <a href={t.documents_url} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', color: '#4f7eff', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none', fontWeight: 600 }}>
+                              <DownloadCloud size={12} /> Docs
+                            </a>
+                          )}
+                          {t.estimated_value > 0 && (
+                            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>৳{t.estimated_value.toLocaleString()}</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Org */}
+                      <td style={{ padding: '12px 16px', fontSize: '0.84rem', color: '#e2e8f0' }}>
+                        {t.organization || <span style={{ color: '#64748b', fontStyle: 'italic' }}>—</span>}
+                      </td>
+
+                      {/* Pub */}
+                      <td style={{ padding: '12px 16px', fontSize: '0.82rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                        {fmtDateShort(t.published_date)}
+                      </td>
+
+                      {/* Close (Countdown badge) */}
+                      <td style={{ padding: '12px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          color: isDone ? '#94a3b8' : cd.color,
+                          background: isDone ? 'rgba(148,163,184,0.1)' : cd.urgent ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)',
+                          border: `1px solid ${isDone ? 'rgba(148,163,184,0.2)' : cd.urgent ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`
+                        }}>
+                          {cd.text}
+                        </span>
+                      </td>
+
+                      {/* Deadline (Closing Date & Time) */}
+                      <td style={{ padding: '12px 16px', fontSize: '0.82rem', color: '#f1f5f9', whiteSpace: 'nowrap' }}>
+                        {fmtDateTime(t.submission_deadline)}
+                      </td>
+
+                      {/* Status */}
+                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                         <select
                           value={t.status}
                           onChange={e => updateStatus(t.id, e.target.value)}
                           style={{
-                            width: 'auto', padding: '5px 6px', borderRadius: 6, fontSize: '.68rem', fontWeight: 600,
-                            border: '1px solid var(--border)', background: STATUS_BGS[t.status],
+                            width: 'auto', padding: '6px 10px', borderRadius: 7, fontSize: '0.76rem', fontWeight: 600,
+                            border: '1px solid #2a3050', background: STATUS_BGS[t.status],
                             color: STATUS_COLORS[t.status], cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
                           }}
                         >
@@ -419,39 +472,83 @@ export default function TendersPage() {
                             <option key={v} value={v}>{l}</option>
                           ))}
                         </select>
-                      </div>
-                    </td>
-                    {/* Actions */}
-                    <td style={{ ...td, textAlign: 'right', padding: '6px 8px' }}>
-                      <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end', alignItems: 'center' }}>
-                        <button onClick={() => toggleTenderNotify(t)} title={t.notify_email ? 'Notifications ON (click to mute)' : 'Notifications OFF (click to enable)'} style={{ ...iconBtn, color: t.notify_email ? '#eab308' : 'var(--muted)' }}>
-                          {t.notify_email ? <Bell size={13} /> : <BellOff size={13} />}
-                        </button>
-                        <button onClick={() => openEdit(t)} title="Edit" style={iconBtn}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </button>
-                        <button onClick={() => setDeleteTarget(t)} title="Delete" style={{ ...iconBtn, color: 'var(--red)' }}>
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+
+                      {/* Actions */}
+                      <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => toggleTenderNotify(t)}
+                            title={t.notify_email ? 'Reminders ON (3d & 1d before closing date)' : 'Reminders OFF (click to turn on)'}
+                            style={{
+                              background: 'none', border: 'none',
+                              color: t.notify_email ? '#eab308' : '#64748b',
+                              cursor: 'pointer', padding: '6px', borderRadius: '6px',
+                              display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s',
+                            }}
+                          >
+                            {t.notify_email ? <Bell size={16} /> : <BellOff size={16} />}
+                          </button>
+                          <button
+                            onClick={() => openEdit(t)}
+                            title="Edit Tender"
+                            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s' }}
+                            onMouseOver={e => (e.currentTarget.style.color = '#38bdf8')}
+                            onMouseOut={e => (e.currentTarget.style.color = '#94a3b8')}
+                          >
+                            <Edit3 size={15} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(t)}
+                            title="Delete Tender"
+                            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s' }}
+                            onMouseOver={e => (e.currentTarget.style.color = '#ef4444')}
+                            onMouseOut={e => (e.currentTarget.style.color = '#64748b')}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      {/* FAB */}
-      <button id="tender-fab" onClick={openAdd} style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 800, width: 56, height: 56, borderRadius: '50%', background: 'var(--primary)', color: '#fff', border: 'none', fontSize: '1.8rem', cursor: 'pointer', boxShadow: '0 4px 20px rgba(79,126,255,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        +
+      {/* Floating Add Button matching Daily Task View */}
+      <button
+        id="tender-fab"
+        onClick={openAdd}
+        title="Add Tender"
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          zIndex: 800,
+          width: 56,
+          height: 56,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #4f7eff, #6c4fe3)',
+          color: '#fff',
+          border: 'none',
+          cursor: 'pointer',
+          boxShadow: '0 4px 20px rgba(79,126,255,0.55)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'transform 0.15s'
+        }}
+      >
+        <Plus size={24} />
       </button>
 
       {/* Add/Edit bottom sheet */}
       {sheetOpen && (
         <div onClick={e => { if (e.target === e.currentTarget) setSheetOpen(false); }} style={{ position: 'fixed', inset: 0, zIndex: 910, background: 'rgba(0,0,0,.65)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 560, paddingBottom: 'env(safe-area-inset-bottom,12px)', maxHeight: '92dvh', overflowY: 'auto', boxShadow: '0 -8px 40px rgba(0,0,0,.5)', animation: 'slideSheet .22s ease-out' }}>
+          <div style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 560, paddingBottom: 'env(safe-area-inset-bottom,12px)', maxHeight: '92dvh', overflowY: 'auto', boxShadow: '0 -8px 40px rgba(0,0,0,.5)', animation: 'slideSheet .22s ease-out' }}>
             <TenderSheet editId={editId} form={form} saving={saving} onClose={() => setSheetOpen(false)} onChange={handleChange} onToggleNotify={handleToggleNotify} onSubmit={handleSubmit} />
           </div>
         </div>
