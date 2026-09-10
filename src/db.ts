@@ -185,17 +185,36 @@ export async function initDB() {
         is_read BOOLEAN DEFAULT false,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS email_jobs (
+        id SERIAL PRIMARY KEY,
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
+        job_type TEXT NOT NULL,
+        scheduled_at TIMESTAMPTZ NOT NULL,
+        recipient_email TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        html_content TEXT NOT NULL,
+        status TEXT DEFAULT 'PENDING',
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     try { await pgPool.query("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link TEXT DEFAULT ''"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE members ADD COLUMN IF NOT EXISTS whatsapp_number TEXT DEFAULT ''"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE members ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT DEFAULT ''"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE members ADD COLUMN IF NOT EXISTS notify_email TEXT DEFAULT ''"); } catch (e) {}
 
-    // Add new accounting columns
+    // Add new accounting columns & notification toggles
     try { await pgPool.query("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS company_name TEXT DEFAULT ''"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS expense_head TEXT DEFAULT ''"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'Cash'"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS notify_telegram INTEGER DEFAULT 0"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE meetings ADD COLUMN IF NOT EXISTS notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE tenders ADD COLUMN IF NOT EXISTS notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE credentials ADD COLUMN IF NOT EXISTS notify_email INTEGER DEFAULT 0"); } catch (e) {}
 
   } else {
     isPg = false;
@@ -326,7 +345,7 @@ export async function initDB() {
         device_type TEXT DEFAULT 'BROWSER'
       );
 
-      CREATE TABLE IF NOT EXISTS notifications (
+        CREATE TABLE IF NOT EXISTS notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         member_id INTEGER REFERENCES members(id),
         message TEXT NOT NULL,
@@ -334,17 +353,36 @@ export async function initDB() {
         is_read BOOLEAN DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS email_jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
+        job_type TEXT NOT NULL,
+        scheduled_at DATETIME NOT NULL,
+        recipient_email TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        html_content TEXT NOT NULL,
+        status TEXT DEFAULT 'PENDING',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     try { await sqliteDb.exec("ALTER TABLE notifications ADD COLUMN link TEXT DEFAULT ''"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE members ADD COLUMN whatsapp_number TEXT DEFAULT ''"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE members ADD COLUMN telegram_chat_id TEXT DEFAULT ''"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE members ADD COLUMN notify_email TEXT DEFAULT ''"); } catch (e) {}
 
-    // Add new accounting columns
+    // Add new accounting columns & notification toggles
     try { await sqliteDb.exec("ALTER TABLE expenses ADD COLUMN company_name TEXT DEFAULT ''"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE expenses ADD COLUMN expense_head TEXT DEFAULT ''"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE expenses ADD COLUMN payment_method TEXT DEFAULT 'Cash'"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE tasks ADD COLUMN notify_telegram INTEGER DEFAULT 0"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE tasks ADD COLUMN notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE leave_requests ADD COLUMN notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE meetings ADD COLUMN notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE tenders ADD COLUMN notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE credentials ADD COLUMN notify_email INTEGER DEFAULT 0"); } catch (e) {}
   }
 
   // Seed default admin and employee accounts
@@ -352,23 +390,23 @@ export async function initDB() {
   const employeeHash = await bcrypt.hash('Employee@123', 10);
 
   const defaultAccounts = [
-    { name: 'Ahsan Kabir', email: 'admin@alliedone.com', role: 'Admin', color: '#ff4d4f', hash: adminHash },
-    { name: 'Tajimur Rafi', email: 'rafi@alliedone.com', role: 'Employee', color: '#4f7eff', hash: employeeHash },
-    { name: 'Orko', email: 'orko@alliedone.com', role: 'Employee', color: '#26c486', hash: employeeHash },
-    { name: 'Kamrul Islam', email: 'kamrul@alliedone.com', role: 'Employee', color: '#f5a623', hash: employeeHash },
+    { name: 'Ahsan Kabir', email: 'admin@alliedone.com', role: 'Admin', color: '#ff4d4f', hash: adminHash, notify_email: 'ahsankabir13@gmail.com' },
+    { name: 'Tajimur Rafi', email: 'rafi@alliedone.com', role: 'Employee', color: '#4f7eff', hash: employeeHash, notify_email: 'tajimurrafi@gmail.com' },
+    { name: 'Orko', email: 'orko@alliedone.com', role: 'Employee', color: '#26c486', hash: employeeHash, notify_email: 'orko552@gmail.com' },
+    { name: 'Kamrul Islam', email: 'kamrul@alliedone.com', role: 'Employee', color: '#f5a623', hash: employeeHash, notify_email: '' },
   ];
 
   for (const acc of defaultAccounts) {
-    const existing = await dbGet('SELECT id FROM members WHERE LOWER(TRIM(email)) = LOWER(?)', [acc.email]);
+    const existing = await dbGet('SELECT id, notify_email FROM members WHERE LOWER(TRIM(email)) = LOWER(?)', [acc.email]) as any;
     if (!existing) {
       await dbRun(
-        `INSERT INTO members (name, email, password_hash, role, avatar_color) VALUES (?, ?, ?, ?, ?)`,
-        [acc.name, acc.email, acc.hash, acc.role, acc.color]
+        `INSERT INTO members (name, email, password_hash, role, avatar_color, notify_email) VALUES (?, ?, ?, ?, ?, ?)`,
+        [acc.name, acc.email, acc.hash, acc.role, acc.color, acc.notify_email || '']
       );
     } else {
       await dbRun(
-        `UPDATE members SET password_hash = ?, role = ?, name = ? WHERE id = ?`,
-        [acc.hash, acc.role, acc.name, existing.id]
+        `UPDATE members SET password_hash = ?, role = ?, name = ?, notify_email = COALESCE(NULLIF(notify_email, ''), ?) WHERE id = ?`,
+        [acc.hash, acc.role, acc.name, acc.notify_email || '', existing.id]
       );
     }
   }

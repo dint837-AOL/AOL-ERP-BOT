@@ -12,7 +12,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LogIn, LogOut, Plus, ChevronLeft, ChevronRight, X, Calendar, Download, BarChart2, Wifi, Laptop, Image as ImageIcon, Terminal, Copy, Check, ShieldCheck, Zap } from 'lucide-react';
+import { LogIn, LogOut, Plus, ChevronLeft, ChevronRight, X, Calendar, Download, BarChart2, Wifi, Laptop, Image as ImageIcon, Terminal, Copy, Check, ShieldCheck, Zap, Bell, BellOff } from 'lucide-react';
 import Topbar from '../components/Topbar';
 import { useAuth } from '../context/AuthContext';
 import html2canvas from 'html2canvas';
@@ -239,7 +239,7 @@ export default function HRPage() {
   const [attLoading, setAttLoading] = useState(false);
 
   const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [leaveData, setLeaveData] = useState({ member_id: '', leave_type: 'SICK', start_datetime: '', end_datetime: '', reason: '' });
+  const [leaveData, setLeaveData] = useState({ member_id: '', leave_type: 'SICK', start_datetime: '', end_datetime: '', reason: '', notify_email: 1 });
 
   const [reportMemberId, setReportMemberId] = useState('');
   const nowJS = new Date();
@@ -350,15 +350,11 @@ export default function HRPage() {
 
     const handleTabSwitch = (e?: any) => {
       const target = e?.detail || new URLSearchParams(window.location.search).get('tab');
-      if (!isAdmin) {
-        setActiveTab('leave');
-        return;
-      }
       if (target === 'leave' || target === 'leaves') {
         setActiveTab('leave');
-      } else if (target === 'report' || target === 'individual') {
+      } else if (target === 'report' || target === 'individual' || target === 'employee') {
         setActiveTab('report');
-      } else if (target === 'att' || target === 'team') {
+      } else {
         setActiveTab('att');
       }
     };
@@ -488,6 +484,7 @@ export default function HRPage() {
       return;
     }
     try {
+      const shouldNotify = leaveData.notify_email ? 1 : 0;
       if (editLeaveId) {
         await authFetch('/api/leaves/' + editLeaveId, {
           method: 'PATCH',
@@ -495,7 +492,8 @@ export default function HRPage() {
             leave_type: leaveData.leave_type,
             start_date: leaveData.start_datetime.split('T')[0] || leaveData.start_datetime,
             end_date: leaveData.end_datetime.split('T')[0] || leaveData.end_datetime,
-            reason: leaveData.reason || ''
+            reason: leaveData.reason || '',
+            notify_email: shouldNotify
           }),
         });
         showToast('Leave request updated.');
@@ -508,15 +506,32 @@ export default function HRPage() {
             leave_type: leaveData.leave_type,
             start_date: leaveData.start_datetime,
             end_date: leaveData.end_datetime,
-            reason: leaveData.reason || ''
+            reason: leaveData.reason || '',
+            notify_email: shouldNotify
           }),
         });
-        showToast('Leave request submitted. Awaiting admin approval.');
+        showToast('Leave request submitted. Email reminders scheduled.');
       }
       setShowLeaveModal(false);
-      setLeaveData({ member_id: '', leave_type: 'SICK', start_datetime: '', end_datetime: '', reason: '' });
+      setLeaveData({ member_id: '', leave_type: 'SICK', start_datetime: '', end_datetime: '', reason: '', notify_email: 1 });
       await loadAll();
     } catch { showToast('Cannot reach server.'); }
+  };
+
+  const toggleLeaveNotification = async (l: any) => {
+    const nextVal = l.notify_email ? 0 : 1;
+    try {
+      const res = await authFetch('/api/leaves/' + l.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ notify_email: nextVal }),
+      });
+      if (res.ok) {
+        showToast(nextVal ? '🔔 Leave notification enabled (24h & 15h alerts)' : '🔕 Leave notification disabled');
+        await loadAll();
+      }
+    } catch {
+      showToast('Failed to toggle notification');
+    }
   };
 
   const reviewLeave = async (id: string, status: 'APPROVED' | 'REJECTED') => {
@@ -1093,13 +1108,11 @@ export default function HRPage() {
           );
         })()}
 
-        {/* Tabs: Summary (admin only), Employee (all), Leave Apply (all) */}
+        {/* Tabs: Summary (all), Employee (all), Leave Apply (all) */}
         <div className="tabs">
-          {isAdmin && (
-            <div className={'tab ' + (activeTab === 'att' ? 'on' : '')} onClick={() => setActiveTab('att')}>
-              Summary
-            </div>
-          )}
+          <div className={'tab ' + (activeTab === 'att' ? 'on' : '')} onClick={() => setActiveTab('att')}>
+            Summary
+          </div>
           <div className={'tab ' + (activeTab === 'report' ? 'on' : '')} onClick={() => setActiveTab('report')}>
             Employee
           </div>
@@ -1113,8 +1126,8 @@ export default function HRPage() {
           </div>
         </div>
 
-        {/* Summary tab — cumulative attendance table (Admin only) */}
-        {activeTab === 'att' && isAdmin && (
+        {/* Summary tab — cumulative attendance table */}
+        {activeTab === 'att' && (
           <div className="card">
             <div className="card-head" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
               <h3>Team Attendance</h3>
@@ -1388,7 +1401,19 @@ export default function HRPage() {
                         >
                           {l.reason || l.leave_type || '-'}
                         </td>
-                        <td style={{ padding: '6px 2px', textAlign: 'center' }}>
+                        <td style={{ padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => toggleLeaveNotification(l)}
+                            style={{
+                              background: 'none', border: 'none', padding: '2px 4px',
+                              color: l.notify_email ? '#eab308' : 'var(--muted)',
+                              cursor: 'pointer', verticalAlign: 'middle'
+                            }}
+                            title={l.notify_email ? 'Email notification ON (click to turn off)' : 'Email notification OFF (click to turn on)'}
+                          >
+                            {l.notify_email ? <Bell size={13} /> : <BellOff size={13} />}
+                          </button>
                           <span
                             className={'badge ' + (l.status === 'APPROVED' ? 'APPROVED' : l.status === 'REJECTED' || l.status === 'CANCELLED' ? 'REJECTED' : 'PENDING')}
                             style={{ fontSize: '.64rem', padding: '2px 4px', borderRadius: 4, display: 'inline-block' }}
@@ -1414,7 +1439,8 @@ export default function HRPage() {
                                     leave_type: l.leave_type,
                                     start_datetime: normDate(l.start_date),
                                     end_datetime: normDate(l.end_date),
-                                    reason: l.reason || ''
+                                    reason: l.reason || '',
+                                    notify_email: l.notify_email ? 1 : 0
                                   });
                                   setShowLeaveModal(true);
                                 }
@@ -1637,7 +1663,8 @@ export default function HRPage() {
               leave_type: 'SICK',
               start_datetime: `${today}T09:00`,
               end_datetime: `${today}T18:00`,
-              reason: ''
+              reason: '',
+              notify_email: 1
             });
             setShowLeaveModal(true);
           }}
@@ -1777,6 +1804,33 @@ export default function HRPage() {
                   value={leaveData.reason}
                   onChange={e => setLeaveData({ ...leaveData, reason: e.target.value })}
                 />
+              </div>
+
+              {/* Brevo Email Bell Notification Toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: leaveData.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: leaveData.notify_email ? '#eab308' : 'var(--muted)' }}>
+                    {leaveData.notify_email ? <Bell size={16} /> : <BellOff size={16} />}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '.84rem', fontWeight: 600, color: 'var(--text)' }}>Brevo Email Reminders</div>
+                    <div style={{ fontSize: '.72rem', color: 'var(--muted)' }}>24h &amp; 15h alerts to admin &amp; employee</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setLeaveData(prev => ({ ...prev, notify_email: prev.notify_email ? 0 : 1 }))}
+                  style={{
+                    background: leaveData.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)',
+                    border: `1px solid ${leaveData.notify_email ? '#eab308' : 'var(--border)'}`,
+                    color: leaveData.notify_email ? '#eab308' : 'var(--muted)',
+                    borderRadius: 8, padding: '6px 12px', fontSize: '.78rem', fontWeight: 700, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 5
+                  }}
+                >
+                  {leaveData.notify_email ? <Check size={13} /> : null}
+                  {leaveData.notify_email ? 'ON' : 'OFF'}
+                </button>
               </div>
 
               {!editLeaveId && (

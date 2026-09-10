@@ -10,7 +10,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Briefcase, DownloadCloud, Trash2 } from 'lucide-react';
+import { Briefcase, DownloadCloud, Trash2, Bell, BellOff } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -26,6 +26,7 @@ interface Tender {
   status: 'UPCOMING' | 'IN_PROGRESS' | 'SUBMITTED' | 'WON' | 'LOST';
   documents_url?: string;
   notes?: string;
+  notify_email?: number;
 }
 
 type TenderForm = {
@@ -37,12 +38,14 @@ type TenderForm = {
   estimated_value: string;
   documents_url: string;
   notes: string;
+  notify_email: number;
 };
 
 const BLANK: TenderForm = {
   title: '', organization: '', tender_type: 'GOVT',
   published_date: '', submission_deadline: '',
   estimated_value: '', documents_url: '', notes: '',
+  notify_email: 1,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -84,10 +87,11 @@ interface TenderSheetProps {
   saving: boolean;
   onClose: () => void;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
+  onToggleNotify: () => void;
   onSubmit: (e: React.FormEvent) => void;
 }
 
-function TenderSheet({ editId, form, saving, onClose, onChange, onSubmit }: TenderSheetProps) {
+function TenderSheet({ editId, form, saving, onClose, onChange, onToggleNotify, onSubmit }: TenderSheetProps) {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
@@ -133,10 +137,38 @@ function TenderSheet({ editId, form, saving, onClose, onChange, onSubmit }: Tend
           <label>Documents URL <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
           <input name="documents_url" placeholder="https://drive.google.com/..." value={form.documents_url} onChange={onChange} />
         </div>
-        <div className="fg">
+        <div className="fg" style={{ marginBottom: 14 }}>
           <label>Notes <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
           <textarea name="notes" placeholder="Additional notes..." value={form.notes} onChange={onChange} rows={2} style={{ width: '100%', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', color: 'var(--text)', fontSize: '.84rem', fontFamily: 'inherit', outline: 'none', resize: 'vertical' }} />
         </div>
+
+        {/* Notifications Bell */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card, #131722)', border: '1px solid var(--border, #2a3050)', borderRadius: '10px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: form.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: form.notify_email ? '#eab308' : '#64748b' }}>
+              {form.notify_email ? <Bell size={16} /> : <BellOff size={16} />}
+            </div>
+            <div>
+              <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text, #f1f5f9)' }}>Notifications</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--muted, #64748b)' }}>Telegram &amp; Brevo reminders (24h &amp; 15h)</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onToggleNotify}
+            style={{
+              background: form.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)',
+              border: `1px solid ${form.notify_email ? '#eab308' : '#334155'}`,
+              color: form.notify_email ? '#eab308' : '#94a3b8',
+              borderRadius: '8px', padding: '6px 14px', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5
+            }}
+          >
+            {form.notify_email ? <Bell size={14} /> : <BellOff size={14} />}
+            {form.notify_email ? 'ON' : 'OFF'}
+          </button>
+        </div>
+
         <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: '.95rem', fontWeight: 700, borderRadius: 10 }} disabled={saving}>
           {saving ? 'Saving...' : editId ? 'Update Tender' : 'Save Tender'}
         </button>
@@ -200,6 +232,7 @@ export default function TendersPage() {
       estimated_value: String(t.estimated_value || ''),
       documents_url: t.documents_url || '',
       notes: t.notes || '',
+      notify_email: t.notify_email ?? 1,
     });
     setSheetOpen(true);
   }
@@ -207,6 +240,25 @@ export default function TendersPage() {
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   }, []);
+
+  const handleToggleNotify = useCallback(() => {
+    setForm(prev => ({ ...prev, notify_email: prev.notify_email ? 0 : 1 }));
+  }, []);
+
+  async function toggleTenderNotify(t: Tender) {
+    const nextVal = t.notify_email ? 0 : 1;
+    try {
+      await fetch(`/api/tenders/${t.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notify_email: nextVal }),
+      });
+      showToast(`Notifications ${nextVal ? 'enabled' : 'muted'} for tender.`);
+      fetchTenders();
+    } catch {
+      showToast('Failed to update notification setting.');
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -224,6 +276,7 @@ export default function TendersPage() {
           submission_deadline: new Date(form.submission_deadline).toISOString(),
           estimated_value: parseFloat(form.estimated_value) || 0,
           documents_url: form.documents_url, notes: form.notes,
+          notify_email: form.notify_email,
           ...(editId ? {} : { status: 'UPCOMING' }),
         }),
       });
@@ -370,7 +423,10 @@ export default function TendersPage() {
                     </td>
                     {/* Actions */}
                     <td style={{ ...td, textAlign: 'right', padding: '6px 8px' }}>
-                      <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                      <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <button onClick={() => toggleTenderNotify(t)} title={t.notify_email ? 'Notifications ON (click to mute)' : 'Notifications OFF (click to enable)'} style={{ ...iconBtn, color: t.notify_email ? '#eab308' : 'var(--muted)' }}>
+                          {t.notify_email ? <Bell size={13} /> : <BellOff size={13} />}
+                        </button>
                         <button onClick={() => openEdit(t)} title="Edit" style={iconBtn}>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                         </button>
@@ -396,7 +452,7 @@ export default function TendersPage() {
       {sheetOpen && (
         <div onClick={e => { if (e.target === e.currentTarget) setSheetOpen(false); }} style={{ position: 'fixed', inset: 0, zIndex: 910, background: 'rgba(0,0,0,.65)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 560, paddingBottom: 'env(safe-area-inset-bottom,12px)', maxHeight: '92dvh', overflowY: 'auto', boxShadow: '0 -8px 40px rgba(0,0,0,.5)', animation: 'slideSheet .22s ease-out' }}>
-            <TenderSheet editId={editId} form={form} saving={saving} onClose={() => setSheetOpen(false)} onChange={handleChange} onSubmit={handleSubmit} />
+            <TenderSheet editId={editId} form={form} saving={saving} onClose={() => setSheetOpen(false)} onChange={handleChange} onToggleNotify={handleToggleNotify} onSubmit={handleSubmit} />
           </div>
         </div>
       )}

@@ -5,6 +5,13 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { initDB, dbAll, dbGet, dbRun, isPostgres } from './db.js';
 import { sendTelegramMessage, getTelegramBotInfo, setRuntimeBotToken, getBotToken } from './telegram.js';
+import {
+  sendBrevoEmail,
+  resolveMemberNotificationEmails,
+  schedule24And15HourReminders,
+  processDueEmailJobs,
+  buildAolErpHtml
+} from './brevo.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -280,20 +287,21 @@ export class OpenClaw {
     });
     // Only Admins can create tasks
     this.app.post('/api/tasks', requireRole('Admin'), async (req, res) => {
-      const { title, description, deadline, priority, assigned_to, task_date, action_type, recipient, status, notify_telegram } = req.body;
+      const { title, description, deadline, priority, assigned_to, task_date, action_type, recipient, status, notify_telegram, notify_email } = req.body;
       if (!title) return res.status(400).json({ error: 'Title required' });
       const date = task_date || new Date().toISOString().split('T')[0];
-      const shouldNotifyTg = notify_telegram ? 1 : 0;
+      const shouldNotifyTg = (notify_telegram || notify_email) ? 1 : 0;
+      const shouldNotifyEmail = notify_email ? 1 : (notify_telegram ? 1 : 0);
       const initialStatus = status || 'DONE';
       
       const { lastID } = await dbRun(
-        `INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date,action_type,recipient,status,notify_telegram) VALUES(?,?,?,?,?,?,?,?,?,?)`,
-        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'STUDY', recipient||'', initialStatus, shouldNotifyTg]
+        `INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date,action_type,recipient,status,notify_telegram,notify_email) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'STUDY', recipient||'', initialStatus, shouldNotifyTg, shouldNotifyEmail]
       );
       
       const newTask = await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]) as any;
       
-      // Always store in-app notifications
+      // In-app notifications & Telegram/Brevo alerts
       if (assigned_to) {
         const assignee = await dbGet('SELECT name FROM members WHERE id=?', [assigned_to]) as any;
         await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [assigned_to, `📋 New Task Assigned: "${title}"`, '/dashboard']);
@@ -302,6 +310,34 @@ export class OpenClaw {
         if (shouldNotifyTg && initialStatus !== 'DONE') {
           await notifyMember(assigned_to, `📋 New Task Assigned: "${title}"`, '/dashboard');
           await notifyAdmins(`📋 New Task: "${title}" (Assigned to ${assignee?.name || 'employee'}).`, '/dashboard');
+        }
+
+        // Brevo email notification if bell is on
+        if (shouldNotifyEmail && initialStatus !== 'DONE') {
+          const emails = await resolveMemberNotificationEmails(assigned_to);
+          const emailHtml = buildAolErpHtml('New Task Assigned', [
+            { label: 'Name', value: assignee?.name || 'Assigned Member' },
+            { label: 'Task', value: title },
+            { label: 'Status', value: initialStatus },
+            { label: 'Deadline', value: deadline ? new Date(deadline).toLocaleString('en-GB') : 'No Deadline' },
+            { label: 'Contact', value: recipient || '—' },
+          ]);
+          sendBrevoEmail({ to: emails, subject: `AOL_ERP: New Task - ${title}`, htmlContent: emailHtml }).catch(console.error);
+
+          if (deadline) {
+            schedule24And15HourReminders({
+              entityType: 'task',
+              entityId: lastID,
+              targetDateTime: deadline,
+              recipientEmails: emails,
+              title: `Task Deadline: ${title}`,
+              rows: [
+                { label: 'Name', value: assignee?.name || 'Assigned Member' },
+                { label: 'Task', value: title },
+                { label: 'Deadline', value: new Date(deadline).toLocaleString('en-GB') },
+              ]
+            }).catch(console.error);
+          }
         }
       } else {
         if (shouldNotifyTg && initialStatus !== 'DONE') {
@@ -326,7 +362,7 @@ export class OpenClaw {
         }
       }
 
-      const allowed = ['status', 'priority', 'title', 'description', 'deadline', 'assigned_to', 'action_type', 'recipient', 'is_archived', 'notify_telegram'];
+      const allowed = ['status', 'priority', 'title', 'description', 'deadline', 'assigned_to', 'action_type', 'recipient', 'is_archived', 'notify_telegram', 'notify_email'];
       const updates: string[] = [];
       const values: any[] = [];
       for (const key of allowed) {
@@ -1163,18 +1199,50 @@ echo "======================================================"
       res.json(rows);
     });
     this.app.post('/api/leaves', async (req, res) => {
-      const { member_id, leave_type, start_date, end_date, reason } = req.body;
+      const { member_id, leave_type, start_date, end_date, reason, notify_email } = req.body;
       if (!member_id || !leave_type || !start_date || !end_date) return res.status(400).json({ error: 'Missing required fields' });
-      const { lastID } = await dbRun(`INSERT INTO leave_requests(member_id,leave_type,start_date,end_date,reason) VALUES(?,?,?,?,?)`, [member_id, leave_type, start_date, end_date, reason||'']);
+      const shouldNotify = notify_email ? 1 : 0;
+      const { lastID } = await dbRun(
+        `INSERT INTO leave_requests(member_id,leave_type,start_date,end_date,reason,notify_email) VALUES(?,?,?,?,?,?)`,
+        [member_id, leave_type, start_date, end_date, reason||'', shouldNotify]
+      );
       
-      const member = await dbGet(`SELECT name FROM members WHERE id=?`, [member_id]) as any;
+      const member = await dbGet(`SELECT name, email, notify_email FROM members WHERE id=?`, [member_id]) as any;
       const leaveMsg = `🌴 Leave Request: ${member?.name || 'An employee'} requested ${leave_type} leave (${start_date} to ${end_date}).${reason ? `\nReason: "${reason}"` : ''}`;
       await notifyAdmins(leaveMsg, '/hr?tab=leave');
+
+      // Brevo email notification & reminder scheduling if Bell is toggled
+      if (shouldNotify) {
+        const recipientEmails = await resolveMemberNotificationEmails(member_id);
+        const emailRows = [
+          { label: 'Name', value: member?.name || 'Employee' },
+          { label: 'Leave', value: leave_type },
+          { label: 'From', value: `${start_date} to ${end_date}` },
+          ...(reason ? [{ label: 'Reason', value: reason }] : [])
+        ];
+        const emailHtml = buildAolErpHtml('Leave Application Submitted', emailRows);
+        sendBrevoEmail({
+          to: recipientEmails,
+          subject: `AOL_ERP: Leave Application - ${member?.name || 'Employee'} (${leave_type})`,
+          htmlContent: emailHtml
+        }).catch(console.error);
+
+        // Schedule 24 hours & 15 hours prior to leave start date (assumed 09:00 AM start)
+        const targetDateTime = `${start_date}T09:00:00+06:00`;
+        schedule24And15HourReminders({
+          entityType: 'leave',
+          entityId: lastID,
+          targetDateTime,
+          recipientEmails,
+          title: `Leave: ${member?.name || 'Employee'} (${leave_type})`,
+          rows: emailRows
+        }).catch(console.error);
+      }
 
       res.status(201).json(await dbGet(`SELECT l.*,m.name as member_name FROM leave_requests l JOIN members m ON l.member_id=m.id WHERE l.id=?`, [lastID]));
     });
     this.app.patch('/api/leaves/:id', async (req, res) => {
-      const { status, leave_type, start_date, end_date, reason } = req.body;
+      const { status, leave_type, start_date, end_date, reason, notify_email } = req.body;
       if (status) {
         // Status update (Approve / Reject / Cancel)
         await dbRun(`UPDATE leave_requests SET status=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?`, [status, req.params.id]);
@@ -1183,6 +1251,34 @@ echo "======================================================"
           const member = await dbGet('SELECT name FROM members WHERE id=?', [leaveRow.member_id]) as any;
           await notifyMember(leaveRow.member_id, `Your ${leaveRow.leave_type} leave request has been ${status}.`, '/hr?tab=leave');
           await notifyAdmins(`📋 Leave Decision: ${member?.name || 'Employee'}'s ${leaveRow.leave_type} leave has been ${status}.`, '/hr?tab=leave');
+
+          if (leaveRow.notify_email) {
+            const recipientEmails = await resolveMemberNotificationEmails(leaveRow.member_id);
+            const emailRows = [
+              { label: 'Name', value: member?.name || 'Employee' },
+              { label: 'Leave', value: leaveRow.leave_type },
+              { label: 'Status', value: status },
+              { label: 'From', value: `${leaveRow.start_date} to ${leaveRow.end_date}` }
+            ];
+            const emailHtml = buildAolErpHtml(`Leave Request ${status}`, emailRows);
+            sendBrevoEmail({
+              to: recipientEmails,
+              subject: `AOL_ERP: Leave Request ${status} - ${member?.name || 'Employee'}`,
+              htmlContent: emailHtml
+            }).catch(console.error);
+
+            if (status === 'APPROVED') {
+              const targetDateTime = `${leaveRow.start_date}T09:00:00+06:00`;
+              schedule24And15HourReminders({
+                entityType: 'leave',
+                entityId: Number(req.params.id),
+                targetDateTime,
+                recipientEmails,
+                title: `Upcoming Leave: ${member?.name || 'Employee'} (${leaveRow.leave_type})`,
+                rows: emailRows
+              }).catch(console.error);
+            }
+          }
         }
         return res.json(leaveRow);
       } else {
@@ -1193,11 +1289,30 @@ echo "======================================================"
         if (start_date) { updates.push('start_date=?'); values.push(start_date); }
         if (end_date)   { updates.push('end_date=?');   values.push(end_date); }
         if (reason !== undefined) { updates.push('reason=?'); values.push(reason); }
+        if (notify_email !== undefined) { updates.push('notify_email=?'); values.push(notify_email ? 1 : 0); }
         if (updates.length > 0) {
           values.push(req.params.id);
           await dbRun(`UPDATE leave_requests SET ${updates.join(', ')} WHERE id=?`, values);
         }
         const leaveRow = await dbGet('SELECT * FROM leave_requests WHERE id=?', [req.params.id]) as any;
+        if (leaveRow && leaveRow.notify_email) {
+          const member = await dbGet('SELECT name FROM members WHERE id=?', [leaveRow.member_id]) as any;
+          const recipientEmails = await resolveMemberNotificationEmails(leaveRow.member_id);
+          const emailRows = [
+            { label: 'Name', value: member?.name || 'Employee' },
+            { label: 'Leave', value: leaveRow.leave_type },
+            { label: 'From', value: `${leaveRow.start_date} to ${leaveRow.end_date}` }
+          ];
+          const targetDateTime = `${leaveRow.start_date}T09:00:00+06:00`;
+          schedule24And15HourReminders({
+            entityType: 'leave',
+            entityId: Number(req.params.id),
+            targetDateTime,
+            recipientEmails,
+            title: `Updated Leave: ${member?.name || 'Employee'} (${leaveRow.leave_type})`,
+            rows: emailRows
+          }).catch(console.error);
+        }
         return res.json(leaveRow);
       }
     });
@@ -1282,20 +1397,39 @@ echo "======================================================"
     // ── CREDENTIALS (Admin only) ──────────────────────────────
     this.app.get('/api/credentials', requireRole('Admin'), async (_, res) => res.json(await dbAll('SELECT * FROM credentials ORDER BY created_at DESC')));
     this.app.post('/api/credentials', requireRole('Admin'), async (req, res) => {
-      const { name, cred_type, url, username, cost, expiry_date, last_changed_date, reminder_days_before } = req.body;
+      const { name, cred_type, url, username, cost, expiry_date, last_changed_date, reminder_days_before, notify_email } = req.body;
       if (!name) return res.status(400).json({ error: 'Name is required' });
+      const shouldNotify = notify_email ? 1 : 0;
       const { lastID } = await dbRun(
-        `INSERT INTO credentials(name,cred_type,url,username,cost,expiry_date,last_changed_date,reminder_days_before) VALUES(?,?,?,?,?,?,?,?)`, 
-        [name, cred_type||'OTHER', url||'', username||'', cost||0, expiry_date||null, last_changed_date||null, reminder_days_before||'5,2,1']
+        `INSERT INTO credentials(name,cred_type,url,username,cost,expiry_date,last_changed_date,reminder_days_before,notify_email) VALUES(?,?,?,?,?,?,?,?,?)`, 
+        [name, cred_type||'OTHER', url||'', username||'', cost||0, expiry_date||null, last_changed_date||null, reminder_days_before||'5,2,1', shouldNotify]
       );
+
+      if (shouldNotify && expiry_date) {
+        const adminEmails = await resolveMemberNotificationEmails('Admin');
+        schedule24And15HourReminders({
+          entityType: 'credential',
+          entityId: lastID,
+          targetDateTime: `${expiry_date}T09:00:00+06:00`,
+          recipientEmails: adminEmails,
+          title: `Credential Expiry: ${name}`,
+          rows: [
+            { label: 'Name', value: name },
+            { label: 'Type', value: cred_type || 'OTHER' },
+            { label: 'Expiry Date', value: expiry_date },
+            { label: 'URL', value: url || '—' }
+          ]
+        }).catch(console.error);
+      }
+
       res.status(201).json(await dbGet('SELECT * FROM credentials WHERE id=?', [lastID]));
     });
     this.app.delete('/api/credentials/:id', requireRole('Admin'), async (req, res) => { await dbRun('DELETE FROM credentials WHERE id=?', [req.params.id]); res.json({ ok: true }); });
     this.app.patch('/api/credentials/:id', requireRole('Admin'), async (req, res) => {
-      const { name, cred_type, url, username, cost, expiry_date, last_changed_date, reminder_days_before } = req.body;
+      const { name, cred_type, url, username, cost, expiry_date, last_changed_date, reminder_days_before, notify_email } = req.body;
       await dbRun(
-        `UPDATE credentials SET name=COALESCE(?,name), cred_type=COALESCE(?,cred_type), url=COALESCE(?,url), username=COALESCE(?,username), cost=COALESCE(?,cost), expiry_date=?, last_changed_date=?, reminder_days_before=COALESCE(?,reminder_days_before) WHERE id=?`,
-        [name||null, cred_type||null, url??null, username??null, cost||null, expiry_date||null, last_changed_date||null, reminder_days_before||null, req.params.id]
+        `UPDATE credentials SET name=COALESCE(?,name), cred_type=COALESCE(?,cred_type), url=COALESCE(?,url), username=COALESCE(?,username), cost=COALESCE(?,cost), expiry_date=?, last_changed_date=?, reminder_days_before=COALESCE(?,reminder_days_before), notify_email=COALESCE(?,notify_email) WHERE id=?`,
+        [name||null, cred_type||null, url??null, username??null, cost||null, expiry_date||null, last_changed_date||null, reminder_days_before||null, notify_email !== undefined ? (notify_email ? 1 : 0) : null, req.params.id]
       );
       res.json(await dbGet('SELECT * FROM credentials WHERE id=?', [req.params.id]));
     });
@@ -1303,20 +1437,38 @@ echo "======================================================"
     // ── MEETINGS (Admin only) ─────────────────────────────────
     this.app.get('/api/meetings', requireRole('Admin'), async (_, res) => res.json(await dbAll('SELECT * FROM meetings ORDER BY scheduled_at ASC')));
     this.app.post('/api/meetings', requireRole('Admin'), async (req, res) => {
-      const { title, contact_name, scheduled_at, reminder_minutes_before } = req.body;
+      const { title, contact_name, scheduled_at, reminder_minutes_before, notify_email } = req.body;
       if (!title || !scheduled_at) return res.status(400).json({ error: 'Title and scheduled_at required' });
+      const shouldNotify = notify_email ? 1 : 0;
       const { lastID } = await dbRun(
-        `INSERT INTO meetings(title,contact_name,scheduled_at,reminder_minutes_before) VALUES(?,?,?,?)`, 
-        [title, contact_name||'', scheduled_at, reminder_minutes_before||'30,15']
+        `INSERT INTO meetings(title,contact_name,scheduled_at,reminder_minutes_before,notify_email) VALUES(?,?,?,?,?)`, 
+        [title, contact_name||'', scheduled_at, reminder_minutes_before||'30,15', shouldNotify]
       );
+
+      if (shouldNotify) {
+        const emails = await resolveMemberNotificationEmails('Admin');
+        schedule24And15HourReminders({
+          entityType: 'meeting',
+          entityId: lastID,
+          targetDateTime: scheduled_at,
+          recipientEmails: emails,
+          title: `Meeting: ${title}`,
+          rows: [
+            { label: 'Meeting', value: title },
+            { label: 'With', value: contact_name || '—' },
+            { label: 'Scheduled At', value: new Date(scheduled_at).toLocaleString('en-GB') }
+          ]
+        }).catch(console.error);
+      }
+
       res.status(201).json(await dbGet('SELECT * FROM meetings WHERE id=?', [lastID]));
     });
     this.app.delete('/api/meetings/:id', requireRole('Admin'), async (req, res) => { await dbRun('DELETE FROM meetings WHERE id=?', [req.params.id]); res.json({ ok: true }); });
     this.app.patch('/api/meetings/:id', requireRole('Admin'), async (req, res) => {
-      const { title, contact_name, scheduled_at, reminder_minutes_before } = req.body;
+      const { title, contact_name, scheduled_at, reminder_minutes_before, notify_email } = req.body;
       await dbRun(
-        `UPDATE meetings SET title=COALESCE(?,title), contact_name=COALESCE(?,contact_name), scheduled_at=COALESCE(?,scheduled_at), reminder_minutes_before=COALESCE(?,reminder_minutes_before) WHERE id=?`,
-        [title||null, contact_name??null, scheduled_at||null, reminder_minutes_before||null, req.params.id]
+        `UPDATE meetings SET title=COALESCE(?,title), contact_name=COALESCE(?,contact_name), scheduled_at=COALESCE(?,scheduled_at), reminder_minutes_before=COALESCE(?,reminder_minutes_before), notify_email=COALESCE(?,notify_email) WHERE id=?`,
+        [title||null, contact_name??null, scheduled_at||null, reminder_minutes_before||null, notify_email !== undefined ? (notify_email ? 1 : 0) : null, req.params.id]
       );
       res.json(await dbGet('SELECT * FROM meetings WHERE id=?', [req.params.id]));
     });
@@ -1324,12 +1476,30 @@ echo "======================================================"
     // ── TENDERS (Admin only) ──────────────────────────────────
     this.app.get('/api/tenders', requireRole('Admin'), async (_, res) => res.json(await dbAll('SELECT * FROM tenders ORDER BY submission_deadline ASC')));
     this.app.post('/api/tenders', requireRole('Admin'), async (req, res) => {
-      const { title, organization, tender_type, published_date, submission_deadline, estimated_value, status, documents_url, notes, assigned_to } = req.body;
+      const { title, organization, tender_type, published_date, submission_deadline, estimated_value, status, documents_url, notes, assigned_to, notify_email } = req.body;
       if (!title || !submission_deadline) return res.status(400).json({ error: 'Title and deadline required' });
+      const shouldNotify = notify_email ? 1 : 0;
       const { lastID } = await dbRun(
-        `INSERT INTO tenders(title, organization, tender_type, published_date, submission_deadline, estimated_value, status, documents_url, notes, assigned_to) VALUES(?,?,?,?,?,?,?,?,?,?)`,
-        [title, organization||'', tender_type||'PRIVATE', published_date||null, submission_deadline, estimated_value||0, status||'UPCOMING', documents_url||'', notes||'', assigned_to||null]
+        `INSERT INTO tenders(title, organization, tender_type, published_date, submission_deadline, estimated_value, status, documents_url, notes, assigned_to, notify_email) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+        [title, organization||'', tender_type||'PRIVATE', published_date||null, submission_deadline, estimated_value||0, status||'UPCOMING', documents_url||'', notes||'', assigned_to||null, shouldNotify]
       );
+
+      if (shouldNotify) {
+        const emails = await resolveMemberNotificationEmails(assigned_to || 'Admin');
+        schedule24And15HourReminders({
+          entityType: 'tender',
+          entityId: lastID,
+          targetDateTime: `${submission_deadline}T17:00:00+06:00`,
+          recipientEmails: emails,
+          title: `Tender Deadline: ${title}`,
+          rows: [
+            { label: 'Tender', value: title },
+            { label: 'Organization', value: organization || '—' },
+            { label: 'Deadline', value: submission_deadline }
+          ]
+        }).catch(console.error);
+      }
+
       res.status(201).json(await dbGet('SELECT * FROM tenders WHERE id=?', [lastID]));
     });
     this.app.patch('/api/tenders/:id/status', requireRole('Admin'), async (req, res) => {
@@ -1339,10 +1509,10 @@ echo "======================================================"
     });
     this.app.delete('/api/tenders/:id', requireRole('Admin'), async (req, res) => { await dbRun('DELETE FROM tenders WHERE id=?', [req.params.id]); res.json({ ok: true }); });
     this.app.patch('/api/tenders/:id', requireRole('Admin'), async (req, res) => {
-      const { title, organization, tender_type, published_date, submission_deadline, estimated_value, documents_url, notes } = req.body;
+      const { title, organization, tender_type, published_date, submission_deadline, estimated_value, documents_url, notes, notify_email } = req.body;
       await dbRun(
-        `UPDATE tenders SET title=COALESCE(?,title), organization=COALESCE(?,organization), tender_type=COALESCE(?,tender_type), published_date=?, submission_deadline=COALESCE(?,submission_deadline), estimated_value=COALESCE(?,estimated_value), documents_url=COALESCE(?,documents_url), notes=COALESCE(?,notes) WHERE id=?`,
-        [title||null, organization||null, tender_type||null, published_date||null, submission_deadline||null, estimated_value??null, documents_url||null, notes||null, req.params.id]
+        `UPDATE tenders SET title=COALESCE(?,title), organization=COALESCE(?,organization), tender_type=COALESCE(?,tender_type), published_date=?, submission_deadline=COALESCE(?,submission_deadline), estimated_value=COALESCE(?,estimated_value), documents_url=COALESCE(?,documents_url), notes=COALESCE(?,notes), notify_email=COALESCE(?,notify_email) WHERE id=?`,
+        [title||null, organization||null, tender_type||null, published_date||null, submission_deadline||null, estimated_value??null, documents_url||null, notes||null, notify_email !== undefined ? (notify_email ? 1 : 0) : null, req.params.id]
       );
       res.json(await dbGet('SELECT * FROM tenders WHERE id=?', [req.params.id]));
     });
@@ -1484,6 +1654,13 @@ echo "======================================================"
         }
       } catch (err) {
         console.error('Error in Task reminders cron:', err);
+      }
+
+      // 6. Process Scheduled Brevo Email Jobs (24h and 15h reminders)
+      try {
+        await processDueEmailJobs();
+      } catch (err) {
+        console.error('Error in Brevo due jobs cron:', err);
       }
     };
     

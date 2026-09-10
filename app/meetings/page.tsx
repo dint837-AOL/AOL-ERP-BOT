@@ -8,7 +8,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, Clock, Trash2, Edit3 } from 'lucide-react';
+import { Calendar, Clock, Trash2, Edit3, Bell, BellOff } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -19,6 +19,7 @@ interface Meeting {
   contact_name?: string;
   scheduled_at: string;
   reminder_minutes_before?: string;
+  notify_email?: number;
 }
 
 type MeetingForm = {
@@ -27,6 +28,7 @@ type MeetingForm = {
   scheduled_date: string;
   scheduled_time: string;
   reminder_minutes_before: string;
+  notify_email: number;
 };
 
 const BLANK: MeetingForm = {
@@ -35,6 +37,7 @@ const BLANK: MeetingForm = {
   scheduled_date: '',
   scheduled_time: '',
   reminder_minutes_before: '30, 15',
+  notify_email: 1,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -66,10 +69,11 @@ interface MeetingSheetProps {
   saving: boolean;
   onClose: () => void;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+  onToggleNotify: () => void;
   onSubmit: (e: React.FormEvent) => void;
 }
 
-function MeetingSheet({ editId, form, saving, onClose, onChange, onSubmit }: MeetingSheetProps) {
+function MeetingSheet({ editId, form, saving, onClose, onChange, onToggleNotify, onSubmit }: MeetingSheetProps) {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
@@ -98,13 +102,41 @@ function MeetingSheet({ editId, form, saving, onClose, onChange, onSubmit }: Mee
             <input type="time" name="scheduled_time" value={form.scheduled_time} onChange={onChange} required />
           </div>
         </div>
-        <div className="fg">
+        <div className="fg" style={{ marginBottom: 14 }}>
           <label>Remind (Minutes Before)</label>
           <input name="reminder_minutes_before" placeholder="e.g. 30, 15" value={form.reminder_minutes_before} onChange={onChange} />
           <div style={{ fontSize: '.7rem', color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
             <Clock size={11} /> Telegram alert will be sent to admin at these minutes before the meeting.
           </div>
         </div>
+
+        {/* Notifications Bell */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card, #131722)', border: '1px solid var(--border, #2a3050)', borderRadius: '10px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: form.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: form.notify_email ? '#eab308' : '#64748b' }}>
+              {form.notify_email ? <Bell size={16} /> : <BellOff size={16} />}
+            </div>
+            <div>
+              <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text, #f1f5f9)' }}>Notifications</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--muted, #64748b)' }}>Telegram &amp; Brevo reminders (24h &amp; 15h)</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onToggleNotify}
+            style={{
+              background: form.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)',
+              border: `1px solid ${form.notify_email ? '#eab308' : '#334155'}`,
+              color: form.notify_email ? '#eab308' : '#94a3b8',
+              borderRadius: '8px', padding: '6px 14px', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5
+            }}
+          >
+            {form.notify_email ? <Bell size={14} /> : <BellOff size={14} />}
+            {form.notify_email ? 'ON' : 'OFF'}
+          </button>
+        </div>
+
         <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: '.95rem', fontWeight: 700, borderRadius: 10 }} disabled={saving}>
           {saving ? 'Saving...' : 'Save'}
         </button>
@@ -147,13 +179,39 @@ export default function MeetingsPage() {
     const date = dt.toLocaleDateString('en-CA');
     const hh = String(dt.getHours()).padStart(2, '0');
     const mm = String(dt.getMinutes()).padStart(2, '0');
-    setForm({ title: m.title, contact_name: m.contact_name || '', scheduled_date: date, scheduled_time: `${hh}:${mm}`, reminder_minutes_before: m.reminder_minutes_before || '30, 15' });
+    setForm({
+      title: m.title,
+      contact_name: m.contact_name || '',
+      scheduled_date: date,
+      scheduled_time: `${hh}:${mm}`,
+      reminder_minutes_before: m.reminder_minutes_before || '30, 15',
+      notify_email: m.notify_email ?? 1,
+    });
     setSheetOpen(true);
   }
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   }, []);
+
+  const handleToggleNotify = useCallback(() => {
+    setForm(prev => ({ ...prev, notify_email: prev.notify_email ? 0 : 1 }));
+  }, []);
+
+  async function toggleMeetingNotify(m: Meeting) {
+    const nextVal = m.notify_email ? 0 : 1;
+    try {
+      await fetch(`/api/meetings/${m.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notify_email: nextVal }),
+      });
+      showToast(`Notifications ${nextVal ? 'enabled' : 'muted'} for this meeting.`);
+      fetchMeetings();
+    } catch {
+      showToast('Failed to update notification setting.');
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -165,7 +223,13 @@ export default function MeetingsPage() {
       const res = await fetch(url, {
         method: editId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: form.title, contact_name: form.contact_name, scheduled_at, reminder_minutes_before: form.reminder_minutes_before }),
+        body: JSON.stringify({
+          title: form.title,
+          contact_name: form.contact_name,
+          scheduled_at,
+          reminder_minutes_before: form.reminder_minutes_before,
+          notify_email: form.notify_email,
+        }),
       });
       if (!res.ok) throw new Error('Failed');
       showToast(editId ? 'Meeting updated.' : 'Meeting scheduled!');
@@ -258,7 +322,10 @@ export default function MeetingsPage() {
                   <td style={{ ...td, fontSize: '.74rem', whiteSpace: 'nowrap' }}>{fmtTime(m.scheduled_at)}</td>
                   {/* Actions */}
                   <td style={{ ...td, textAlign: 'right', padding: '6px 8px' }}>
-                    <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                    <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', alignItems: 'center' }}>
+                      <button onClick={() => toggleMeetingNotify(m)} title={m.notify_email ? 'Notifications ON (click to mute)' : 'Notifications OFF (click to enable)'} style={{ ...iconBtn, color: m.notify_email ? '#eab308' : 'var(--muted)' }}>
+                        {m.notify_email ? <Bell size={13} /> : <BellOff size={13} />}
+                      </button>
                       <button onClick={() => openEdit(m)} title="Edit" style={iconBtn}><Edit3 size={13} /></button>
                       <button onClick={() => setDeleteTarget(m)} title="Delete" style={{ ...iconBtn, color: 'var(--red)' }}><Trash2 size={13} /></button>
                     </div>
@@ -279,7 +346,7 @@ export default function MeetingsPage() {
       {sheetOpen && (
         <div onClick={e => { if (e.target === e.currentTarget) setSheetOpen(false); }} style={{ position: 'fixed', inset: 0, zIndex: 910, background: 'rgba(0,0,0,.65)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 560, paddingBottom: 'env(safe-area-inset-bottom,12px)', maxHeight: '92dvh', overflowY: 'auto', boxShadow: '0 -8px 40px rgba(0,0,0,.5)', animation: 'slideSheet .22s ease-out' }}>
-            <MeetingSheet editId={editId} form={form} saving={saving} onClose={() => setSheetOpen(false)} onChange={handleChange} onSubmit={handleSubmit} />
+            <MeetingSheet editId={editId} form={form} saving={saving} onClose={() => setSheetOpen(false)} onChange={handleChange} onToggleNotify={handleToggleNotify} onSubmit={handleSubmit} />
           </div>
         </div>
       )}

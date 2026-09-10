@@ -9,7 +9,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Key, Clock, Trash2, Edit3 } from 'lucide-react';
+import { Key, Clock, Trash2, Edit3, Bell, BellOff } from 'lucide-react';
 import Topbar from '../components/Topbar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -23,6 +23,7 @@ interface Cred {
   expiry_date?: string;
   last_changed_date?: string;
   reminder_days_before?: string;
+  notify_email?: number;
 }
 
 type CredForm = {
@@ -33,6 +34,7 @@ type CredForm = {
   expiry_date: string;
   last_changed_date: string;
   reminder_days_before: string;
+  notify_email: number;
 };
 
 const BLANK_FORM: CredForm = {
@@ -43,6 +45,7 @@ const BLANK_FORM: CredForm = {
   expiry_date: '',
   last_changed_date: '',
   reminder_days_before: '5, 2, 1',
+  notify_email: 1,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -75,10 +78,11 @@ interface CredSheetProps {
   saving: boolean;
   onClose: () => void;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+  onToggleNotify: () => void;
   onSubmit: (e: React.FormEvent) => void;
 }
 
-function CredSheet({ editId, form, saving, onClose, onChange, onSubmit }: CredSheetProps) {
+function CredSheet({ editId, form, saving, onClose, onChange, onToggleNotify, onSubmit }: CredSheetProps) {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
@@ -122,13 +126,41 @@ function CredSheet({ editId, form, saving, onClose, onChange, onSubmit }: CredSh
             <input type="date" name="last_changed_date" value={form.last_changed_date} onChange={onChange} />
           </div>
         </div>
-        <div className="fg">
+        <div className="fg" style={{ marginBottom: 14 }}>
           <label>Remind (Days Before Expiry)</label>
           <input name="reminder_days_before" placeholder="e.g. 5, 2, 1" value={form.reminder_days_before} onChange={onChange} />
           <div style={{ fontSize: '.7rem', color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Clock size={11} /> Telegram alert will be sent to admin on these days before expiry.
+            <Clock size={11} /> Telegram &amp; Brevo alerts will be sent to admin before expiry.
           </div>
         </div>
+
+        {/* Notifications Bell */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card, #131722)', border: '1px solid var(--border, #2a3050)', borderRadius: '10px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: form.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: form.notify_email ? '#eab308' : '#64748b' }}>
+              {form.notify_email ? <Bell size={16} /> : <BellOff size={16} />}
+            </div>
+            <div>
+              <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text, #f1f5f9)' }}>Notifications</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--muted, #64748b)' }}>Telegram &amp; Brevo reminders (24h &amp; 15h)</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onToggleNotify}
+            style={{
+              background: form.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)',
+              border: `1px solid ${form.notify_email ? '#eab308' : '#334155'}`,
+              color: form.notify_email ? '#eab308' : '#94a3b8',
+              borderRadius: '8px', padding: '6px 14px', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5
+            }}
+          >
+            {form.notify_email ? <Bell size={14} /> : <BellOff size={14} />}
+            {form.notify_email ? 'ON' : 'OFF'}
+          </button>
+        </div>
+
         <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: '.95rem', fontWeight: 700, borderRadius: 10 }} disabled={saving}>
           {saving ? 'Saving...' : editId ? 'Update Credential' : 'Save Credential'}
         </button>
@@ -167,13 +199,41 @@ export default function CredentialsPage() {
 
   function openEdit(c: Cred) {
     setEditId(c.id);
-    setForm({ name: c.name, cred_type: c.cred_type, url: c.url || '', username: c.username || '', expiry_date: c.expiry_date || '', last_changed_date: c.last_changed_date || '', reminder_days_before: c.reminder_days_before || '5, 2, 1' });
+    setForm({
+      name: c.name,
+      cred_type: c.cred_type,
+      url: c.url || '',
+      username: c.username || '',
+      expiry_date: c.expiry_date || '',
+      last_changed_date: c.last_changed_date || '',
+      reminder_days_before: c.reminder_days_before || '5, 2, 1',
+      notify_email: c.notify_email ?? 1,
+    });
     setSheetOpen(true);
   }
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   }, []);
+
+  const handleToggleNotify = useCallback(() => {
+    setForm(prev => ({ ...prev, notify_email: prev.notify_email ? 0 : 1 }));
+  }, []);
+
+  async function toggleCredNotify(c: Cred) {
+    const nextVal = c.notify_email ? 0 : 1;
+    try {
+      await fetch(`/api/credentials/${c.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notify_email: nextVal }),
+      });
+      showToast(`Notifications ${nextVal ? 'enabled' : 'muted'} for credential.`);
+      fetchCreds();
+    } catch {
+      showToast('Failed to update notification setting.');
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -184,7 +244,16 @@ export default function CredentialsPage() {
       const res = await fetch(url, {
         method: editId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: form.name, cred_type: form.cred_type, url: form.url, username: form.username, expiry_date: form.expiry_date || null, last_changed_date: form.last_changed_date || null, reminder_days_before: form.reminder_days_before }),
+        body: JSON.stringify({
+          name: form.name,
+          cred_type: form.cred_type,
+          url: form.url,
+          username: form.username,
+          expiry_date: form.expiry_date || null,
+          last_changed_date: form.last_changed_date || null,
+          reminder_days_before: form.reminder_days_before,
+          notify_email: form.notify_email,
+        }),
       });
       if (!res.ok) throw new Error('Failed');
       showToast(editId ? 'Credential updated.' : 'Credential saved.');
@@ -283,7 +352,10 @@ export default function CredentialsPage() {
                     </td>
                     {/* Actions */}
                     <td style={{ ...td, textAlign: 'right', padding: '6px 8px' }}>
-                      <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                      <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <button onClick={() => toggleCredNotify(c)} title={c.notify_email ? 'Notifications ON (click to mute)' : 'Notifications OFF (click to enable)'} style={{ ...iconBtn, color: c.notify_email ? '#eab308' : 'var(--muted)' }}>
+                          {c.notify_email ? <Bell size={13} /> : <BellOff size={13} />}
+                        </button>
                         <button onClick={() => openEdit(c)} title="Edit" style={iconBtn}><Edit3 size={13} /></button>
                         <button onClick={() => setDeleteTarget(c)} title="Delete" style={{ ...iconBtn, color: 'var(--red)' }}><Trash2 size={13} /></button>
                       </div>
@@ -305,7 +377,7 @@ export default function CredentialsPage() {
       {sheetOpen && (
         <div onClick={e => { if (e.target === e.currentTarget) setSheetOpen(false); }} style={{ position: 'fixed', inset: 0, zIndex: 910, background: 'rgba(0,0,0,.65)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 560, paddingBottom: 'env(safe-area-inset-bottom,12px)', maxHeight: '92dvh', overflowY: 'auto', boxShadow: '0 -8px 40px rgba(0,0,0,.5)', animation: 'slideSheet .22s ease-out' }}>
-            <CredSheet editId={editId} form={form} saving={saving} onClose={() => setSheetOpen(false)} onChange={handleChange} onSubmit={handleSubmit} />
+            <CredSheet editId={editId} form={form} saving={saving} onClose={() => setSheetOpen(false)} onChange={handleChange} onToggleNotify={handleToggleNotify} onSubmit={handleSubmit} />
           </div>
         </div>
       )}
