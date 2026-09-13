@@ -9,7 +9,8 @@ import {
   sendBrevoEmail,
   resolveMemberNotificationEmails,
   schedule24And15HourReminders,
-  scheduleTender3And1DayReminders,
+  scheduleTenderReminders,
+  scheduleCustomReminders,
   processDueEmailJobs,
   buildAolErpHtml
 } from './brevo.js';
@@ -69,6 +70,35 @@ async function notifyAdmins(message: string, link: string = '') {
 
   if (sentChatIds.size === 0) {
     console.warn('[Telegram] Skipped admin notification: No Admin has a telegram_chat_id in members table, and TELEGRAM_CHAT_ID is not set in environment.');
+  }
+}
+
+function formatReminderParts(days?: number | null, hours?: number | null, minutes?: number | null): string {
+  const parts: string[] = [];
+  if (Number(days) > 0) parts.push(`${Number(days)} day(s)`);
+  if (Number(hours) > 0) parts.push(`${Number(hours)} hour(s)`);
+  if (Number(minutes) > 0) parts.push(`${Number(minutes)} minute(s)`);
+  return parts.join(', ');
+}
+
+async function notifyReminderConfigured(params: {
+  entityLabel: string;
+  title: string;
+  link: string;
+  remDays?: number | null;
+  remHours?: number | null;
+  remMins?: number | null;
+  alsoMemberId?: number | null;
+}) {
+  const parts = formatReminderParts(params.remDays, params.remHours, params.remMins);
+  if (!parts) return;
+  const msg = `Reminder set for ${params.entityLabel}: "${params.title}" (${parts} before).`;
+  await notifyAdmins(msg, params.link);
+  if (params.alsoMemberId) {
+    const m = await dbGet('SELECT role FROM members WHERE id=?', [params.alsoMemberId]) as any;
+    if (m && m.role !== 'Admin') {
+      await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [params.alsoMemberId, msg, params.link]);
+    }
   }
 }
 
@@ -288,16 +318,20 @@ export class OpenClaw {
     });
     // Only Admins can create tasks
     this.app.post('/api/tasks', requireRole('Admin'), async (req, res) => {
-      const { title, description, deadline, priority, assigned_to, task_date, action_type, recipient, status, notify_telegram, notify_email } = req.body;
+      const { title, description, deadline, priority, assigned_to, task_date, action_type, recipient, status, notify_telegram, notify_email, reminder_days, reminder_hours, reminder_minutes } = req.body;
       if (!title) return res.status(400).json({ error: 'Title required' });
       const date = task_date || new Date().toISOString().split('T')[0];
-      const shouldNotifyTg = (notify_telegram || notify_email) ? 1 : 0;
-      const shouldNotifyEmail = notify_email ? 1 : (notify_telegram ? 1 : 0);
+      const remDays = reminder_days !== undefined && reminder_days !== '' && reminder_days !== null ? Number(reminder_days) : null;
+      const remHours = reminder_hours !== undefined && reminder_hours !== '' && reminder_hours !== null ? Number(reminder_hours) : null;
+      const remMins = reminder_minutes !== undefined && reminder_minutes !== '' && reminder_minutes !== null ? Number(reminder_minutes) : null;
+      const hasReminder = (remDays && remDays > 0) || (remHours && remHours > 0) || (remMins && remMins > 0);
+      const shouldNotifyTg = (notify_telegram || notify_email || hasReminder) ? 1 : 0;
+      const shouldNotifyEmail = (notify_email || hasReminder) ? 1 : (notify_telegram ? 1 : 0);
       const initialStatus = status || 'DONE';
       
       const { lastID } = await dbRun(
-        `INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date,action_type,recipient,status,notify_telegram,notify_email) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'STUDY', recipient||'', initialStatus, shouldNotifyTg, shouldNotifyEmail]
+        `INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date,action_type,recipient,status,notify_telegram,notify_email,reminder_days,reminder_hours,reminder_minutes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'STUDY', recipient||'', initialStatus, shouldNotifyTg, shouldNotifyEmail, remDays, remHours, remMins]
       );
       
       const newTask = await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]) as any;
@@ -305,12 +339,12 @@ export class OpenClaw {
       // In-app notifications & Telegram/Brevo alerts
       if (assigned_to) {
         const assignee = await dbGet('SELECT name FROM members WHERE id=?', [assigned_to]) as any;
-        await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [assigned_to, `📋 New Task Assigned: "${title}"`, '/dashboard']);
+        await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [assigned_to, `New Task Assigned: "${title}"`, '/dashboard']);
         
         // Telegram notification: ONLY if bell is on AND status is NOT done!
         if (shouldNotifyTg && initialStatus !== 'DONE') {
-          await notifyMember(assigned_to, `📋 New Task Assigned: "${title}"`, '/dashboard');
-          await notifyAdmins(`📋 New Task: "${title}" (Assigned to ${assignee?.name || 'employee'}).`, '/dashboard');
+          await notifyMember(assigned_to, `New Task Assigned: "${title}"`, '/dashboard');
+          await notifyAdmins(`New Task: "${title}" (Assigned to ${assignee?.name || 'employee'}).`, '/dashboard');
         }
 
         // Brevo email notification if bell is on
@@ -325,7 +359,7 @@ export class OpenClaw {
           ]);
           sendBrevoEmail({ to: emails, subject: `AOL_ERP: New Task - ${title}`, htmlContent: emailHtml }).catch(console.error);
 
-          if (deadline) {
+          if (deadline && !hasReminder) {
             schedule24And15HourReminders({
               entityType: 'task',
               entityId: lastID,
@@ -340,10 +374,37 @@ export class OpenClaw {
             }).catch(console.error);
           }
         }
-      } else {
-        if (shouldNotifyTg && initialStatus !== 'DONE') {
-          await notifyAdmins(`📋 New Task Created: "${title}" (Unassigned).`, '/dashboard');
-        }
+      } else if (shouldNotifyTg && initialStatus !== 'DONE') {
+        await notifyAdmins(`New Task Created: "${title}" (Unassigned).`, '/dashboard');
+      }
+
+      // Custom Day/Hour/Minute reminders — always schedule when set on create
+      if (hasReminder && deadline) {
+        const emails = await resolveMemberNotificationEmails(assigned_to || 'Admin');
+        scheduleCustomReminders({
+          entityType: 'task',
+          entityId: lastID,
+          targetDateTime: deadline,
+          recipientEmails: emails,
+          title,
+          rows: [
+            { label: 'Task', value: title },
+            { label: 'Assignee', value: newTask?.assignee_name || '—' },
+            { label: 'Deadline', value: new Date(deadline).toLocaleString('en-GB') },
+          ],
+          reminderDays: remDays,
+          reminderHours: remHours,
+          reminderMinutes: remMins,
+        }).catch(console.error);
+        await notifyReminderConfigured({
+          entityLabel: 'Task',
+          title,
+          link: '/dashboard',
+          remDays,
+          remHours,
+          remMins,
+          alsoMemberId: assigned_to ? Number(assigned_to) : null,
+        });
       }
 
       res.status(201).json(newTask);
@@ -355,15 +416,20 @@ export class OpenClaw {
 
       // Employees can only update status on tasks assigned to them
       if (requestingUser?.role !== 'Admin') {
-        if (!oldTask || oldTask.assigned_to !== requestingUser?.id) {
+        if (!oldTask || Number(oldTask.assigned_to) !== Number(requestingUser?.id)) {
           return res.status(403).json({ error: 'You can only update tasks assigned to you.' });
         }
         if (Object.keys(req.body).some(k => k !== 'status')) {
           return res.status(403).json({ error: 'Employees may only update task status.' });
         }
+      } else if ('status' in req.body) {
+        // Admin cannot change status unless they are the assignee
+        if (Number(oldTask?.assigned_to) !== Number(requestingUser?.id)) {
+          delete req.body.status;
+        }
       }
 
-      const allowed = ['status', 'priority', 'title', 'description', 'deadline', 'assigned_to', 'action_type', 'recipient', 'is_archived', 'notify_telegram', 'notify_email'];
+      const allowed = ['status', 'priority', 'title', 'description', 'deadline', 'assigned_to', 'action_type', 'recipient', 'is_archived', 'notify_telegram', 'notify_email', 'reminder_days', 'reminder_hours', 'reminder_minutes'];
       const updates: string[] = [];
       const values: any[] = [];
       for (const key of allowed) {
@@ -378,6 +444,42 @@ export class OpenClaw {
       }
       
       const updatedTask = await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [req.params.id]) as any;
+
+      // Reschedule custom reminders when relevant fields change
+      if (updatedTask && ('reminder_days' in req.body || 'reminder_hours' in req.body || 'reminder_minutes' in req.body || 'deadline' in req.body || 'notify_email' in req.body)) {
+        const hasReminder = (Number(updatedTask.reminder_days) > 0) || (Number(updatedTask.reminder_hours) > 0) || (Number(updatedTask.reminder_minutes) > 0);
+        if (updatedTask.notify_email && hasReminder && updatedTask.deadline) {
+          const emails = await resolveMemberNotificationEmails(updatedTask.assigned_to || 'Admin');
+          scheduleCustomReminders({
+            entityType: 'task',
+            entityId: Number(req.params.id),
+            targetDateTime: updatedTask.deadline,
+            recipientEmails: emails,
+            title: updatedTask.title,
+            rows: [
+              { label: 'Task', value: updatedTask.title },
+              { label: 'Assignee', value: updatedTask.assignee_name || '—' },
+              { label: 'Deadline', value: new Date(updatedTask.deadline).toLocaleString('en-GB') },
+            ],
+            reminderDays: updatedTask.reminder_days,
+            reminderHours: updatedTask.reminder_hours,
+            reminderMinutes: updatedTask.reminder_minutes,
+          }).catch(console.error);
+          if ('reminder_days' in req.body || 'reminder_hours' in req.body || 'reminder_minutes' in req.body) {
+            await notifyReminderConfigured({
+              entityLabel: 'Task',
+              title: updatedTask.title,
+              link: '/dashboard',
+              remDays: updatedTask.reminder_days,
+              remHours: updatedTask.reminder_hours,
+              remMins: updatedTask.reminder_minutes,
+              alsoMemberId: updatedTask.assigned_to ? Number(updatedTask.assigned_to) : null,
+            });
+          }
+        } else {
+          dbRun('DELETE FROM email_jobs WHERE entity_type = ? AND entity_id = ? AND status = ?', ['task', req.params.id, 'PENDING']).catch(() => {});
+        }
+      }
       
       if (oldTask && updatedTask) {
         const user = requestingUser;
@@ -386,8 +488,7 @@ export class OpenClaw {
         // If status changed
         if (req.body.status && req.body.status !== oldTask.status) {
           const newStatus = req.body.status;
-          const statusIcon = newStatus === 'DONE' ? '✅' : '🔄';
-          const msg = `${statusIcon} Task Status: "${updatedTask.title}" marked as ${newStatus} by ${user?.name || 'employee'}.`;
+          const msg = `Task Status: "${updatedTask.title}" marked as ${newStatus} by ${user?.name || 'employee'}.`;
           
           // Always log in-app notification for admins
           const admins = await dbAll("SELECT id FROM members WHERE role = 'Admin'") as any[];
@@ -403,7 +504,7 @@ export class OpenClaw {
         
         // If task was re-assigned to someone else
         if (req.body.assigned_to && req.body.assigned_to !== oldTask.assigned_to) {
-          const assignMsg = `📋 You have been assigned a task: "${updatedTask.title}"`;
+          const assignMsg = `You have been assigned a task: "${updatedTask.title}"`;
           await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [req.body.assigned_to, assignMsg, '/dashboard']);
           if (isTelegramEnabled && updatedTask.status !== 'DONE') {
             await notifyMember(req.body.assigned_to, assignMsg, '/dashboard');
@@ -453,7 +554,7 @@ export class OpenClaw {
       const { chat_id } = req.body;
       if (!chat_id) return res.status(400).json({ error: 'chat_id is required' });
       
-      const result = await sendTelegramMessage(chat_id, '🔔 Test message from AOL ERP Bot! If you receive this, notifications are working.');
+      const result = await sendTelegramMessage(chat_id, 'Test message from AOL ERP Bot! If you receive this, notifications are working.');
       res.json(result);
     });
 
@@ -536,16 +637,70 @@ export class OpenClaw {
     this.app.post('/api/attendance', async (req, res) => {
       const { member_id, action_type } = req.body;
       if (!action_type || !['IN','OUT'].includes(action_type)) return res.status(400).json({ error: 'action_type must be IN or OUT' });
+      if (!member_id) return res.status(400).json({ error: 'member_id required' });
+
+      const requestingUser = (req as any).user;
+      if (requestingUser?.role !== 'Admin' && Number(member_id) !== Number(requestingUser?.id)) {
+        return res.status(403).json({ error: 'You can only check in/out for yourself.' });
+      }
+
+      const todayDhaka = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+      const existing = await dbGet(
+        `SELECT id, action_type FROM attendance
+         WHERE member_id=? AND action_type=?
+           AND date(timestamp) = date(?)
+         LIMIT 1`,
+        [member_id, action_type, todayDhaka]
+      ) as any;
+      // Also catch timezone-stored ISO timestamps by scanning today's rows
+      if (!existing) {
+        const todayRows = await dbAll(
+          `SELECT id, action_type, timestamp FROM attendance WHERE member_id=? AND action_type=? ORDER BY id DESC LIMIT 20`,
+          [member_id, action_type]
+        ) as any[];
+        const dup = todayRows.find(r => {
+          try {
+            return new Date(r.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }) === todayDhaka;
+          } catch { return false; }
+        });
+        if (dup) {
+          return res.status(409).json({
+            error: action_type === 'IN' ? 'Already checked in today.' : 'Already checked out today.',
+            code: 'ALREADY_RECORDED'
+          });
+        }
+      } else {
+        return res.status(409).json({
+          error: action_type === 'IN' ? 'Already checked in today.' : 'Already checked out today.',
+          code: 'ALREADY_RECORDED'
+        });
+      }
+
+      if (action_type === 'OUT') {
+        const hasIn = await dbAll(
+          `SELECT id, timestamp FROM attendance WHERE member_id=? AND action_type='IN' ORDER BY id DESC LIMIT 20`,
+          [member_id]
+        ) as any[];
+        const inToday = hasIn.some(r => {
+          try {
+            return new Date(r.timestamp).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }) === todayDhaka;
+          } catch { return false; }
+        });
+        if (!inToday) {
+          return res.status(400).json({ error: 'Cannot check out before check-in.' });
+        }
+      }
+
       const nowIso = new Date().toISOString();
-      const { lastID } = await dbRun('INSERT INTO attendance(member_id,action_type,timestamp) VALUES(?,?,?)', [member_id||null, action_type, nowIso]);
+      const { lastID } = await dbRun('INSERT INTO attendance(member_id,action_type,timestamp) VALUES(?,?,?)', [member_id, action_type, nowIso]);
       const rec = await dbGet(`SELECT a.*,m.name as member_name FROM attendance a LEFT JOIN members m ON a.member_id=m.id WHERE a.id=?`, [lastID]) as any;
       
       const empName = rec?.member_name || 'An employee';
       const timeStr = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Dhaka' });
       if (action_type === 'IN') {
-        await notifyAdmins(`🟢 Check-In: ${empName} checked in at ${timeStr}.`, '/hr?tab=att');
+        await notifyAdmins(`Check-In: ${empName} checked in at ${timeStr}.`, '/hr?tab=att');
       } else {
-        await notifyAdmins(`🔴 Check-Out: ${empName} checked out at ${timeStr}.`, '/hr?tab=att');
+        await notifyAdmins(`Check-Out: ${empName} checked out at ${timeStr}.`, '/hr?tab=att');
       }
 
       res.status(201).json(rec);
@@ -719,7 +874,7 @@ export class OpenClaw {
         if (!existingIn) {
           await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'IN', nowIso]);
           console.log(`[ROUTER WEBHOOK] Auto checked in ${member.name} on Wi-Fi CONNECT`);
-          await notifyAdmins(`⚡ Wi-Fi Auto Check-In: ${member.name} connected to Office Wi-Fi.`, '/hr?tab=att');
+          await notifyAdmins(`Wi-Fi Auto Check-In: ${member.name} connected to Office Wi-Fi.`, '/hr?tab=att');
         }
         await dbRun(
           `INSERT INTO active_sessions (member_id, last_seen, ip, is_wifi)
@@ -733,7 +888,7 @@ export class OpenClaw {
         if (existingIn && !existingOut) {
           await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'OUT', nowIso]);
           console.log(`[ROUTER WEBHOOK] Auto checked out ${member.name} on Wi-Fi DISCONNECT`);
-          await notifyAdmins(`⚡ Wi-Fi Auto Check-Out: ${member.name} disconnected from Office Wi-Fi.`, '/hr?tab=att');
+          await notifyAdmins(`Wi-Fi Auto Check-Out: ${member.name} disconnected from Office Wi-Fi.`, '/hr?tab=att');
         }
         await dbRun('DELETE FROM active_sessions WHERE member_id = ?', [member.id]);
         return res.json({ ok: true, action: 'OUT', member_name: member.name });
@@ -787,7 +942,7 @@ export class OpenClaw {
           await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'OUT', nowIso]);
           autoCheckedOut = true;
           console.log(`[LAPTOP SHUTDOWN] Member #${member.id} (${member.name}) checked out via laptop shutdown hook (${hostname || clientIp}).`);
-          await notifyAdmins(`💻 Laptop Auto Check-Out: ${member.name} turned off laptop (${hostname || 'Workstation'}).`, '/hr?tab=att');
+          await notifyAdmins(`Laptop Auto Check-Out: ${member.name} turned off laptop (${hostname || 'Workstation'}).`, '/hr?tab=att');
         }
 
         await dbRun('DELETE FROM active_sessions WHERE member_id = ?', [member.id]);
@@ -807,7 +962,7 @@ export class OpenClaw {
           await dbRun('INSERT INTO attendance (member_id, action_type, timestamp) VALUES (?, ?, ?)', [member.id, 'IN', nowIso]);
           autoCheckedIn = true;
           console.log(`[LAPTOP AUTO-CHECKIN] Member #${member.id} (${member.name}) automatically checked in via Laptop Agent (${hostname || clientIp}).`);
-          await notifyAdmins(`💻 Laptop Auto Check-In: ${member.name} opened laptop (${hostname || 'Workstation'}).`, '/hr?tab=att');
+          await notifyAdmins(`Laptop Auto Check-In: ${member.name} opened laptop (${hostname || 'Workstation'}).`, '/hr?tab=att');
         }
 
         await dbRun(
@@ -1200,19 +1355,25 @@ echo "======================================================"
       res.json(rows);
     });
     this.app.post('/api/leaves', async (req, res) => {
-      const { member_id, leave_type, start_date, end_date, reason, notify_email } = req.body;
+      const { member_id, leave_type, start_date, end_date, reason, notify_email, reminder_days, reminder_hours, reminder_minutes } = req.body;
       if (!member_id || !leave_type || !start_date || !end_date) return res.status(400).json({ error: 'Missing required fields' });
-      const shouldNotify = notify_email ? 1 : 0;
+      const remDays = reminder_days !== undefined && reminder_days !== '' && reminder_days !== null ? Number(reminder_days) : null;
+      const remHours = reminder_hours !== undefined && reminder_hours !== '' && reminder_hours !== null ? Number(reminder_hours) : null;
+      const remMins = reminder_minutes !== undefined && reminder_minutes !== '' && reminder_minutes !== null ? Number(reminder_minutes) : null;
+      const hasReminder =
+        (Number.isFinite(remDays as number) && (remDays as number) > 0) ||
+        (Number.isFinite(remHours as number) && (remHours as number) > 0) ||
+        (Number.isFinite(remMins as number) && (remMins as number) > 0);
+      const shouldNotify = notify_email !== undefined ? (notify_email ? 1 : 0) : (hasReminder ? 1 : 0);
       const { lastID } = await dbRun(
-        `INSERT INTO leave_requests(member_id,leave_type,start_date,end_date,reason,notify_email) VALUES(?,?,?,?,?,?)`,
-        [member_id, leave_type, start_date, end_date, reason||'', shouldNotify]
+        `INSERT INTO leave_requests(member_id,leave_type,start_date,end_date,reason,notify_email,reminder_days,reminder_hours,reminder_minutes) VALUES(?,?,?,?,?,?,?,?,?)`,
+        [member_id, leave_type, start_date, end_date, reason||'', shouldNotify, remDays, remHours, remMins]
       );
       
       const member = await dbGet(`SELECT name, email, notify_email FROM members WHERE id=?`, [member_id]) as any;
-      const leaveMsg = `🌴 Leave Request: ${member?.name || 'An employee'} requested ${leave_type} leave (${start_date} to ${end_date}).${reason ? `\nReason: "${reason}"` : ''}`;
+      const leaveMsg = `Leave Request: ${member?.name || 'An employee'} requested ${leave_type} leave (${start_date} to ${end_date}).${reason ? `\nReason: "${reason}"` : ''}`;
       await notifyAdmins(leaveMsg, '/hr?tab=leave');
 
-      // Brevo email notification & reminder scheduling if Bell is toggled
       if (shouldNotify) {
         const recipientEmails = await resolveMemberNotificationEmails(member_id);
         const emailRows = [
@@ -1228,22 +1389,47 @@ echo "======================================================"
           htmlContent: emailHtml
         }).catch(console.error);
 
-        // Schedule 24 hours & 15 hours prior to leave start date (assumed 09:00 AM start)
-        const targetDateTime = `${start_date}T09:00:00+06:00`;
-        schedule24And15HourReminders({
-          entityType: 'leave',
-          entityId: lastID,
-          targetDateTime,
-          recipientEmails,
-          title: `Leave: ${member?.name || 'Employee'} (${leave_type})`,
-          rows: emailRows
-        }).catch(console.error);
+        let targetDateTime = String(start_date).trim();
+        if (!targetDateTime.includes('T')) targetDateTime = `${targetDateTime}T09:00:00+06:00`;
+        else if (!targetDateTime.includes('Z') && !/[+-]\d{2}(:?\d{2})?$/.test(targetDateTime)) targetDateTime += '+06:00';
+
+        if (hasReminder) {
+          scheduleCustomReminders({
+            entityType: 'leave',
+            entityId: lastID,
+            targetDateTime,
+            recipientEmails,
+            title: `Leave: ${member?.name || 'Employee'} (${leave_type})`,
+            rows: emailRows,
+            reminderDays: remDays,
+            reminderHours: remHours,
+            reminderMinutes: remMins,
+          }).catch(console.error);
+          await notifyReminderConfigured({
+            entityLabel: 'Leave',
+            title: `${member?.name || 'Employee'} (${leave_type})`,
+            link: '/hr?tab=leave',
+            remDays,
+            remHours,
+            remMins,
+            alsoMemberId: Number(member_id),
+          });
+        } else {
+          schedule24And15HourReminders({
+            entityType: 'leave',
+            entityId: lastID,
+            targetDateTime,
+            recipientEmails,
+            title: `Leave: ${member?.name || 'Employee'} (${leave_type})`,
+            rows: emailRows
+          }).catch(console.error);
+        }
       }
 
       res.status(201).json(await dbGet(`SELECT l.*,m.name as member_name FROM leave_requests l JOIN members m ON l.member_id=m.id WHERE l.id=?`, [lastID]));
     });
     this.app.patch('/api/leaves/:id', async (req, res) => {
-      const { status, leave_type, start_date, end_date, reason, notify_email } = req.body;
+      const { status, leave_type, start_date, end_date, reason, notify_email, reminder_days, reminder_hours, reminder_minutes } = req.body;
       if (status) {
         // Status update (Approve / Reject / Cancel)
         await dbRun(`UPDATE leave_requests SET status=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?`, [status, req.params.id]);
@@ -1251,7 +1437,7 @@ echo "======================================================"
         if (leaveRow) {
           const member = await dbGet('SELECT name FROM members WHERE id=?', [leaveRow.member_id]) as any;
           await notifyMember(leaveRow.member_id, `Your ${leaveRow.leave_type} leave request has been ${status}.`, '/hr?tab=leave');
-          await notifyAdmins(`📋 Leave Decision: ${member?.name || 'Employee'}'s ${leaveRow.leave_type} leave has been ${status}.`, '/hr?tab=leave');
+          await notifyAdmins(`Leave Decision: ${member?.name || 'Employee'}'s ${leaveRow.leave_type} leave has been ${status}.`, '/hr?tab=leave');
 
           if (leaveRow.notify_email) {
             const recipientEmails = await resolveMemberNotificationEmails(leaveRow.member_id);
@@ -1269,33 +1455,84 @@ echo "======================================================"
             }).catch(console.error);
 
             if (status === 'APPROVED') {
-              const targetDateTime = `${leaveRow.start_date}T09:00:00+06:00`;
-              schedule24And15HourReminders({
-                entityType: 'leave',
-                entityId: Number(req.params.id),
-                targetDateTime,
-                recipientEmails,
-                title: `Upcoming Leave: ${member?.name || 'Employee'} (${leaveRow.leave_type})`,
-                rows: emailRows
-              }).catch(console.error);
+              let targetDateTime = String(leaveRow.start_date).trim();
+              if (!targetDateTime.includes('T')) targetDateTime = `${targetDateTime}T09:00:00+06:00`;
+              else if (!targetDateTime.includes('Z') && !/[+-]\d{2}(:?\d{2})?$/.test(targetDateTime)) targetDateTime += '+06:00';
+              const hasReminder =
+                (Number(leaveRow.reminder_days) > 0) ||
+                (Number(leaveRow.reminder_hours) > 0) ||
+                (Number(leaveRow.reminder_minutes) > 0);
+              if (hasReminder) {
+                scheduleCustomReminders({
+                  entityType: 'leave',
+                  entityId: Number(req.params.id),
+                  targetDateTime,
+                  recipientEmails,
+                  title: `Upcoming Leave: ${member?.name || 'Employee'} (${leaveRow.leave_type})`,
+                  rows: emailRows,
+                  reminderDays: leaveRow.reminder_days,
+                  reminderHours: leaveRow.reminder_hours,
+                  reminderMinutes: leaveRow.reminder_minutes,
+                }).catch(console.error);
+              } else {
+                schedule24And15HourReminders({
+                  entityType: 'leave',
+                  entityId: Number(req.params.id),
+                  targetDateTime,
+                  recipientEmails,
+                  title: `Upcoming Leave: ${member?.name || 'Employee'} (${leaveRow.leave_type})`,
+                  rows: emailRows
+                }).catch(console.error);
+              }
             }
           }
         }
-        return res.json(leaveRow);
+        return res.json(await dbGet(`SELECT l.*,m.name as member_name,m.avatar_color FROM leave_requests l JOIN members m ON l.member_id=m.id WHERE l.id=?`, [req.params.id]));
       } else {
-        // Field update (Edit mode — admin editing leave details)
-        const updates: string[] = [];
-        const values: any[] = [];
-        if (leave_type) { updates.push('leave_type=?'); values.push(leave_type); }
-        if (start_date) { updates.push('start_date=?'); values.push(start_date); }
-        if (end_date)   { updates.push('end_date=?');   values.push(end_date); }
-        if (reason !== undefined) { updates.push('reason=?'); values.push(reason); }
-        if (notify_email !== undefined) { updates.push('notify_email=?'); values.push(notify_email ? 1 : 0); }
-        if (updates.length > 0) {
-          values.push(req.params.id);
-          await dbRun(`UPDATE leave_requests SET ${updates.join(', ')} WHERE id=?`, values);
-        }
-        const leaveRow = await dbGet('SELECT * FROM leave_requests WHERE id=?', [req.params.id]) as any;
+        // Field update (Edit / revise leave details)
+        const current = await dbGet('SELECT * FROM leave_requests WHERE id=?', [req.params.id]) as any;
+        if (!current) return res.status(404).json({ error: 'Not found' });
+
+        const nextDays = reminder_days !== undefined
+          ? (reminder_days === '' || reminder_days === null ? null : Number(reminder_days))
+          : (current.reminder_days ?? null);
+        const nextHours = reminder_hours !== undefined
+          ? (reminder_hours === '' || reminder_hours === null ? null : Number(reminder_hours))
+          : (current.reminder_hours ?? null);
+        const nextMins = reminder_minutes !== undefined
+          ? (reminder_minutes === '' || reminder_minutes === null ? null : Number(reminder_minutes))
+          : (current.reminder_minutes ?? null);
+        const hasReminder =
+          (Number(nextDays) > 0) || (Number(nextHours) > 0) || (Number(nextMins) > 0);
+        const nextNotify = notify_email !== undefined
+          ? (notify_email ? 1 : 0)
+          : (hasReminder ? 1 : (current.notify_email ? 1 : 0));
+
+        await dbRun(
+          `UPDATE leave_requests SET
+            leave_type=?,
+            start_date=?,
+            end_date=?,
+            reason=?,
+            notify_email=?,
+            reminder_days=?,
+            reminder_hours=?,
+            reminder_minutes=?
+          WHERE id=?`,
+          [
+            leave_type !== undefined ? leave_type : current.leave_type,
+            start_date !== undefined ? start_date : current.start_date,
+            end_date !== undefined ? end_date : current.end_date,
+            reason !== undefined ? reason : current.reason,
+            nextNotify,
+            nextDays,
+            nextHours,
+            nextMins,
+            req.params.id,
+          ]
+        );
+
+        const leaveRow = await dbGet(`SELECT l.*,m.name as member_name,m.avatar_color FROM leave_requests l JOIN members m ON l.member_id=m.id WHERE l.id=?`, [req.params.id]) as any;
         if (leaveRow && leaveRow.notify_email) {
           const member = await dbGet('SELECT name FROM members WHERE id=?', [leaveRow.member_id]) as any;
           const recipientEmails = await resolveMemberNotificationEmails(leaveRow.member_id);
@@ -1304,18 +1541,51 @@ echo "======================================================"
             { label: 'Leave', value: leaveRow.leave_type },
             { label: 'From', value: `${leaveRow.start_date} to ${leaveRow.end_date}` }
           ];
-          const targetDateTime = `${leaveRow.start_date}T09:00:00+06:00`;
-          schedule24And15HourReminders({
-            entityType: 'leave',
-            entityId: Number(req.params.id),
-            targetDateTime,
-            recipientEmails,
-            title: `Updated Leave: ${member?.name || 'Employee'} (${leaveRow.leave_type})`,
-            rows: emailRows
-          }).catch(console.error);
+          let targetDateTime = String(leaveRow.start_date).trim();
+          if (!targetDateTime.includes('T')) targetDateTime = `${targetDateTime}T09:00:00+06:00`;
+          else if (!targetDateTime.includes('Z') && !/[+-]\d{2}(:?\d{2})?$/.test(targetDateTime)) targetDateTime += '+06:00';
+
+          if (hasReminder) {
+            scheduleCustomReminders({
+              entityType: 'leave',
+              entityId: Number(req.params.id),
+              targetDateTime,
+              recipientEmails,
+              title: `Updated Leave: ${member?.name || 'Employee'} (${leaveRow.leave_type})`,
+              rows: emailRows,
+              reminderDays: leaveRow.reminder_days,
+              reminderHours: leaveRow.reminder_hours,
+              reminderMinutes: leaveRow.reminder_minutes,
+            }).catch(console.error);
+            if (reminder_days !== undefined || reminder_hours !== undefined || reminder_minutes !== undefined) {
+              await notifyReminderConfigured({
+                entityLabel: 'Leave',
+                title: `${member?.name || 'Employee'} (${leaveRow.leave_type})`,
+                link: '/hr?tab=leave',
+                remDays: leaveRow.reminder_days,
+                remHours: leaveRow.reminder_hours,
+                remMins: leaveRow.reminder_minutes,
+                alsoMemberId: Number(leaveRow.member_id),
+              });
+            }
+          } else {
+            schedule24And15HourReminders({
+              entityType: 'leave',
+              entityId: Number(req.params.id),
+              targetDateTime,
+              recipientEmails,
+              title: `Updated Leave: ${member?.name || 'Employee'} (${leaveRow.leave_type})`,
+              rows: emailRows
+            }).catch(console.error);
+          }
         }
         return res.json(leaveRow);
       }
+    });
+    this.app.delete('/api/leaves/:id', requireRole('Admin'), async (req, res) => {
+      await dbRun('DELETE FROM email_jobs WHERE entity_type=? AND entity_id=?', ['leave', Number(req.params.id)]);
+      await dbRun('DELETE FROM leave_requests WHERE id=?', [req.params.id]);
+      res.json({ ok: true });
     });
 
     // ── NOTIFICATIONS ────────────────────────────────────────
@@ -1398,57 +1668,157 @@ echo "======================================================"
     // ── CREDENTIALS (Admin only) ──────────────────────────────
     this.app.get('/api/credentials', requireRole('Admin'), async (_, res) => res.json(await dbAll('SELECT * FROM credentials ORDER BY created_at DESC')));
     this.app.post('/api/credentials', requireRole('Admin'), async (req, res) => {
-      const { name, cred_type, url, username, cost, expiry_date, last_changed_date, reminder_days_before, notify_email } = req.body;
+      const { name, cred_type, url, username, cost, expiry_date, last_changed_date, notify_email, reminder_days, reminder_hours, reminder_minutes } = req.body;
       if (!name) return res.status(400).json({ error: 'Name is required' });
-      const shouldNotify = notify_email ? 1 : 0;
+      const remDays = reminder_days !== undefined && reminder_days !== '' && reminder_days !== null ? Number(reminder_days) : null;
+      const remHours = reminder_hours !== undefined && reminder_hours !== '' && reminder_hours !== null ? Number(reminder_hours) : null;
+      const remMins = reminder_minutes !== undefined && reminder_minutes !== '' && reminder_minutes !== null ? Number(reminder_minutes) : null;
+      const hasReminder = (remDays && remDays > 0) || (remHours && remHours > 0) || (remMins && remMins > 0);
+      const shouldNotify = notify_email ? 1 : (hasReminder ? 1 : 0);
+      const legacyDays = remDays && remDays > 0 ? String(remDays) : '';
       const { lastID } = await dbRun(
-        `INSERT INTO credentials(name,cred_type,url,username,cost,expiry_date,last_changed_date,reminder_days_before,notify_email) VALUES(?,?,?,?,?,?,?,?,?)`, 
-        [name, cred_type||'OTHER', url||'', username||'', cost||0, expiry_date||null, last_changed_date||null, reminder_days_before||'5,2,1', shouldNotify]
+        `INSERT INTO credentials(name,cred_type,url,username,cost,expiry_date,last_changed_date,reminder_days_before,notify_email,reminder_days,reminder_hours,reminder_minutes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [name, cred_type||'OTHER', url||'', username||'', cost||0, expiry_date||null, last_changed_date||null, legacyDays, shouldNotify, remDays, remHours, remMins]
       );
 
-      if (shouldNotify && expiry_date) {
+      if (shouldNotify && hasReminder && expiry_date) {
         const adminEmails = await resolveMemberNotificationEmails('Admin');
-        schedule24And15HourReminders({
+        scheduleCustomReminders({
           entityType: 'credential',
           entityId: lastID,
           targetDateTime: `${expiry_date}T09:00:00+06:00`,
           recipientEmails: adminEmails,
           title: `Credential Expiry: ${name}`,
           rows: [
-            { label: 'Name', value: name },
-            { label: 'Type', value: cred_type || 'OTHER' },
+            { label: 'Activity', value: name },
+            { label: 'User', value: username || '—' },
             { label: 'Expiry Date', value: expiry_date },
             { label: 'URL', value: url || '—' }
-          ]
+          ],
+          reminderDays: remDays,
+          reminderHours: remHours,
+          reminderMinutes: remMins,
         }).catch(console.error);
+        await notifyReminderConfigured({
+          entityLabel: 'Credential',
+          title: name,
+          link: '/credentials',
+          remDays,
+          remHours,
+          remMins,
+        });
       }
 
       res.status(201).json(await dbGet('SELECT * FROM credentials WHERE id=?', [lastID]));
     });
     this.app.delete('/api/credentials/:id', requireRole('Admin'), async (req, res) => { await dbRun('DELETE FROM credentials WHERE id=?', [req.params.id]); res.json({ ok: true }); });
     this.app.patch('/api/credentials/:id', requireRole('Admin'), async (req, res) => {
-      const { name, cred_type, url, username, cost, expiry_date, last_changed_date, reminder_days_before, notify_email } = req.body;
+      const { name, cred_type, url, username, cost, expiry_date, last_changed_date, notify_email, reminder_days, reminder_hours, reminder_minutes } = req.body;
+      const current = await dbGet('SELECT * FROM credentials WHERE id=?', [req.params.id]) as any;
+      if (!current) return res.status(404).json({ error: 'Credential not found' });
+
+      const nextDays = reminder_days !== undefined
+        ? (reminder_days === '' || reminder_days === null ? null : Number(reminder_days))
+        : (current.reminder_days ?? null);
+      const nextHours = reminder_hours !== undefined
+        ? (reminder_hours === '' || reminder_hours === null ? null : Number(reminder_hours))
+        : (current.reminder_hours ?? null);
+      const nextMins = reminder_minutes !== undefined
+        ? (reminder_minutes === '' || reminder_minutes === null ? null : Number(reminder_minutes))
+        : (current.reminder_minutes ?? null);
+      const hasReminder = (Number(nextDays) > 0) || (Number(nextHours) > 0) || (Number(nextMins) > 0);
+      const nextNotify = notify_email !== undefined ? (notify_email ? 1 : 0) : (hasReminder ? 1 : (current.notify_email || 0));
+      const legacyDays = Number(nextDays) > 0 ? String(nextDays) : (current.reminder_days_before || '');
+
       await dbRun(
-        `UPDATE credentials SET name=COALESCE(?,name), cred_type=COALESCE(?,cred_type), url=COALESCE(?,url), username=COALESCE(?,username), cost=COALESCE(?,cost), expiry_date=?, last_changed_date=?, reminder_days_before=COALESCE(?,reminder_days_before), notify_email=COALESCE(?,notify_email) WHERE id=?`,
-        [name||null, cred_type||null, url??null, username??null, cost||null, expiry_date||null, last_changed_date||null, reminder_days_before||null, notify_email !== undefined ? (notify_email ? 1 : 0) : null, req.params.id]
+        `UPDATE credentials SET
+          name=COALESCE(?,name),
+          cred_type=COALESCE(?,cred_type),
+          url=COALESCE(?,url),
+          username=COALESCE(?,username),
+          cost=COALESCE(?,cost),
+          expiry_date=?,
+          last_changed_date=?,
+          reminder_days_before=?,
+          notify_email=?,
+          reminder_days=?,
+          reminder_hours=?,
+          reminder_minutes=?
+        WHERE id=?`,
+        [
+          name || null,
+          cred_type || null,
+          url ?? null,
+          username ?? null,
+          cost ?? null,
+          expiry_date !== undefined ? (expiry_date || null) : current.expiry_date,
+          last_changed_date !== undefined ? (last_changed_date || null) : current.last_changed_date,
+          legacyDays,
+          nextNotify,
+          nextDays,
+          nextHours,
+          nextMins,
+          req.params.id
+        ]
       );
-      res.json(await dbGet('SELECT * FROM credentials WHERE id=?', [req.params.id]));
+
+      const updated = await dbGet('SELECT * FROM credentials WHERE id=?', [req.params.id]) as any;
+      if (updated) {
+        if (updated.notify_email && hasReminder && updated.expiry_date) {
+          const adminEmails = await resolveMemberNotificationEmails('Admin');
+          scheduleCustomReminders({
+            entityType: 'credential',
+            entityId: Number(req.params.id),
+            targetDateTime: `${updated.expiry_date}T09:00:00+06:00`,
+            recipientEmails: adminEmails,
+            title: `Credential Expiry: ${updated.name}`,
+            rows: [
+              { label: 'Activity', value: updated.name },
+              { label: 'User', value: updated.username || '—' },
+              { label: 'Expiry Date', value: updated.expiry_date },
+              { label: 'URL', value: updated.url || '—' }
+            ],
+            reminderDays: updated.reminder_days,
+            reminderHours: updated.reminder_hours,
+            reminderMinutes: updated.reminder_minutes,
+          }).catch(console.error);
+          if (reminder_days !== undefined || reminder_hours !== undefined || reminder_minutes !== undefined) {
+            await notifyReminderConfigured({
+              entityLabel: 'Credential',
+              title: updated.name,
+              link: '/credentials',
+              remDays: updated.reminder_days,
+              remHours: updated.reminder_hours,
+              remMins: updated.reminder_minutes,
+            });
+          }
+        } else {
+          dbRun('DELETE FROM email_jobs WHERE entity_type = ? AND entity_id = ? AND status = ?', ['credential', req.params.id, 'PENDING']).catch(() => {});
+        }
+      }
+      res.json(updated);
     });
 
     // ── MEETINGS (Admin only) ─────────────────────────────────
     this.app.get('/api/meetings', requireRole('Admin'), async (_, res) => res.json(await dbAll('SELECT * FROM meetings ORDER BY scheduled_at ASC')));
     this.app.post('/api/meetings', requireRole('Admin'), async (req, res) => {
-      const { title, contact_name, scheduled_at, reminder_minutes_before, notify_email } = req.body;
+      const { title, contact_name, scheduled_at, notify_email, reminder_days, reminder_hours, reminder_minutes } = req.body;
       if (!title || !scheduled_at) return res.status(400).json({ error: 'Title and scheduled_at required' });
-      const shouldNotify = notify_email ? 1 : 0;
+      const remDays = reminder_days !== undefined && reminder_days !== '' && reminder_days !== null ? Number(reminder_days) : null;
+      const remHours = reminder_hours !== undefined && reminder_hours !== '' && reminder_hours !== null ? Number(reminder_hours) : null;
+      const remMins = reminder_minutes !== undefined && reminder_minutes !== '' && reminder_minutes !== null ? Number(reminder_minutes) : null;
+      const hasReminder = (remDays && remDays > 0) || (remHours && remHours > 0) || (remMins && remMins > 0);
+      const shouldNotify = notify_email ? 1 : (hasReminder ? 1 : 0);
+      // Keep legacy minutes string for backward-compatible cron matching if only minutes set
+      const legacyMins = remMins && remMins > 0 ? String(remMins) : '';
       const { lastID } = await dbRun(
-        `INSERT INTO meetings(title,contact_name,scheduled_at,reminder_minutes_before,notify_email) VALUES(?,?,?,?,?)`, 
-        [title, contact_name||'', scheduled_at, reminder_minutes_before||'30,15', shouldNotify]
+        `INSERT INTO meetings(title,contact_name,scheduled_at,reminder_minutes_before,notify_email,reminder_days,reminder_hours,reminder_minutes) VALUES(?,?,?,?,?,?,?,?)`,
+        [title, contact_name||'', scheduled_at, legacyMins, shouldNotify, remDays, remHours, remMins]
       );
 
-      if (shouldNotify) {
+      if (shouldNotify && hasReminder) {
         const emails = await resolveMemberNotificationEmails('Admin');
-        schedule24And15HourReminders({
+        scheduleCustomReminders({
           entityType: 'meeting',
           entityId: lastID,
           targetDateTime: scheduled_at,
@@ -1458,36 +1828,120 @@ echo "======================================================"
             { label: 'Meeting', value: title },
             { label: 'With', value: contact_name || '—' },
             { label: 'Scheduled At', value: new Date(scheduled_at).toLocaleString('en-GB') }
-          ]
+          ],
+          reminderDays: remDays,
+          reminderHours: remHours,
+          reminderMinutes: remMins,
         }).catch(console.error);
+        await notifyReminderConfigured({
+          entityLabel: 'Meeting',
+          title,
+          link: '/meetings',
+          remDays,
+          remHours,
+          remMins,
+        });
       }
 
       res.status(201).json(await dbGet('SELECT * FROM meetings WHERE id=?', [lastID]));
     });
     this.app.delete('/api/meetings/:id', requireRole('Admin'), async (req, res) => { await dbRun('DELETE FROM meetings WHERE id=?', [req.params.id]); res.json({ ok: true }); });
     this.app.patch('/api/meetings/:id', requireRole('Admin'), async (req, res) => {
-      const { title, contact_name, scheduled_at, reminder_minutes_before, notify_email } = req.body;
+      const { title, contact_name, scheduled_at, notify_email, reminder_days, reminder_hours, reminder_minutes } = req.body;
+      const current = await dbGet('SELECT * FROM meetings WHERE id=?', [req.params.id]) as any;
+      if (!current) return res.status(404).json({ error: 'Meeting not found' });
+
+      const nextDays = reminder_days !== undefined
+        ? (reminder_days === '' || reminder_days === null ? null : Number(reminder_days))
+        : (current.reminder_days ?? null);
+      const nextHours = reminder_hours !== undefined
+        ? (reminder_hours === '' || reminder_hours === null ? null : Number(reminder_hours))
+        : (current.reminder_hours ?? null);
+      const nextMins = reminder_minutes !== undefined
+        ? (reminder_minutes === '' || reminder_minutes === null ? null : Number(reminder_minutes))
+        : (current.reminder_minutes ?? null);
+      const hasReminder = (Number(nextDays) > 0) || (Number(nextHours) > 0) || (Number(nextMins) > 0);
+      const nextNotify = notify_email !== undefined ? (notify_email ? 1 : 0) : (hasReminder ? 1 : (current.notify_email || 0));
+      const legacyMins = Number(nextMins) > 0 ? String(nextMins) : (current.reminder_minutes_before || '');
+
       await dbRun(
-        `UPDATE meetings SET title=COALESCE(?,title), contact_name=COALESCE(?,contact_name), scheduled_at=COALESCE(?,scheduled_at), reminder_minutes_before=COALESCE(?,reminder_minutes_before), notify_email=COALESCE(?,notify_email) WHERE id=?`,
-        [title||null, contact_name??null, scheduled_at||null, reminder_minutes_before||null, notify_email !== undefined ? (notify_email ? 1 : 0) : null, req.params.id]
+        `UPDATE meetings SET
+          title=COALESCE(?,title),
+          contact_name=COALESCE(?,contact_name),
+          scheduled_at=COALESCE(?,scheduled_at),
+          reminder_minutes_before=?,
+          notify_email=?,
+          reminder_days=?,
+          reminder_hours=?,
+          reminder_minutes=?
+        WHERE id=?`,
+        [
+          title || null,
+          contact_name ?? null,
+          scheduled_at || null,
+          legacyMins,
+          nextNotify,
+          nextDays,
+          nextHours,
+          nextMins,
+          req.params.id
+        ]
       );
-      res.json(await dbGet('SELECT * FROM meetings WHERE id=?', [req.params.id]));
+
+      const updated = await dbGet('SELECT * FROM meetings WHERE id=?', [req.params.id]) as any;
+      if (updated) {
+        if (updated.notify_email && hasReminder && updated.scheduled_at) {
+          const emails = await resolveMemberNotificationEmails('Admin');
+          scheduleCustomReminders({
+            entityType: 'meeting',
+            entityId: Number(req.params.id),
+            targetDateTime: updated.scheduled_at,
+            recipientEmails: emails,
+            title: `Meeting: ${updated.title}`,
+            rows: [
+              { label: 'Meeting', value: updated.title },
+              { label: 'With', value: updated.contact_name || '—' },
+              { label: 'Scheduled At', value: new Date(updated.scheduled_at).toLocaleString('en-GB') }
+            ],
+            reminderDays: updated.reminder_days,
+            reminderHours: updated.reminder_hours,
+            reminderMinutes: updated.reminder_minutes,
+          }).catch(console.error);
+          if (reminder_days !== undefined || reminder_hours !== undefined || reminder_minutes !== undefined) {
+            await notifyReminderConfigured({
+              entityLabel: 'Meeting',
+              title: updated.title,
+              link: '/meetings',
+              remDays: updated.reminder_days,
+              remHours: updated.reminder_hours,
+              remMins: updated.reminder_minutes,
+            });
+          }
+        } else {
+          dbRun('DELETE FROM email_jobs WHERE entity_type = ? AND entity_id = ? AND status = ?', ['meeting', req.params.id, 'PENDING']).catch(() => {});
+        }
+      }
+      res.json(updated);
     });
 
     // ── TENDERS (Admin only) ──────────────────────────────────
     this.app.get('/api/tenders', requireRole('Admin'), async (_, res) => res.json(await dbAll('SELECT * FROM tenders ORDER BY submission_deadline ASC')));
     this.app.post('/api/tenders', requireRole('Admin'), async (req, res) => {
-      const { title, organization, tender_type, published_date, submission_deadline, estimated_value, status, documents_url, notes, assigned_to, notify_email } = req.body;
+      const { title, organization, tender_type, published_date, submission_deadline, estimated_value, status, documents_url, notes, assigned_to, notify_email, reminder_days, reminder_hours, reminder_minutes } = req.body;
       if (!title || !submission_deadline) return res.status(400).json({ error: 'Title and deadline required' });
-      const shouldNotify = notify_email ? 1 : 0;
+      const remDays = reminder_days !== undefined && reminder_days !== '' && reminder_days !== null ? Number(reminder_days) : null;
+      const remHours = reminder_hours !== undefined && reminder_hours !== '' && reminder_hours !== null ? Number(reminder_hours) : null;
+      const remMins = reminder_minutes !== undefined && reminder_minutes !== '' && reminder_minutes !== null ? Number(reminder_minutes) : null;
+      const hasReminder = (remDays && remDays > 0) || (remHours && remHours > 0) || (remMins && remMins > 0);
+      const shouldNotify = notify_email ? 1 : (hasReminder ? 1 : 0);
       const { lastID } = await dbRun(
-        `INSERT INTO tenders(title, organization, tender_type, published_date, submission_deadline, estimated_value, status, documents_url, notes, assigned_to, notify_email) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-        [title, organization||'', tender_type||'PRIVATE', published_date||null, submission_deadline, estimated_value||0, status||'UPCOMING', documents_url||'', notes||'', assigned_to||null, shouldNotify]
+        `INSERT INTO tenders(title, organization, tender_type, published_date, submission_deadline, estimated_value, status, documents_url, notes, assigned_to, notify_email, reminder_days, reminder_hours, reminder_minutes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [title, organization||'', tender_type||'PRIVATE', published_date||null, submission_deadline, estimated_value||0, status||'UPCOMING', documents_url||'', notes||'', assigned_to||null, shouldNotify, remDays, remHours, remMins]
       );
 
-      if (shouldNotify) {
+      if (shouldNotify && hasReminder) {
         const emails = await resolveMemberNotificationEmails(assigned_to || 'Admin');
-        scheduleTender3And1DayReminders({
+        scheduleTenderReminders({
           entityId: lastID,
           closingDateTime: submission_deadline.includes('T') ? submission_deadline : `${submission_deadline}T17:00:00+06:00`,
           recipientEmails: emails,
@@ -1496,8 +1950,19 @@ echo "======================================================"
             { label: 'Tender', value: title },
             { label: 'Organization', value: organization || '—' },
             { label: 'Closing Date', value: submission_deadline }
-          ]
+          ],
+          reminderDays: remDays,
+          reminderHours: remHours,
+          reminderMinutes: remMins,
         }).catch(console.error);
+        await notifyReminderConfigured({
+          entityLabel: 'Tender',
+          title,
+          link: '/tenders',
+          remDays,
+          remHours,
+          remMins,
+        });
       }
 
       res.status(201).json(await dbGet('SELECT * FROM tenders WHERE id=?', [lastID]));
@@ -1509,25 +1974,87 @@ echo "======================================================"
     });
     this.app.delete('/api/tenders/:id', requireRole('Admin'), async (req, res) => { await dbRun('DELETE FROM tenders WHERE id=?', [req.params.id]); res.json({ ok: true }); });
     this.app.patch('/api/tenders/:id', requireRole('Admin'), async (req, res) => {
-      const { title, organization, tender_type, published_date, submission_deadline, estimated_value, documents_url, notes, notify_email } = req.body;
+      const { title, organization, tender_type, published_date, submission_deadline, estimated_value, documents_url, notes, notify_email, reminder_days, reminder_hours, reminder_minutes, status } = req.body;
+      const current = await dbGet('SELECT * FROM tenders WHERE id=?', [req.params.id]) as any;
+      if (!current) return res.status(404).json({ error: 'Tender not found' });
+
+      const nextDays = reminder_days !== undefined
+        ? (reminder_days === '' || reminder_days === null ? null : Number(reminder_days))
+        : (current.reminder_days ?? null);
+      const nextHours = reminder_hours !== undefined
+        ? (reminder_hours === '' || reminder_hours === null ? null : Number(reminder_hours))
+        : (current.reminder_hours ?? null);
+      const nextMins = reminder_minutes !== undefined
+        ? (reminder_minutes === '' || reminder_minutes === null ? null : Number(reminder_minutes))
+        : (current.reminder_minutes ?? null);
+      const hasReminder = (Number(nextDays) > 0) || (Number(nextHours) > 0) || (Number(nextMins) > 0);
+      const nextNotify = notify_email !== undefined ? (notify_email ? 1 : 0) : (hasReminder ? 1 : (current.notify_email || 0));
+
       await dbRun(
-        `UPDATE tenders SET title=COALESCE(?,title), organization=COALESCE(?,organization), tender_type=COALESCE(?,tender_type), published_date=?, submission_deadline=COALESCE(?,submission_deadline), estimated_value=COALESCE(?,estimated_value), documents_url=COALESCE(?,documents_url), notes=COALESCE(?,notes), notify_email=COALESCE(?,notify_email) WHERE id=?`,
-        [title||null, organization||null, tender_type||null, published_date||null, submission_deadline||null, estimated_value??null, documents_url||null, notes||null, notify_email !== undefined ? (notify_email ? 1 : 0) : null, req.params.id]
+        `UPDATE tenders SET
+          title=COALESCE(?,title),
+          organization=COALESCE(?,organization),
+          tender_type=COALESCE(?,tender_type),
+          published_date=?,
+          submission_deadline=COALESCE(?,submission_deadline),
+          estimated_value=COALESCE(?,estimated_value),
+          documents_url=COALESCE(?,documents_url),
+          notes=COALESCE(?,notes),
+          notify_email=?,
+          status=COALESCE(?,status),
+          reminder_days=?,
+          reminder_hours=?,
+          reminder_minutes=?
+        WHERE id=?`,
+        [
+          title || null,
+          organization || null,
+          tender_type || null,
+          published_date !== undefined ? (published_date || null) : current.published_date,
+          submission_deadline || null,
+          estimated_value ?? null,
+          documents_url || null,
+          notes || null,
+          nextNotify,
+          status || null,
+          nextDays,
+          nextHours,
+          nextMins,
+          req.params.id
+        ]
       );
+
       const updatedTender = await dbGet('SELECT * FROM tenders WHERE id=?', [req.params.id]) as any;
-      if (updatedTender && updatedTender.notify_email && updatedTender.submission_deadline) {
-        const emails = await resolveMemberNotificationEmails(updatedTender.assigned_to || 'Admin');
-        scheduleTender3And1DayReminders({
-          entityId: Number(req.params.id),
-          closingDateTime: updatedTender.submission_deadline.includes('T') ? updatedTender.submission_deadline : `${updatedTender.submission_deadline}T17:00:00+06:00`,
-          recipientEmails: emails,
-          title: `Tender Closing: ${updatedTender.title}`,
-          rows: [
-            { label: 'Tender', value: updatedTender.title },
-            { label: 'Organization', value: updatedTender.organization || '—' },
-            { label: 'Closing Date', value: updatedTender.submission_deadline }
-          ]
-        }).catch(console.error);
+      if (updatedTender) {
+        if (updatedTender.notify_email && hasReminder && updatedTender.submission_deadline) {
+          const emails = await resolveMemberNotificationEmails(updatedTender.assigned_to || 'Admin');
+          scheduleTenderReminders({
+            entityId: Number(req.params.id),
+            closingDateTime: updatedTender.submission_deadline.includes('T') ? updatedTender.submission_deadline : `${updatedTender.submission_deadline}T17:00:00+06:00`,
+            recipientEmails: emails,
+            title: `Tender Closing: ${updatedTender.title}`,
+            rows: [
+              { label: 'Tender', value: updatedTender.title },
+              { label: 'Organization', value: updatedTender.organization || '—' },
+              { label: 'Closing Date', value: updatedTender.submission_deadline }
+            ],
+            reminderDays: updatedTender.reminder_days,
+            reminderHours: updatedTender.reminder_hours,
+            reminderMinutes: updatedTender.reminder_minutes,
+          }).catch(console.error);
+          if (reminder_days !== undefined || reminder_hours !== undefined || reminder_minutes !== undefined) {
+            await notifyReminderConfigured({
+              entityLabel: 'Tender',
+              title: updatedTender.title,
+              link: '/tenders',
+              remDays: updatedTender.reminder_days,
+              remHours: updatedTender.reminder_hours,
+              remMins: updatedTender.reminder_minutes,
+            });
+          }
+        } else {
+          dbRun('DELETE FROM email_jobs WHERE entity_type = ? AND entity_id = ? AND status = ?', ['tender', req.params.id, 'PENDING']).catch(() => {});
+        }
       }
       res.json(updatedTender);
     });
@@ -1553,54 +2080,196 @@ echo "======================================================"
       const todayStr = now.toISOString().split('T')[0]!;
       const today = new Date(todayStr);
 
-      // 1. Check Credentials (run once a day logically, but checked here)
-      // To prevent spamming every minute, we'll only print credential alerts if the time is exactly 09:00, 
-      // but for this mock, we'll just check them (in reality you'd track 'last_alerted' in DB).
-      // Since it's a mock, we will just evaluate the logic and let the user see it.
+      // 1. Check Credentials — custom day / hour / minute reminders → notify admins
       const creds = await dbAll('SELECT * FROM credentials') as any[];
       for (const c of creds) {
-        if (!c.reminder_days_before) continue;
-        const daysToAlert = c.reminder_days_before.split(',').map((d: string) => parseInt(d.trim()));
-        
-        // Expiry alerts
-        if (c.expiry_date) {
-          const exp = new Date(c.expiry_date);
-          const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-          if (daysToAlert.includes(diffDays)) {
-            // We'll log it if the current minute is 00 (top of the hour) to avoid spamming the console
-            if (now.getMinutes() === 0) console.log(`[ALERT] Credential '${c.name}' expires in ${diffDays} day(s)!`);
+        if (!c.expiry_date || !c.notify_email) continue;
+        const expStr = `${c.expiry_date}T09:00:00+06:00`;
+        const exp = new Date(expStr);
+        if (isNaN(exp.getTime())) continue;
+
+        const diffMs = exp.getTime() - now.getTime();
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+        const diffMinutes = Math.round(diffMs / (1000 * 60));
+
+        const dayRem = Number(c.reminder_days);
+        const hourRem = Number(c.reminder_hours);
+        const minRem = Number(c.reminder_minutes);
+
+        if (Number.isFinite(dayRem) && dayRem > 0 && diffDays === dayRem && now.getMinutes() === 0) {
+          await notifyAdmins(`Credential Reminder: "${c.name}" expires in ${dayRem} day(s).`, '/credentials');
+        }
+        if (Number.isFinite(hourRem) && hourRem > 0 && diffMinutes === hourRem * 60) {
+          await notifyAdmins(`Credential Reminder: "${c.name}" expires in ${hourRem} hour(s).`, '/credentials');
+        }
+        if (Number.isFinite(minRem) && minRem > 0 && diffMinutes === minRem) {
+          await notifyAdmins(`Credential Reminder: "${c.name}" expires in ${minRem} minute(s).`, '/credentials');
+        }
+
+        // Legacy comma-separated days fallback
+        if ((!Number.isFinite(dayRem) || dayRem <= 0) && c.reminder_days_before) {
+          const daysToAlert = String(c.reminder_days_before).split(',').map((d: string) => parseInt(d.trim(), 10)).filter((n: number) => Number.isFinite(n));
+          const calendarDiff = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          if (daysToAlert.includes(calendarDiff) && now.getMinutes() === 0) {
+            await notifyAdmins(`Credential Reminder: "${c.name}" expires in ${calendarDiff} day(s).`, '/credentials');
+            console.log(`[ALERT] Credential '${c.name}' expires in ${calendarDiff} day(s)!`);
           }
         }
       }
 
-      // 2. Check Meetings (minute-level precision)
+      // 2. Check Meetings — custom day / hour / minute reminders → notify admins
       const meetings = await dbAll('SELECT * FROM meetings') as any[];
       for (const m of meetings) {
-        if (!m.reminder_minutes_before) continue;
-        const minutesToAlert = m.reminder_minutes_before.split(',').map((minuteStr: string) => parseInt(minuteStr.trim()));
-        
+        if (!m.scheduled_at || !m.notify_email) continue;
+
         let schedStr = String(m.scheduled_at).trim();
         if (!schedStr.includes('Z') && !/[+-]\d{2}(:?\d{2})?$/.test(schedStr)) {
           if (schedStr.includes(' ') && !schedStr.includes('T')) schedStr = schedStr.replace(' ', 'T');
           schedStr += '+06:00';
         }
         const scheduledTime = new Date(schedStr);
-        const diffMinutes = Math.round((scheduledTime.getTime() - now.getTime()) / (1000 * 60));
-        
-        if (minutesToAlert.includes(diffMinutes)) {
-          console.log(`[ALERT] Meeting '${m.title}' with ${m.contact_name} is in exactly ${diffMinutes} minutes!`);
+        if (isNaN(scheduledTime.getTime())) continue;
+
+        const diffMs = scheduledTime.getTime() - now.getTime();
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+        const diffMinutes = Math.round(diffMs / (1000 * 60));
+
+        const dayRem = Number(m.reminder_days);
+        const hourRem = Number(m.reminder_hours);
+        const minRem = Number(m.reminder_minutes);
+
+        if (Number.isFinite(dayRem) && dayRem > 0 && diffDays === dayRem && now.getMinutes() === 0) {
+          await notifyAdmins(`Meeting Reminder: "${m.title}" in ${dayRem} day(s).`, '/meetings');
+        }
+        if (Number.isFinite(hourRem) && hourRem > 0 && diffMinutes === hourRem * 60) {
+          await notifyAdmins(`Meeting Reminder: "${m.title}" in ${hourRem} hour(s).`, '/meetings');
+        }
+        if (Number.isFinite(minRem) && minRem > 0 && diffMinutes === minRem) {
+          await notifyAdmins(`Meeting Reminder: "${m.title}" in ${minRem} minute(s).`, '/meetings');
+        }
+
+        // Legacy comma-separated minutes fallback
+        if ((!Number.isFinite(minRem) || minRem <= 0) && m.reminder_minutes_before) {
+          const minutesToAlert = String(m.reminder_minutes_before).split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => Number.isFinite(n) && n > 0);
+          if (minutesToAlert.includes(diffMinutes)) {
+            await notifyAdmins(`Meeting Reminder: "${m.title}" in ${diffMinutes} minute(s).`, '/meetings');
+            console.log(`[ALERT] Meeting '${m.title}' with ${m.contact_name} is in exactly ${diffMinutes} minutes!`);
+          }
         }
       }
 
-      // 3. Check Tenders (daily precision for 7, 3, 1 days)
+      // 3. Check Tenders — custom day / hour / minute reminders → notify admins
       const tenders = await dbAll('SELECT * FROM tenders') as any[];
       for (const t of tenders) {
         if (!t.submission_deadline || ['SUBMITTED','WON','LOST'].includes(t.status)) continue;
-        const deadline = new Date(t.submission_deadline);
-        const diffDays = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        if ([7, 3, 1].includes(diffDays)) {
-          if (now.getMinutes() === 0) console.log(`[ALERT] Tender '${t.title}' submission is due in ${diffDays} day(s)!`);
+        if (!t.notify_email) continue;
+
+        let dlStr = String(t.submission_deadline).trim();
+        if (!dlStr.includes('Z') && !/[+-]\d{2}(:?\d{2})?$/.test(dlStr)) {
+          if (dlStr.includes(' ') && !dlStr.includes('T')) dlStr = dlStr.replace(' ', 'T');
+          dlStr += '+06:00';
         }
+        const deadline = new Date(dlStr);
+        if (isNaN(deadline.getTime())) continue;
+
+        const diffMs = deadline.getTime() - now.getTime();
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+        const diffMinutes = Math.round(diffMs / (1000 * 60));
+
+        const dayRem = Number(t.reminder_days);
+        const hourRem = Number(t.reminder_hours);
+        const minRem = Number(t.reminder_minutes);
+
+        if (Number.isFinite(dayRem) && dayRem > 0 && diffDays === dayRem && now.getMinutes() === 0) {
+          await notifyAdmins(`Tender Reminder: "${t.title}" closes in ${dayRem} day(s).`, '/tenders');
+          console.log(`[ALERT] Tender '${t.title}' reminder: ${dayRem} day(s) left.`);
+        }
+        if (Number.isFinite(hourRem) && hourRem > 0 && diffHours === hourRem && now.getSeconds() < 30) {
+          // Fire once near the top of the matched hour window (cron is every minute; match exact hour remaining)
+          if (diffMinutes === hourRem * 60) {
+            await notifyAdmins(`Tender Reminder: "${t.title}" closes in ${hourRem} hour(s).`, '/tenders');
+            console.log(`[ALERT] Tender '${t.title}' reminder: ${hourRem} hour(s) left.`);
+          }
+        }
+        if (Number.isFinite(minRem) && minRem > 0 && diffMinutes === minRem) {
+          await notifyAdmins(`Tender Reminder: "${t.title}" closes in ${minRem} minute(s).`, '/tenders');
+          console.log(`[ALERT] Tender '${t.title}' reminder: ${minRem} minute(s) left.`);
+        }
+      }
+
+      // 3b. Check Tasks — custom day / hour / minute reminders → notify admins
+      try {
+        const reminderTasks = await dbAll(`SELECT * FROM tasks WHERE status != 'DONE' AND deadline IS NOT NULL AND notify_email = 1`) as any[];
+        for (const t of reminderTasks) {
+          let dlStr = String(t.deadline).trim();
+          if (!dlStr.includes('Z') && !/[+-]\d{2}(:?\d{2})?$/.test(dlStr)) {
+            if (dlStr.includes(' ') && !dlStr.includes('T')) dlStr = dlStr.replace(' ', 'T');
+            dlStr += '+06:00';
+          }
+          const deadline = new Date(dlStr);
+          if (isNaN(deadline.getTime())) continue;
+
+          const diffMs = deadline.getTime() - now.getTime();
+          const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+          const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+          const diffMinutes = Math.round(diffMs / (1000 * 60));
+
+          const dayRem = Number(t.reminder_days);
+          const hourRem = Number(t.reminder_hours);
+          const minRem = Number(t.reminder_minutes);
+
+          if (Number.isFinite(dayRem) && dayRem > 0 && diffDays === dayRem && now.getMinutes() === 0) {
+            await notifyAdmins(`Task Reminder: "${t.title}" due in ${dayRem} day(s).`, '/dashboard');
+          }
+          if (Number.isFinite(hourRem) && hourRem > 0 && diffMinutes === hourRem * 60) {
+            await notifyAdmins(`Task Reminder: "${t.title}" due in ${hourRem} hour(s).`, '/dashboard');
+          }
+          if (Number.isFinite(minRem) && minRem > 0 && diffMinutes === minRem) {
+            await notifyAdmins(`Task Reminder: "${t.title}" due in ${minRem} minute(s).`, '/dashboard');
+          }
+        }
+      } catch (err) {
+        console.error('Error in Task custom reminders cron:', err);
+      }
+
+      // 3c. Check Leaves — custom day / hour / minute reminders
+      try {
+        const leaveRows = await dbAll(`SELECT l.*, m.name as member_name FROM leave_requests l LEFT JOIN members m ON l.member_id=m.id WHERE l.notify_email = 1 AND l.status != 'REJECTED' AND l.status != 'CANCELLED'`) as any[];
+        for (const l of leaveRows) {
+          if (!l.start_date) continue;
+          let dlStr = String(l.start_date).trim();
+          if (!dlStr.includes('T')) dlStr = `${dlStr}T09:00:00+06:00`;
+          else if (!dlStr.includes('Z') && !/[+-]\d{2}(:?\d{2})?$/.test(dlStr)) {
+            if (dlStr.includes(' ') && !dlStr.includes('T')) dlStr = dlStr.replace(' ', 'T');
+            dlStr += '+06:00';
+          }
+          const deadline = new Date(dlStr);
+          if (isNaN(deadline.getTime())) continue;
+
+          const diffMs = deadline.getTime() - now.getTime();
+          const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+          const diffMinutes = Math.round(diffMs / (1000 * 60));
+
+          const dayRem = Number(l.reminder_days);
+          const hourRem = Number(l.reminder_hours);
+          const minRem = Number(l.reminder_minutes);
+
+          const who = l.member_name || 'Employee';
+          if (Number.isFinite(dayRem) && dayRem > 0 && diffDays === dayRem && now.getMinutes() === 0) {
+            await notifyAdmins(`Leave Reminder: ${who} (${l.leave_type}) starts in ${dayRem} day(s).`, '/hr?tab=leave');
+          }
+          if (Number.isFinite(hourRem) && hourRem > 0 && diffMinutes === hourRem * 60) {
+            await notifyAdmins(`Leave Reminder: ${who} (${l.leave_type}) starts in ${hourRem} hour(s).`, '/hr?tab=leave');
+          }
+          if (Number.isFinite(minRem) && minRem > 0 && diffMinutes === minRem) {
+            await notifyAdmins(`Leave Reminder: ${who} (${l.leave_type}) starts in ${minRem} minute(s).`, '/hr?tab=leave');
+          }
+        }
+      } catch (err) {
+        console.error('Error in Leave custom reminders cron:', err);
       }
 
       // 4. Wi-Fi Auto Check-Out Engine (runs every minute)

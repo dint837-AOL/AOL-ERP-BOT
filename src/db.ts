@@ -211,10 +211,25 @@ export async function initDB() {
     try { await pgPool.query("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'Cash'"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS notify_telegram INTEGER DEFAULT 0"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS reminder_days INTEGER"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS reminder_hours INTEGER"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS reminder_minutes INTEGER"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS reminder_days INTEGER"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS reminder_hours INTEGER"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS reminder_minutes INTEGER"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE meetings ADD COLUMN IF NOT EXISTS notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE meetings ADD COLUMN IF NOT EXISTS reminder_days INTEGER"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE meetings ADD COLUMN IF NOT EXISTS reminder_hours INTEGER"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE meetings ADD COLUMN IF NOT EXISTS reminder_minutes INTEGER"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE tenders ADD COLUMN IF NOT EXISTS notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE tenders ADD COLUMN IF NOT EXISTS reminder_days INTEGER"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE tenders ADD COLUMN IF NOT EXISTS reminder_hours INTEGER"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE tenders ADD COLUMN IF NOT EXISTS reminder_minutes INTEGER"); } catch (e) {}
     try { await pgPool.query("ALTER TABLE credentials ADD COLUMN IF NOT EXISTS notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE credentials ADD COLUMN IF NOT EXISTS reminder_days INTEGER"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE credentials ADD COLUMN IF NOT EXISTS reminder_hours INTEGER"); } catch (e) {}
+    try { await pgPool.query("ALTER TABLE credentials ADD COLUMN IF NOT EXISTS reminder_minutes INTEGER"); } catch (e) {}
 
   } else {
     isPg = false;
@@ -379,10 +394,25 @@ export async function initDB() {
     try { await sqliteDb.exec("ALTER TABLE expenses ADD COLUMN payment_method TEXT DEFAULT 'Cash'"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE tasks ADD COLUMN notify_telegram INTEGER DEFAULT 0"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE tasks ADD COLUMN notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE tasks ADD COLUMN reminder_days INTEGER"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE tasks ADD COLUMN reminder_hours INTEGER"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE tasks ADD COLUMN reminder_minutes INTEGER"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE leave_requests ADD COLUMN notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE leave_requests ADD COLUMN reminder_days INTEGER"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE leave_requests ADD COLUMN reminder_hours INTEGER"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE leave_requests ADD COLUMN reminder_minutes INTEGER"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE meetings ADD COLUMN notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE meetings ADD COLUMN reminder_days INTEGER"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE meetings ADD COLUMN reminder_hours INTEGER"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE meetings ADD COLUMN reminder_minutes INTEGER"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE tenders ADD COLUMN notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE tenders ADD COLUMN reminder_days INTEGER"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE tenders ADD COLUMN reminder_hours INTEGER"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE tenders ADD COLUMN reminder_minutes INTEGER"); } catch (e) {}
     try { await sqliteDb.exec("ALTER TABLE credentials ADD COLUMN notify_email INTEGER DEFAULT 0"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE credentials ADD COLUMN reminder_days INTEGER"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE credentials ADD COLUMN reminder_hours INTEGER"); } catch (e) {}
+    try { await sqliteDb.exec("ALTER TABLE credentials ADD COLUMN reminder_minutes INTEGER"); } catch (e) {}
   }
 
   // Seed default admin and employee accounts
@@ -390,7 +420,8 @@ export async function initDB() {
   const employeeHash = await bcrypt.hash('Employee@123', 10);
 
   const defaultAccounts = [
-    { name: 'Ahsan Kabir', email: 'admin@alliedone.com', role: 'Admin', color: '#ff4d4f', hash: adminHash, notify_email: 'ahsankabir13@gmail.com' },
+    { name: 'Ahsan Kabir Admin', email: 'admin@alliedone.com', role: 'Admin', color: '#ff4d4f', hash: adminHash, notify_email: 'ahsankabir13@gmail.com' },
+    { name: 'Ahsan Kabir', email: 'ahsankabir@alliedone.com', role: 'Employee', color: '#ff7a45', hash: employeeHash, notify_email: 'ahsankabir13@gmail.com' },
     { name: 'Tajimur Rafi', email: 'rafi@alliedone.com', role: 'Employee', color: '#4f7eff', hash: employeeHash, notify_email: 'tajimurrafi@gmail.com' },
     { name: 'Arijit Orko', email: 'orko@alliedone.com', role: 'Employee', color: '#26c486', hash: employeeHash, notify_email: 'orko552@gmail.com' },
     { name: 'Kamrul Islam', email: 'kamrul@alliedone.com', role: 'Employee', color: '#f5a623', hash: employeeHash, notify_email: '' },
@@ -410,6 +441,12 @@ export async function initDB() {
       );
     }
   }
+
+  // Ensure admin@ stays Admin labeled distinctly from employee Ahsan Kabir
+  try {
+    await dbRun(`UPDATE members SET role = 'Admin', name = 'Ahsan Kabir Admin' WHERE LOWER(TRIM(email)) = 'admin@alliedone.com'`);
+    await dbRun(`UPDATE members SET role = 'Employee', name = 'Ahsan Kabir' WHERE LOWER(TRIM(email)) = 'ahsankabir@alliedone.com'`);
+  } catch (e) {}
 
   // Seed default settings if missing
   const settingsRows = await dbAll('SELECT key FROM settings') as any[];

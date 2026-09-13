@@ -182,7 +182,7 @@ export function buildAolErpHtml(title: string, rows: Array<{ label: string; valu
 
               ${notice ? `
                 <div style="margin-top: 18px; padding: 12px 16px; background-color: rgba(79, 126, 255, 0.12); border-left: 4px solid #4f7eff; border-radius: 4px; color: #cbd5e1; font-size: 13px; line-height: 1.5;">
-                  🔔 <strong>Notice:</strong> ${notice}
+                  <strong>Notice:</strong> ${notice}
                 </div>
               ` : ''}
             </td>
@@ -283,8 +283,141 @@ export async function schedule24And15HourReminders(params: {
 }
 
 /**
- * Schedule 3-day and 1-day reminder email jobs specifically for Tenders
+ * Schedule custom Day / Hour / Minute reminder email jobs for tenders or tasks.
+ * Only filled offsets create jobs (e.g. day=2 only → one notification 2 days before).
  */
+export async function scheduleCustomReminders(params: {
+  entityType: 'tender' | 'task' | 'meeting' | 'credential' | 'leave';
+  entityId: number;
+  targetDateTime: string | Date;
+  recipientEmails: string[];
+  title: string;
+  rows: Array<{ label: string; value: string }>;
+  reminderDays?: number | null;
+  reminderHours?: number | null;
+  reminderMinutes?: number | null;
+}) {
+  const offsets: Array<{ jobType: string; ms: number; label: string }> = [];
+  const days = Number(params.reminderDays);
+  const hours = Number(params.reminderHours);
+  const minutes = Number(params.reminderMinutes);
+  if (Number.isFinite(days) && days > 0) {
+    offsets.push({ jobType: `${days}d`, ms: days * 24 * 60 * 60 * 1000, label: `${days} day(s)` });
+  }
+  if (Number.isFinite(hours) && hours > 0) {
+    offsets.push({ jobType: `${hours}h`, ms: hours * 60 * 60 * 1000, label: `${hours} hour(s)` });
+  }
+  if (Number.isFinite(minutes) && minutes > 0) {
+    offsets.push({ jobType: `${minutes}m`, ms: minutes * 60 * 1000, label: `${minutes} minute(s)` });
+  }
+  return scheduleOffsetJobs({
+    entityType: params.entityType,
+    entityId: params.entityId,
+    targetDateTime: params.targetDateTime,
+    recipientEmails: params.recipientEmails,
+    title: params.title,
+    rows: params.rows,
+    offsets,
+  });
+}
+
+/** @deprecated Prefer scheduleCustomReminders */
+export async function scheduleTenderReminders(params: {
+  entityId: number;
+  closingDateTime: string | Date;
+  recipientEmails: string[];
+  title: string;
+  rows: Array<{ label: string; value: string }>;
+  reminderDays?: number | null;
+  reminderHours?: number | null;
+  reminderMinutes?: number | null;
+}) {
+  return scheduleCustomReminders({
+    entityType: 'tender',
+    entityId: params.entityId,
+    targetDateTime: params.closingDateTime,
+    recipientEmails: params.recipientEmails,
+    title: params.title,
+    rows: params.rows,
+    reminderDays: params.reminderDays,
+    reminderHours: params.reminderHours,
+    reminderMinutes: params.reminderMinutes,
+  });
+}
+
+async function scheduleOffsetJobs(params: {
+  entityType: 'tender' | 'task' | 'meeting' | 'credential' | 'leave';
+  entityId: number;
+  targetDateTime: string | Date;
+  recipientEmails: string[];
+  title: string;
+  rows: Array<{ label: string; value: string }>;
+  offsets: Array<{ jobType: string; ms: number; label: string }>;
+}) {
+  const target = new Date(params.targetDateTime);
+  if (isNaN(target.getTime())) {
+    console.warn(`[Brevo] Invalid date for ${params.entityType} reminder: ${params.targetDateTime}`);
+    return;
+  }
+
+  try {
+    await dbRun('DELETE FROM email_jobs WHERE entity_type = ? AND entity_id = ? AND status = ?', [params.entityType, params.entityId, 'PENDING']);
+  } catch (err) {
+    console.error(`[Brevo] Error clearing previous ${params.entityType} jobs:`, err);
+  }
+
+  if (params.offsets.length === 0 || !params.recipientEmails.length) {
+    console.log(`[Brevo] No ${params.entityType} reminder offsets set for #${params.entityId}; cleared pending jobs.`);
+    return;
+  }
+
+  const now = Date.now();
+  const targetMs = target.getTime();
+  const kindLabel =
+    params.entityType === 'tender' ? 'Tender Closing'
+    : params.entityType === 'meeting' ? 'Meeting'
+    : params.entityType === 'credential' ? 'Credential Expiry'
+    : params.entityType === 'leave' ? 'Leave Start'
+    : 'Task Deadline';
+  const beforeLabel =
+    params.entityType === 'tender' ? 'tender closing deadline'
+    : params.entityType === 'meeting' ? 'meeting'
+    : params.entityType === 'credential' ? 'credential expiry'
+    : params.entityType === 'leave' ? 'leave start'
+    : 'task deadline';
+
+  for (const email of params.recipientEmails) {
+    let staggerMs = 10000;
+    for (const offset of params.offsets) {
+      const sendAtRaw = new Date(targetMs - offset.ms);
+      const sendAt = sendAtRaw.getTime() <= now ? new Date(now + staggerMs) : sendAtRaw;
+      staggerMs += 10000;
+
+      const html = buildAolErpHtml(
+        `${kindLabel} Reminder: ${params.title} (${offset.label} left)`,
+        params.rows,
+        `This is an automated reminder ${offset.label} before the ${beforeLabel}.`
+      );
+
+      await dbRun(`
+        INSERT INTO email_jobs (entity_type, entity_id, job_type, scheduled_at, recipient_email, subject, html_content, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
+      `, [
+        params.entityType,
+        params.entityId,
+        offset.jobType,
+        sendAt.toISOString(),
+        email,
+        `AOL_ERP: Reminder (${offset.label}) - ${kindLabel}: ${params.title}`,
+        html
+      ]);
+    }
+  }
+
+  console.log(`[Brevo] Scheduled ${params.offsets.length} ${params.entityType} reminder(s) for #${params.entityId} to [${params.recipientEmails.join(', ')}]`);
+}
+
+/** Legacy 3-day + 1-day tender reminders */
 export async function scheduleTender3And1DayReminders(params: {
   entityId: number;
   closingDateTime: string | Date;
@@ -292,74 +425,18 @@ export async function scheduleTender3And1DayReminders(params: {
   title: string;
   rows: Array<{ label: string; value: string }>;
 }) {
-  const target = new Date(params.closingDateTime);
-  if (isNaN(target.getTime())) {
-    console.warn(`[Brevo] Invalid closing date for tender reminder: ${params.closingDateTime}`);
-    return;
-  }
-
-  const now = Date.now();
-  const targetMs = target.getTime();
-
-  // 3 days prior
-  const time3d = new Date(targetMs - 3 * 24 * 60 * 60 * 1000);
-  // 1 day prior
-  const time1d = new Date(targetMs - 1 * 24 * 60 * 60 * 1000);
-
-  // Clear any existing pending jobs for this tender
-  try {
-    await dbRun('DELETE FROM email_jobs WHERE entity_type = ? AND entity_id = ? AND status = ?', ['tender', params.entityId, 'PENDING']);
-  } catch (err) {
-    console.error('[Brevo] Error clearing previous tender jobs:', err);
-  }
-
-  for (const email of params.recipientEmails) {
-    // 3-day job
-    const html3d = buildAolErpHtml(
-      `Tender Closing Reminder: ${params.title} (3 Days Left)`,
-      params.rows,
-      'This is an automated 3-day reminder before the tender closing deadline.'
-    );
-    const sendAt3d = time3d.getTime() <= now ? new Date(now + 10000) : time3d;
-
-    await dbRun(`
-      INSERT INTO email_jobs (entity_type, entity_id, job_type, scheduled_at, recipient_email, subject, html_content, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
-    `, [
-      'tender',
-      params.entityId,
-      '3d',
-      sendAt3d.toISOString(),
-      email,
-      `AOL_ERP: 3-Day Reminder - Tender Closing: ${params.title}`,
-      html3d
-    ]);
-
-    // 1-day job
-    const html1d = buildAolErpHtml(
-      `Tender Closing Final Reminder: ${params.title} (1 Day Left)`,
-      params.rows,
-      'This is an urgent 1-day final reminder before the tender closing deadline.'
-    );
-    const sendAt1d = time1d.getTime() <= now ? new Date(now + 20000) : time1d;
-
-    if (sendAt1d.getTime() > sendAt3d.getTime() || time1d.getTime() > now) {
-      await dbRun(`
-        INSERT INTO email_jobs (entity_type, entity_id, job_type, scheduled_at, recipient_email, subject, html_content, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
-      `, [
-        'tender',
-        params.entityId,
-        '1d',
-        sendAt1d.toISOString(),
-        email,
-        `AOL_ERP: 1-Day Final Reminder - Tender Closing: ${params.title}`,
-        html1d
-      ]);
-    }
-  }
-
-  console.log(`[Brevo] Scheduled 3-day & 1-day reminders for tender #${params.entityId} to [${params.recipientEmails.join(', ')}]`);
+  return scheduleOffsetJobs({
+    entityType: 'tender',
+    entityId: params.entityId,
+    targetDateTime: params.closingDateTime,
+    recipientEmails: params.recipientEmails,
+    title: params.title,
+    rows: params.rows,
+    offsets: [
+      { jobType: '3d', ms: 3 * 24 * 60 * 60 * 1000, label: '3 day(s)' },
+      { jobType: '1d', ms: 1 * 24 * 60 * 60 * 1000, label: '1 day(s)' },
+    ],
+  });
 }
 
 /**

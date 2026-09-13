@@ -9,7 +9,7 @@
 
 | Name | Email | Password | Role |
 |---|---|---|---|
-| System Admin | admin@alliedone.com | Admin@123 | Admin |
+| Ahsan Kabir Admin | admin@alliedone.com | Admin@123 | Admin |
 
 Admin can: Approve/reject leave requests, View all attendance logs, Generate monthly attendance reports, Download CSV reports, Manage all modules.
 

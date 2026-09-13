@@ -56,6 +56,44 @@
             display: flex;
             align-items: center;
             gap: 15px;
+            position: relative;
+        }
+
+        .chat-close {
+            margin-left: auto;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid var(--border);
+            color: #94a3b8;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.15s;
+        }
+
+        .chat-close:hover {
+            background: rgba(255,255,255,0.14);
+            color: #f8fafc;
+            transform: none;
+        }
+
+        .chat-close svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        @media (max-width: 640px) {
+            .chat-container {
+                height: 100vh;
+                height: 100dvh;
+                max-width: 100%;
+                border-radius: 0;
+                border: none;
+            }
         }
 
         .avatar {
@@ -231,6 +269,9 @@
                 <h2>AlliedOne ERP Bot</h2>
                 <p><span class="status-dot"></span> Online and ready</p>
             </div>
+            <button type="button" class="chat-close" id="chatCloseBtn" title="Close" aria-label="Close chat">
+                <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
         </div>
         
         <div class="chat-messages" id="chatMessages">
@@ -307,6 +348,14 @@
         sendBtn.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
+        });
+
+        document.getElementById('chatCloseBtn').addEventListener('click', () => {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = '/';
+            }
         });
     </script>
 </body>

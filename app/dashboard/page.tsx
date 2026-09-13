@@ -67,6 +67,9 @@ type Task = {
   is_archived?: number;
   notify_telegram?: number;
   notify_email?: number;
+  reminder_days?: number | null;
+  reminder_hours?: number | null;
+  reminder_minutes?: number | null;
 };
 
 type Member = { id: number; name: string; avatar_color: string; role: string; };
@@ -119,14 +122,42 @@ function DeadlineEditor({ defaultValue, onSave }: { defaultValue: string; onSave
   );
 }
 
-function CompactMobileTaskCard({ task, onClick, onToggleBell }: { task: any; onClick: () => void; onToggleBell?: (e: React.MouseEvent) => void }) {
-  const dl = task.deadline ? new Date(task.deadline) : null;
-  const shortName = task.assignee_name
-    ? task.assignee_name.trim().split(/\s+/).map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
-    : 'U';
-  const st = getStatusStyle(task.status);
-  const hasNotify = Boolean(task.notify_telegram || task.notify_email);
+function getCountdownShort(deadline?: string): string {
+  if (!deadline) return '—';
+  const diff = new Date(deadline).getTime() - Date.now();
+  if (diff < 0) return '0M';
+  const days = Math.floor(diff / 86400000);
+  if (days >= 1) return `${days}D`;
+  const hours = Math.floor(diff / 3600000);
+  if (hours >= 1) return `${hours}H`;
+  const mins = Math.max(1, Math.floor(diff / 60000));
+  return `${mins}M`;
+}
 
+function getInitials(name?: string): string {
+  if (!name?.trim()) return '—';
+  return name.trim().split(/\s+/).map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
+}
+
+function toLocalInput(iso?: string) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch {
+    return '';
+  }
+}
+
+const WHITE = '#ffffff';
+const MUTED_LABEL = 'rgba(255,255,255,0.55)';
+const BLUE = '#4f7eff';
+const BLUE_BG = 'rgba(79,126,255,0.15)';
+const BLUE_GRAD = 'linear-gradient(135deg, #4f7eff, #6c4fe3)';
+
+function CompactMobileTaskCard({ task, onClick }: { task: any; onClick: () => void }) {
   return (
     <div
       onClick={onClick}
@@ -146,147 +177,157 @@ function CompactMobileTaskCard({ task, onClick, onToggleBell }: { task: any; onC
       onMouseOver={e => { e.currentTarget.style.borderColor = '#4f7eff'; e.currentTarget.style.background = 'rgba(79,126,255,0.04)'; }}
       onMouseOut={e => { e.currentTarget.style.borderColor = '#2a3050'; e.currentTarget.style.background = '#161926'; }}
     >
-      {/* Status glowing dot */}
-      <div style={{ width: 8, height: 8, borderRadius: '50%', background: st.color, boxShadow: st.dotGlow, flexShrink: 0 }} />
-
-      {/* Title */}
-      <div style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.92rem', color: '#f8fafc', fontWeight: 600 }}>
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: '50%',
+          background: task.assignee_color || '#4f7eff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '0.68rem',
+          fontWeight: 700,
+          color: WHITE,
+          flexShrink: 0,
+        }}
+      >
+        {getInitials(task.assignee_name)}
+      </div>
+      <div style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.92rem', color: WHITE, fontWeight: 600 }}>
         {task.title || 'Untitled Task'}
       </div>
-
-      {/* Bell icon */}
-      <button
-        type="button"
-        onClick={e => { e.stopPropagation(); onToggleBell && onToggleBell(e); }}
-        style={{ background: 'none', border: 'none', padding: '4px 6px', cursor: 'pointer', color: hasNotify ? '#eab308' : '#475569', display: 'flex', alignItems: 'center' }}
-        title={hasNotify ? 'Notifications ON (click to turn off)' : 'Notifications OFF (click to turn on)'}
-      >
-        {hasNotify ? <Bell size={15} /> : <BellOff size={15} />}
-      </button>
-
-      {/* Assignee Avatar */}
-      {task.assignee_name && (
-        <div style={{ width: 26, height: 26, borderRadius: '50%', background: task.assignee_color || '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-          {shortName}
-        </div>
-      )}
-
-      {/* Deadline badge */}
-      {dl && (
-        <div style={{ fontSize: '0.78rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
-          {dl.toLocaleString('en-GB', { day: 'numeric', month: 'short' })}
-        </div>
-      )}
+      <div style={{ fontSize: '0.82rem', color: WHITE, whiteSpace: 'nowrap', fontWeight: 600, flexShrink: 0, marginLeft: 40 }}>
+        {getCountdownShort(task.deadline)}
+      </div>
     </div>
   );
 }
 
 /* ─── Blank new-task row shape ─────────────────────── */
-const BLANK_ROW = { action_type: '', title: '', recipient: '', assigned_to: '', status: 'DONE', deadline: '', notify_telegram: 0, notify_email: 0 };
+const BLANK_ROW = {
+  action_type: 'SMS',
+  title: '',
+  recipient: '',
+  assigned_to: '',
+  status: 'PENDING',
+  deadline: '',
+  notify_telegram: 0,
+  notify_email: 0,
+  reminder_days: '',
+  reminder_hours: '',
+  reminder_minutes: '',
+};
 
-/* ─── Shared inline field styles ─── */
+/* ─── Shared inline field styles (tenders-matching) ─── */
 const fieldInputSt: React.CSSProperties = {
-  background: '#131722', border: '1px solid #2a3050', borderRadius: '8px',
-  color: '#f1f5f9', fontSize: '0.84rem', padding: '9px 11px',
+  background: '#131722', border: '1px solid #2a3050', borderRadius: 7,
+  color: WHITE, fontSize: '0.78rem', padding: '6px 9px',
   width: '100%', outline: 'none', fontFamily: 'inherit'
 };
-const fieldSelectSt: React.CSSProperties = { ...fieldInputSt, cursor: 'pointer' };
+const fieldEditSt: React.CSSProperties = { ...fieldInputSt, border: '1px solid #3a4568' };
+const fieldSelectSt: React.CSSProperties = { ...fieldEditSt, cursor: 'pointer' };
+const labelSt: React.CSSProperties = {
+  fontSize: '0.62rem', color: MUTED_LABEL, textTransform: 'uppercase',
+  marginBottom: 2, fontWeight: 600, letterSpacing: '0.04em',
+};
+const valueSt: React.CSSProperties = { color: WHITE, fontWeight: 500, fontSize: '0.82rem', lineHeight: 1.25 };
 
+function FieldLabel({ children, optional }: { children: React.ReactNode; optional?: boolean }) {
+  return <div style={labelSt}>{children}{optional ? ' (optional)' : ''}</div>;
+}
 
+function ReminderBoxes({
+  days, hours, minutes, editMode, onChange,
+}: {
+  days: string; hours: string; minutes: string; editMode: boolean;
+  onChange: (field: 'reminder_days' | 'reminder_hours' | 'reminder_minutes', val: string) => void;
+}) {
+  const box = (label: string, field: 'reminder_days' | 'reminder_hours' | 'reminder_minutes', val: string, ph: string) => (
+    <div style={{ flex: 1 }}>
+      <div style={{ ...labelSt, marginBottom: 2 }}>{label}</div>
+      {editMode ? (
+        <input type="number" min={0} placeholder={ph} value={val} onChange={e => onChange(field, e.target.value)}
+          style={{ ...fieldEditSt, textAlign: 'center', padding: '5px 6px' }} />
+      ) : (
+        <div style={{ background: '#131722', border: '1px solid #2a3050', borderRadius: 7, padding: '5px 6px', textAlign: 'center', color: WHITE, fontWeight: 600, fontSize: '0.8rem' }}>
+          {val || '—'}
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <div>
+      <FieldLabel optional>Reminder</FieldLabel>
+      <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+        {box('Day', 'reminder_days', days, '2')}
+        {box('Hour', 'reminder_hours', hours, '10')}
+        {box('Minute', 'reminder_minutes', minutes, '30')}
+      </div>
+    </div>
+  );
+}
 
-/* ─── Mobile Add Task Bottom Sheet / Dialog ─── */
+/* ─── Mobile Add Task Sheet (tenders style) ─── */
 function MobileAddSheet({ newRow, setNewRow, members, onSubmit, saving, onClose }: {
   newRow: any; setNewRow: any; members: Member[];
   onSubmit: () => void; saving: boolean; onClose: () => void;
 }) {
+  const set = (field: string, val: string) => setNewRow({ ...newRow, [field]: val });
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 800, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '16px' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 800, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)' }} />
-      <div style={{ position: 'relative', background: '#161926', borderRadius: '20px', border: '1px solid #2a3050', padding: '24px 20px 32px', width: '100%', maxWidth: '480px', maxHeight: '88vh', overflowY: 'auto' }}>
-        <div style={{ width: 38, height: 4, background: '#2a3050', borderRadius: 2, margin: '0 auto 18px' }} />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>Add New Task</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 4 }}><X size={18} /></button>
+      <div style={{ position: 'relative', background: '#161926', borderRadius: '18px 18px 0 0', border: '1px solid #2a3050', borderBottom: 'none', padding: '12px 16px 16px', paddingBottom: 'max(14px, env(safe-area-inset-bottom))', width: '100%', maxWidth: 560, maxHeight: '100dvh', overflow: 'hidden' }}>
+        <div style={{ width: 36, height: 3, background: '#2a3050', borderRadius: 2, margin: '0 auto 10px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: WHITE, margin: 0 }}>Add Task</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: WHITE, cursor: 'pointer', padding: 4, opacity: 0.7 }}><X size={18} /></button>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Action */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div>
-            <label style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Action Type</label>
-            <select value={newRow.action_type} onChange={e => setNewRow({ ...newRow, action_type: e.target.value })} style={fieldSelectSt}>
-              {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
-            </select>
+            <FieldLabel>Task Details</FieldLabel>
+            <input type="text" placeholder="Task title…" value={newRow.title} onChange={e => set('title', e.target.value)} style={{ ...fieldEditSt, fontWeight: 600 }} />
           </div>
-          {/* Title */}
-          <div>
-            <label style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Activity Name *</label>
-            <input type="text" placeholder="Enter activity name…" value={newRow.title}
-              onChange={e => setNewRow({ ...newRow, title: e.target.value })}
-              onKeyDown={e => { if (e.key === 'Enter') onSubmit(); }}
-              style={{ ...fieldInputSt, fontSize: '0.92rem' }} />
-          </div>
-          {/* Recipient */}
-          <div>
-            <label style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Recipient / Contact</label>
-            <input type="text" placeholder="Name, email, or phone…" value={newRow.recipient}
-              onChange={e => setNewRow({ ...newRow, recipient: e.target.value })} style={fieldInputSt} />
-          </div>
-          {/* Assignee + Status */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div>
-              <label style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Assignee</label>
-              <select value={newRow.assigned_to} onChange={e => setNewRow({ ...newRow, assigned_to: e.target.value })} style={fieldSelectSt}>
-                <option value="">Select…</option>
-                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              <FieldLabel>Assignee</FieldLabel>
+              <select value={newRow.assigned_to} onChange={e => set('assigned_to', e.target.value)} style={fieldSelectSt}>
+                <option value="">Unassigned</option>
+                {[...members].sort((a, b) => a.name.localeCompare(b.name)).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
             <div>
-              <label style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Status</label>
-              <select value={newRow.status} onChange={e => setNewRow({ ...newRow, status: e.target.value as any })} style={fieldSelectSt}>
-                <option value="DONE">Done</option>
-                <option value="WIP">WIP</option>
+              <FieldLabel optional>Recipient</FieldLabel>
+              <input type="text" placeholder="Name / phone…" value={newRow.recipient} onChange={e => set('recipient', e.target.value)} style={fieldEditSt} />
+            </div>
+            <div>
+              <FieldLabel>Activity</FieldLabel>
+              <select value={newRow.action_type} onChange={e => set('action_type', e.target.value)} style={fieldSelectSt}>
+                {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
+              </select>
+            </div>
+            <div>
+              <FieldLabel>Status</FieldLabel>
+              <select value={newRow.status} onChange={e => set('status', e.target.value)} style={fieldSelectSt}>
                 <option value="PENDING">Pending</option>
+                <option value="WIP">WIP</option>
+                <option value="DONE">Done</option>
               </select>
             </div>
           </div>
-          {/* Deadline */}
           <div>
-            <label style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Deadline (optional)</label>
+            <FieldLabel>Deadline</FieldLabel>
             <input type="datetime-local" value={newRow.deadline}
               onClick={e => { try { (e.target as HTMLInputElement).showPicker?.(); } catch {} }}
-              onChange={e => setNewRow({ ...newRow, deadline: e.target.value })}
-              style={{ ...fieldInputSt, colorScheme: 'dark', cursor: 'pointer' }} />
+              onChange={e => set('deadline', e.target.value)}
+              style={{ ...fieldEditSt, colorScheme: 'dark' }} />
           </div>
-
-          {/* Notifications Bell */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#131722', border: '1px solid #2a3050', borderRadius: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 30, height: 30, borderRadius: '50%', background: newRow.notify_telegram ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: newRow.notify_telegram ? '#eab308' : '#64748b' }}>
-                {newRow.notify_telegram ? <Bell size={16} /> : <BellOff size={16} />}
-              </div>
-              <div>
-                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9' }}>Notifications</div>
-                <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Telegram &amp; Brevo alerts</div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setNewRow({ ...newRow, notify_telegram: newRow.notify_telegram ? 0 : 1, notify_email: newRow.notify_telegram ? 0 : 1 })}
-              style={{
-                background: newRow.notify_telegram ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)',
-                border: `1px solid ${newRow.notify_telegram ? '#eab308' : '#334155'}`,
-                color: newRow.notify_telegram ? '#eab308' : '#94a3b8',
-                borderRadius: '8px', padding: '6px 12px', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 5
-              }}
-            >
-              {newRow.notify_telegram ? <Check size={13} /> : null}
-              {newRow.notify_telegram ? 'ON' : 'OFF'}
-            </button>
-          </div>
-
-          {/* Submit */}
+          <ReminderBoxes
+            days={newRow.reminder_days || ''} hours={newRow.reminder_hours || ''} minutes={newRow.reminder_minutes || ''}
+            editMode onChange={(f, v) => set(f, v)}
+          />
           <button onClick={onSubmit} disabled={saving}
-            style={{ background: 'linear-gradient(135deg,#4f7eff,#6c4fe3)', border: 'none', color: '#fff', borderRadius: '12px', padding: '14px', fontSize: '1rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: saving ? 0.6 : 1, marginTop: 4, transition: 'opacity 0.15s', boxShadow: '0 4px 15px rgba(79,126,255,0.3)' }}>
+            style={{ marginTop: 4, background: BLUE_GRAD, border: 'none', color: WHITE, borderRadius: 9, padding: '11px', fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1, boxShadow: '0 4px 15px rgba(79,126,255,0.3)' }}>
             {saving ? 'Saving...' : 'Save'}
           </button>
         </div>
@@ -304,7 +345,7 @@ export default function DashboardPage() {
   const [members,       setMembers]       = useState<Member[]>([]);
   const [currentDate,   setCurrentDate]   = useState(getLocalDateString());
   // Employees start on 'team' view (their own tasks); admins default to 'admin' full table
-  const [tab,           setTab]           = useState<'admin' | 'team' | 'board'>(isAdmin ? 'admin' : 'team');
+  const [tab,           setTab]           = useState<'admin' | 'team'>(isAdmin ? 'admin' : 'team');
   const [viewLayout,    setViewLayout]    = useState<'cards' | 'table'>('cards');
   const [loading,       setLoading]       = useState(true);
   const [toastMsg,      setToastMsg]      = useState('');
@@ -471,28 +512,41 @@ export default function DashboardPage() {
     setSelectedMobileTask(task);
     setMobileTaskContext(ctx);
     setMobileEditMode(false);
-    setMobileDraft(task);
+    setMobileDraft({
+      ...task,
+      deadline: toLocalInput(task.deadline),
+      reminder_days: task.reminder_days != null && Number(task.reminder_days) > 0 ? String(task.reminder_days) : '',
+      reminder_hours: task.reminder_hours != null && Number(task.reminder_hours) > 0 ? String(task.reminder_hours) : '',
+      reminder_minutes: task.reminder_minutes != null && Number(task.reminder_minutes) > 0 ? String(task.reminder_minutes) : '',
+    });
   };
 
   /* ─── Add new task (inline row submit) ─────────── */
   /* ─── Add new task (inline row submit) ─────────── */
   const submitNewRow = async () => {
-    if (!newRow.title.trim()) { showToast('Activity name is required.'); return; }
+    if (!newRow.title.trim()) { showToast('Task title is required.'); return; }
     setSavingNew(true);
     try {
+      const remDays = String((newRow as any).reminder_days || '').trim();
+      const remHours = String((newRow as any).reminder_hours || '').trim();
+      const remMins = String((newRow as any).reminder_minutes || '').trim();
+      const hasReminder = (Number(remDays) > 0) || (Number(remHours) > 0) || (Number(remMins) > 0);
       await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newRow.title,
-          action_type: newRow.action_type,
+          action_type: newRow.action_type || 'SMS',
           recipient: newRow.recipient || '',
           assigned_to: newRow.assigned_to ? parseInt(newRow.assigned_to) : null,
-          status: newRow.status || 'DONE',
+          status: newRow.status || 'PENDING',
           deadline: newRow.deadline || null,
           task_date: currentDate,
-          notify_telegram: (newRow as any).notify_telegram || 0,
-          notify_email: (newRow as any).notify_email ?? (newRow as any).notify_telegram ?? 0,
+          reminder_days: remDays === '' ? null : Number(remDays),
+          reminder_hours: remHours === '' ? null : Number(remHours),
+          reminder_minutes: remMins === '' ? null : Number(remMins),
+          notify_telegram: hasReminder ? 1 : ((newRow as any).notify_telegram || 0),
+          notify_email: hasReminder ? 1 : ((newRow as any).notify_email || 0),
         }),
       });
       setNewRow({ ...BLANK_ROW });
@@ -545,21 +599,6 @@ export default function DashboardPage() {
     if (fDeadline && (!t.deadline || !t.deadline.startsWith(fDeadline))) return false;
     return true;
   });
-
-  /* ─── Board view for currentDate ─────────────── */
-  const boardRows = [
-    { id: null as number | null, name: 'Unassigned', avatar_color: '#64748b', role: '' },
-    ...[...members].sort((a, b) => a.name.localeCompare(b.name)),
-  ].map(m => {
-    const mt = tasks.filter(t => t.assigned_to === m.id);
-    return {
-      ...m,
-      total:   mt.length,
-      done:    mt.filter(t => t.status === 'DONE').length,
-      wip:     mt.filter(t => t.status === 'WIP' || t.status === 'DUE').length,
-      pending: mt.filter(t => t.status === 'PENDING').length,
-    };
-  }).filter(r => r.total > 0);
 
   /* ─── Inline cell renderer for admin table (desktop) ────── */
   const renderCell = (task: Task, field: string) => {
@@ -629,7 +668,8 @@ export default function DashboardPage() {
     }
 
     if (field === 'status') {
-      if (isEditing) return (
+      const canChangeStatus = String(task.assigned_to) === String(user?.id);
+      if (isEditing && canChangeStatus) return (
         <select autoFocus defaultValue={task.status === 'DUE' ? 'WIP' : task.status}
           onBlur={e => saveCell(task.id, 'status', e.target.value)}
           onChange={e => saveCell(task.id, 'status', e.target.value)}
@@ -641,9 +681,11 @@ export default function DashboardPage() {
       );
       const st = getStatusStyle(task.status);
       return (
-        <div onClick={() => setEditCell({ id: task.id, field })}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', background: st.bg, color: st.color, border: `1px solid ${st.color}35` }}
-          title="Click to change status">
+        <div
+          onClick={() => { if (canChangeStatus) setEditCell({ id: task.id, field }); }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700, cursor: canChangeStatus ? 'pointer' : 'default', background: st.bg, color: st.color, border: `1px solid ${st.color}35`, opacity: canChangeStatus ? 1 : 0.95 }}
+          title={canChangeStatus ? 'Click to change status' : 'Only the assigned employee can change status'}
+        >
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.color, boxShadow: st.dotGlow }} />
           <span>{st.label}</span>
         </div>
@@ -773,12 +815,12 @@ export default function DashboardPage() {
 
         {/* ── Tab bar ─────────────────────────────── */}
         <div className="tabs dash-tabs" style={{ borderBottom: '1px solid #2a3050', marginBottom: 16, display: 'flex', overflowX: 'auto' }}>
-          {(['admin', 'team', 'board'] as const)
+          {(['admin', 'team'] as const)
             .filter(t => isAdmin || t !== 'admin') // Employees don't see Admin View tab
             .map(t => (
             <div key={t} className={`tab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)}
               style={{ padding: '10px 20px', fontSize: '0.88rem', fontWeight: tab === t ? 600 : 500, color: tab === t ? '#38bdf8' : '#94a3b8', borderBottom: tab === t ? '2px solid #38bdf8' : '2px solid transparent', cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-              {t === 'admin' ? 'Admin View' : t === 'team' ? (isAdmin ? 'Team View' : 'My Tasks') : 'Board View'}
+              {t === 'admin' ? 'Admin View' : (isAdmin ? 'Team View' : 'My Tasks')}
             </div>
           ))}
         </div>
@@ -839,7 +881,6 @@ export default function DashboardPage() {
                         key={task.id}
                         task={task}
                         onClick={() => handleMobileClick(task, 'admin')}
-                        onToggleBell={() => toggleTelegramNotification(task)}
                       />
                     ))
                   )}
@@ -1009,7 +1050,8 @@ export default function DashboardPage() {
           /* ══════════════════════════════════════════ */
           ) : tab === 'team' ? (
             <>
-              {/* Filter bar */}
+              {/* Filter bar — admin only (employees see no filters) */}
+              {isAdmin && (
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20, background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', padding: '12px 14px', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filters:</span>
                 <select value={fAssignee} onChange={e => setFAssignee(e.target.value)}
@@ -1041,6 +1083,7 @@ export default function DashboardPage() {
                   </button>
                 )}
               </div>
+              )}
 
               {(isMobile || viewLayout === 'cards') ? (
                 /* Card List in Team View */
@@ -1048,7 +1091,7 @@ export default function DashboardPage() {
                   {filteredTasks.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '52px 20px', color: '#64748b' }}>
                       <div style={{ fontSize: '2.8rem', marginBottom: 12 }}>🔍</div>
-                      <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#94a3b8' }}>No tasks match selected filters on {currentDate}</div>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#94a3b8' }}>{isAdmin ? `No tasks match selected filters on ${currentDate}` : `No tasks on ${currentDate}`}</div>
                     </div>
                   ) : (
                     filteredTasks.map(task => (
@@ -1056,7 +1099,6 @@ export default function DashboardPage() {
                         key={task.id}
                         task={task}
                         onClick={() => handleMobileClick(task, 'employee')}
-                        onToggleBell={() => toggleTelegramNotification(task)}
                       />
                     ))
                   )}
@@ -1127,58 +1169,7 @@ export default function DashboardPage() {
                 </div>
               )}
             </>
-
-          /* ══════════════════════════════════════════ */
-          /* TAB 3 – BOARD VIEW                        */
-          /* ══════════════════════════════════════════ */
-          ) : (
-            /* Board table (same on PC and mobile) */
-            <div className="card" style={{ background: '#161926', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
-              <div className="table-scroll">
-                <table style={{ width: '100%', minWidth: '700px', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid #2a3050' }}>
-                      <th style={{ padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Assignee Name</th>
-                      <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Jobs</th>
-                      <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Done</th>
-                      <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>WIP</th>
-                      <th style={{ width: '130px', textAlign: 'center', padding: '14px 20px', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {boardRows.length === 0 && (
-                      <tr className="empty-r"><td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No tasks assigned on {currentDate}.</td></tr>
-                    )}
-                    {boardRows.map(row => (
-                      <tr key={row.id ?? 'unassigned'} style={{ borderBottom: '1px solid rgba(42,48,80,0.6)', transition: 'background 0.15s' }}>
-                        <td style={{ padding: '14px 20px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <div style={{ width: 34, height: 34, borderRadius: '50%', background: row.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                              {(row.name[0] || 'U').toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ fontWeight: 600, fontSize: '0.92rem', color: '#f8fafc' }}>{row.name}</div>
-                              {row.role && <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 2 }}>{row.role}</div>}
-                            </div>
-                          </div>
-                        </td>
-                        <td style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.15rem', color: '#f1f5f9', padding: '14px 20px' }}>{row.total}</td>
-                        <td style={{ textAlign: 'center', padding: '14px 20px' }}>
-                          <span style={{ display: 'inline-block', background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.35)', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>{row.done}</span>
-                        </td>
-                        <td style={{ textAlign: 'center', padding: '14px 20px' }}>
-                          <span style={{ display: 'inline-block', background: 'rgba(234,179,8,0.15)', color: '#eab308', border: '1px solid rgba(234,179,8,0.35)', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>{row.wip}</span>
-                        </td>
-                        <td style={{ textAlign: 'center', padding: '14px 20px' }}>
-                          <span style={{ display: 'inline-block', background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.35)', padding: '4px 14px', borderRadius: '14px', fontWeight: 700, fontSize: '0.95rem' }}>{row.pending}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )
+          ) : null
         )}
 
         {/* ── Summary at the Bottom of Task Table (Traffic Light Colors) ── */}
@@ -1216,240 +1207,190 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ── Mobile Details Modal ── */}
+      {/* ── Mobile Details Modal (tenders-matching) ── */}
       {selectedMobileTask && (() => {
         const activeTask = tasks.find(t => t.id === selectedMobileTask.id) || selectedMobileTask;
-        const isAdmin = mobileTaskContext === 'admin';
-        const canEdit = isAdmin || mobileTaskContext === 'employee';
+        const ctxAdmin = mobileTaskContext === 'admin';
+        const isAssignee = String(activeTask.assigned_to) === String(user?.id);
+        const canEditDetails = ctxAdmin && isAdmin;
+        const canChangeStatus = isAssignee;
+        const canEdit = canEditDetails || canChangeStatus;
+        const remDays = String((mobileDraft as any).reminder_days ?? activeTask.reminder_days ?? '');
+        const remHours = String((mobileDraft as any).reminder_hours ?? activeTask.reminder_hours ?? '');
+        const remMins = String((mobileDraft as any).reminder_minutes ?? activeTask.reminder_minutes ?? '');
+        const remDaysDisp = remDays && Number(remDays) > 0 ? remDays : '';
+        const remHoursDisp = remHours && Number(remHours) > 0 ? remHours : '';
+        const remMinsDisp = remMins && Number(remMins) > 0 ? remMins : '';
 
         const handleDraftChange = (field: string, val: any) => {
           setMobileDraft((prev: any) => ({ ...prev, [field]: val }));
         };
 
+        const closeDetail = () => { setSelectedMobileTask(null); setMobileEditMode(false); };
+
         const saveMobileDraft = async () => {
           try {
+            const dDays = String((mobileDraft as any).reminder_days ?? '').trim();
+            const dHours = String((mobileDraft as any).reminder_hours ?? '').trim();
+            const dMins = String((mobileDraft as any).reminder_minutes ?? '').trim();
+            const hasReminder = (Number(dDays) > 0) || (Number(dHours) > 0) || (Number(dMins) > 0);
+            const payload: any = canEditDetails ? {
+              title: mobileDraft.title ?? activeTask.title,
+              assigned_to: (mobileDraft.assigned_to ?? activeTask.assigned_to) || null,
+              recipient: mobileDraft.recipient ?? activeTask.recipient ?? '',
+              action_type: mobileDraft.action_type ?? activeTask.action_type,
+              deadline: (mobileDraft.deadline ?? activeTask.deadline) || null,
+              reminder_days: dDays === '' ? null : Number(dDays),
+              reminder_hours: dHours === '' ? null : Number(dHours),
+              reminder_minutes: dMins === '' ? null : Number(dMins),
+              notify_email: hasReminder ? 1 : 0,
+              notify_telegram: hasReminder ? 1 : 0,
+            } : canChangeStatus ? {
+              status: mobileDraft.status ?? activeTask.status,
+            } : {};
+            if (canEditDetails && canChangeStatus) {
+              payload.status = mobileDraft.status ?? activeTask.status;
+            }
+            // Normalize datetime-local to ISO
+            if (payload.deadline && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(String(payload.deadline))) {
+              payload.deadline = new Date(payload.deadline).toISOString();
+            }
             await fetch(`/api/tasks/${activeTask.id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(mobileDraft)
+              body: JSON.stringify(payload)
             });
             showToast('Task updated!');
             setMobileEditMode(false);
             fetchTasks();
-            setSelectedMobileTask({ ...activeTask, ...mobileDraft });
+            setSelectedMobileTask({ ...activeTask, ...payload });
           } catch (e) {
             showToast('Failed to update task.');
           }
         };
 
-        const fieldInputSt = {
-          background: '#131722', border: '1px solid #4f7eff', borderRadius: '7px',
-          color: '#f1f5f9', fontSize: '0.9rem', padding: '6px 10px',
-          width: '100%', outline: 'none', fontFamily: 'inherit'
-        };
+        const deadlineLocal = toLocalInput(String(mobileDraft.deadline ?? activeTask.deadline ?? ''));
 
         return (
           <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
-            onClick={() => { setSelectedMobileTask(null); setMobileEditMode(false); }}>
-            <div style={{ background: '#161926', borderTop: '1px solid #2a3050', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', padding: '24px 20px', paddingBottom: 'max(24px, env(safe-area-inset-bottom))', position: 'relative', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}
+            onClick={closeDetail}>
+            <div style={{ background: '#161926', borderTop: '1px solid #2a3050', borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: '14px 16px 16px', paddingBottom: 'max(14px, env(safe-area-inset-bottom))', position: 'relative', display: 'flex', flexDirection: 'column', maxHeight: '100dvh', overflow: 'hidden' }}
               onClick={e => e.stopPropagation()}>
-              
-              {/* Header Actions */}
-              <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 10 }}>
+
+              <div style={{ position: 'absolute', top: 10, right: 12, display: 'flex', gap: 8, zIndex: 2 }}>
                 {canEdit && !mobileEditMode && (
-                  <button onClick={() => setMobileEditMode(true)} style={{ background: 'rgba(79,126,255,0.1)', border: 'none', color: '#4f7eff', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <Pencil size={16} />
+                  <button onClick={() => setMobileEditMode(true)} style={{ background: BLUE_BG, border: 'none', color: BLUE, width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <Pencil size={15} />
                   </button>
                 )}
-                {isAdmin && !mobileEditMode && (
-                  <button onClick={() => { setTaskToDelete(activeTask); setSelectedMobileTask(null); }} style={{ background: 'rgba(239,68,68,0.1)', border: 'none', color: '#ef4444', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <Trash2 size={16} />
+                {ctxAdmin && !mobileEditMode && (
+                  <button onClick={() => { setTaskToDelete(activeTask); closeDetail(); }} style={{ background: 'rgba(239,68,68,0.12)', border: 'none', color: '#ef4444', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <Trash2 size={15} />
                   </button>
                 )}
-                <button onClick={() => { setSelectedMobileTask(null); setMobileEditMode(false); }} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#94a3b8', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                  <X size={18} />
+                <button onClick={closeDetail} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: '#94a3b8', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                  <X size={16} />
                 </button>
               </div>
 
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12, fontWeight: 700 }}>
+              <div style={{ fontSize: '0.68rem', color: WHITE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10, fontWeight: 700, paddingRight: 110, opacity: 0.7 }}>
                 {mobileEditMode ? 'Edit Task Details' : 'Task Details'}
               </div>
-              
-              <div style={{ overflowY: 'auto', paddingRight: 4 }}>
-                {/* Title */}
-                <div style={{ marginBottom: 20 }}>
-                  {mobileEditMode ? (
-                    <input autoFocus type="text" value={mobileDraft.title ?? activeTask.title}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
+                <div>
+                  <FieldLabel>Task Details</FieldLabel>
+                  {mobileEditMode && canEditDetails ? (
+                    <input autoFocus type="text" value={(mobileDraft.title as any) ?? activeTask.title ?? ''}
                       onChange={e => handleDraftChange('title', e.target.value)}
-                      style={{ ...fieldInputSt, fontSize: '1.1rem', fontWeight: 600 }} />
+                      style={{ ...fieldEditSt, fontWeight: 600 }} />
                   ) : (
-                    <div style={{ fontSize: '1.2rem', fontWeight: 600, color: '#f8fafc', lineHeight: 1.3, paddingRight: 100 }}>{activeTask.title || 'Untitled Task'}</div>
+                    <div style={{ ...valueSt, fontWeight: 600, fontSize: '0.95rem', paddingRight: 90 }}>{activeTask.title || '—'}</div>
                   )}
                 </div>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-                  {/* Assignee */}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <div>
-                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Assignee</div>
-                    {mobileEditMode && isAdmin ? (
-                      <select value={mobileDraft.assigned_to ?? activeTask.assigned_to ?? ''}
-                        onChange={e => handleDraftChange('assigned_to', e.target.value)}
-                        style={fieldInputSt}>
+                    <FieldLabel>Assignee</FieldLabel>
+                    {mobileEditMode && canEditDetails ? (
+                      <select value={(mobileDraft.assigned_to as any) ?? activeTask.assigned_to ?? ''}
+                        onChange={e => handleDraftChange('assigned_to', e.target.value ? Number(e.target.value) : null)}
+                        style={fieldSelectSt}>
                         <option value="">Unassigned</option>
                         {[...members].sort((a,b) => a.name.localeCompare(b.name)).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
                     ) : (
-                      <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem' }}>
-                        {(mobileDraft.assigned_to ?? activeTask.assigned_to) ? members.find(m => m.id == (mobileDraft.assigned_to ?? activeTask.assigned_to))?.name || 'Unassigned' : 'Unassigned'}
-                      </div>
+                      <div style={valueSt}>{activeTask.assignee_name || members.find(m => m.id == activeTask.assigned_to)?.name || 'Unassigned'}</div>
                     )}
                   </div>
-                  
-                  {/* Recipient */}
                   <div>
-                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Recipient</div>
-                    {mobileEditMode && isAdmin ? (
-                      <input type="text" value={mobileDraft.recipient ?? activeTask.recipient ?? ''} placeholder="Recipient..."
-                        onChange={e => handleDraftChange('recipient', e.target.value)}
-                        style={fieldInputSt} />
+                    <FieldLabel optional>Recipient</FieldLabel>
+                    {mobileEditMode && canEditDetails ? (
+                      <input type="text" value={(mobileDraft.recipient as any) ?? activeTask.recipient ?? ''}
+                        onChange={e => handleDraftChange('recipient', e.target.value)} style={fieldEditSt} />
                     ) : (
-                      <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem' }}>{(mobileDraft.recipient ?? activeTask.recipient) || '—'}</div>
+                      <div style={valueSt}>{activeTask.recipient || '—'}</div>
                     )}
                   </div>
-
-                  {/* Activity */}
                   <div>
-                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Activity</div>
-                    {mobileEditMode && isAdmin ? (
-                      <select value={mobileDraft.action_type ?? activeTask.action_type}
-                        onChange={e => handleDraftChange('action_type', e.target.value)}
-                        style={fieldInputSt}>
-                        <option value="" disabled>Select</option>
+                    <FieldLabel>Activity</FieldLabel>
+                    {mobileEditMode && canEditDetails ? (
+                      <select value={(mobileDraft.action_type as any) ?? activeTask.action_type}
+                        onChange={e => handleDraftChange('action_type', e.target.value)} style={fieldSelectSt}>
                         {ACTION_KEYS.map(k => <option key={k} value={k}>{getActionMeta(k).label}</option>)}
                       </select>
                     ) : (
-                      <div style={{ color: '#f1f5f9', fontWeight: 500, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {getActionMeta(mobileDraft.action_type ?? activeTask.action_type).icon}
-                        {getActionMeta(mobileDraft.action_type ?? activeTask.action_type).label}
-                      </div>
+                      <div style={valueSt}>{getActionMeta(activeTask.action_type).label}</div>
                     )}
                   </div>
-
-                  {/* Status */}
                   <div>
-                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Status</div>
-                    {mobileEditMode ? (
-                      <select value={mobileDraft.status ?? activeTask.status}
-                        onChange={e => handleDraftChange('status', e.target.value)}
-                        style={fieldInputSt}>
-                        <option value="DONE">Done</option>
-                        <option value="WIP">WIP</option>
+                    <FieldLabel>Status</FieldLabel>
+                    {mobileEditMode && canChangeStatus ? (
+                      <select value={(mobileDraft.status as any) ?? activeTask.status}
+                        onChange={e => handleDraftChange('status', e.target.value)} style={fieldSelectSt}>
                         <option value="PENDING">Pending</option>
+                        <option value="WIP">WIP</option>
+                        <option value="DONE">Done</option>
                       </select>
                     ) : (
-                      <div style={{ color: getStatusStyle(mobileDraft.status ?? activeTask.status).color, fontWeight: 600, fontSize: '0.9rem' }}>
-                        {getStatusStyle(mobileDraft.status ?? activeTask.status).label}
-                      </div>
+                      <div style={valueSt}>{getStatusStyle(activeTask.status).label}</div>
                     )}
                   </div>
                 </div>
 
-                {/* Deadline */}
-                <div style={{ marginBottom: 24 }}>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Deadline</div>
-                  {mobileEditMode && isAdmin ? (
-                    <input type="datetime-local" value={(mobileDraft.deadline ?? activeTask.deadline)?.slice(0, 16) || ''}
+                <div>
+                  <FieldLabel>Deadline</FieldLabel>
+                  {mobileEditMode && canEditDetails ? (
+                    <input type="datetime-local" value={deadlineLocal}
                       onClick={e => { try { (e.target as HTMLInputElement).showPicker?.(); } catch {} }}
                       onChange={e => handleDraftChange('deadline', e.target.value)}
-                      style={{ ...fieldInputSt, colorScheme: 'dark' }} />
+                      style={{ ...fieldEditSt, colorScheme: 'dark' }} />
                   ) : (
-                    <div style={{ color: (mobileDraft.deadline ?? activeTask.deadline) ? '#38bdf8' : '#94a3b8', fontWeight: 500, fontSize: '0.95rem' }}>
-                      {(mobileDraft.deadline ?? activeTask.deadline) ? new Date(mobileDraft.deadline ?? activeTask.deadline).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'No Deadline'}
+                    <div style={valueSt}>
+                      {activeTask.deadline
+                        ? new Date(activeTask.deadline).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                        : '—'}
                     </div>
                   )}
                 </div>
 
-                {/* Notifications Bell */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: '#131722', border: '1px solid #2a3050', borderRadius: '10px', marginBottom: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: ((mobileDraft.notify_telegram ?? activeTask.notify_telegram) || (mobileDraft.notify_email ?? activeTask.notify_email)) ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: ((mobileDraft.notify_telegram ?? activeTask.notify_telegram) || (mobileDraft.notify_email ?? activeTask.notify_email)) ? '#eab308' : '#64748b' }}>
-                      {((mobileDraft.notify_telegram ?? activeTask.notify_telegram) || (mobileDraft.notify_email ?? activeTask.notify_email)) ? <Bell size={16} /> : <BellOff size={16} />}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#f1f5f9' }}>Notifications</div>
-                      <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Telegram &amp; Brevo reminders</div>
-                    </div>
-                  </div>
-                  {mobileEditMode ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cur = (mobileDraft.notify_telegram ?? activeTask.notify_telegram) ? 1 : 0;
-                        const next = cur ? 0 : 1;
-                        handleDraftChange('notify_telegram', next);
-                        handleDraftChange('notify_email', next);
-                      }}
-                      style={{
-                        background: (mobileDraft.notify_telegram ?? activeTask.notify_telegram) ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)',
-                        border: `1px solid ${(mobileDraft.notify_telegram ?? activeTask.notify_telegram) ? '#eab308' : '#334155'}`,
-                        color: (mobileDraft.notify_telegram ?? activeTask.notify_telegram) ? '#eab308' : '#94a3b8',
-                        borderRadius: '8px', padding: '6px 14px', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 5
-                      }}
-                    >
-                      {(mobileDraft.notify_telegram ?? activeTask.notify_telegram) ? <Bell size={14} /> : <BellOff size={14} />}
-                      {(mobileDraft.notify_telegram ?? activeTask.notify_telegram) ? 'ON' : 'OFF'}
-                    </button>
-                  ) : (
-                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: ((mobileDraft.notify_telegram ?? activeTask.notify_telegram) || (mobileDraft.notify_email ?? activeTask.notify_email)) ? '#eab308' : '#64748b' }}>
-                      {((mobileDraft.notify_telegram ?? activeTask.notify_telegram) || (mobileDraft.notify_email ?? activeTask.notify_email)) ? 'Active' : 'Muted'}
-                    </span>
-                  )}
-                </div>
+                <ReminderBoxes
+                  days={mobileEditMode ? remDaysDisp : remDaysDisp}
+                  hours={mobileEditMode ? remHoursDisp : remHoursDisp}
+                  minutes={mobileEditMode ? remMinsDisp : remMinsDisp}
+                  editMode={mobileEditMode && canEditDetails}
+                  onChange={(f, v) => handleDraftChange(f, v)}
+                />
               </div>
 
-              {!mobileEditMode ? (
-                <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? '1fr 1fr 1fr' : '1fr 1fr', gap: 10, marginTop: 14 }}>
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedMobileTask(null); setMobileEditMode(false); }}
-                    style={{ padding: '12px', borderRadius: 10, border: '1px solid #2a3050', background: '#131722', color: '#f1f5f9', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
-                    Close
-                  </button>
-                  {canEdit && (
-                    <button
-                      type="button"
-                      onClick={() => setMobileEditMode(true)}
-                      style={{ padding: '12px', borderRadius: 10, border: '1px solid #4f7eff', background: 'rgba(79,126,255,0.12)', color: '#4f7eff', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit' }}
-                    >
-                      <Pencil size={15} /> Edit
-                    </button>
-                  )}
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => { setTaskToDelete(activeTask); setSelectedMobileTask(null); }}
-                      style={{ padding: '12px', borderRadius: 10, border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit' }}
-                    >
-                      <Trash2 size={15} /> Delete
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
-                  <button
-                    type="button"
-                    onClick={() => setMobileEditMode(false)}
-                    style={{ padding: '12px', borderRadius: 10, border: '1px solid #2a3050', background: '#131722', color: '#f1f5f9', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
+              {mobileEditMode && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+                  <button type="button" onClick={() => { setMobileDraft(activeTask); setMobileEditMode(false); }}
+                    style={{ padding: '10px', borderRadius: 9, border: '1px solid #2a3050', background: '#131722', color: WHITE, fontSize: '0.84rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                     Cancel
                   </button>
-                  <button 
-                    type="button"
-                    onClick={saveMobileDraft}
-                    style={{ padding: '12px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #4f7eff, #6c4fe3)', color: '#fff', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 15px rgba(79,126,255,0.3)' }}
-                  >
+                  <button type="button" onClick={saveMobileDraft}
+                    style={{ padding: '10px', borderRadius: 9, border: 'none', background: BLUE_GRAD, color: WHITE, fontSize: '0.84rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 15px rgba(79,126,255,0.3)' }}>
                     Save Changes
                   </button>
                 </div>

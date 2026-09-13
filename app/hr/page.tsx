@@ -17,6 +17,425 @@ import Topbar from '../components/Topbar';
 import { useAuth } from '../context/AuthContext';
 import html2canvas from 'html2canvas';
 
+const WHITE = '#ffffff';
+const MUTED_LABEL = 'rgba(255,255,255,0.55)';
+const BLUE = '#4f7eff';
+const BLUE_BG = 'rgba(79,126,255,0.15)';
+const BLUE_GRAD = 'linear-gradient(135deg, #4f7eff, #6c4fe3)';
+const GREEN = '#26c486';
+const GREEN_BG = 'rgba(38,196,134,0.15)';
+const RED = '#ef4444';
+const RED_BG = 'rgba(239,68,68,0.12)';
+const AMBER = '#eab308';
+const AMBER_BG = 'rgba(234,179,8,0.15)';
+
+const LEAVE_REASONS = [
+  { value: 'SICK', label: 'Sick' },
+  { value: 'PERSONAL', label: 'Personal' },
+  { value: 'EXAM', label: 'Exam / Study' },
+  { value: 'CASUAL', label: 'Casual' },
+  { value: 'VACATION', label: 'Vacation' },
+] as const;
+
+const leaveFieldInputSt: React.CSSProperties = {
+  background: '#131722',
+  border: '1px solid #2a3050',
+  borderRadius: 7,
+  color: WHITE,
+  fontSize: '0.78rem',
+  padding: '6px 9px',
+  width: '100%',
+  outline: 'none',
+  fontFamily: 'inherit',
+};
+const leaveFieldEditSt: React.CSSProperties = { ...leaveFieldInputSt, border: '1px solid #3a4568' };
+const leaveLabelSt: React.CSSProperties = {
+  fontSize: '0.62rem',
+  color: MUTED_LABEL,
+  textTransform: 'uppercase',
+  marginBottom: 2,
+  fontWeight: 600,
+  letterSpacing: '0.04em',
+};
+const leaveValueSt: React.CSSProperties = {
+  color: WHITE,
+  fontWeight: 500,
+  fontSize: '0.82rem',
+  lineHeight: 1.25,
+};
+
+type LeaveForm = {
+  member_id: string;
+  leave_type: string;
+  start_datetime: string;
+  end_datetime: string;
+  reason: string;
+  reminder_days: string;
+  reminder_hours: string;
+  reminder_minutes: string;
+};
+
+const BLANK_LEAVE: LeaveForm = {
+  member_id: '',
+  leave_type: 'SICK',
+  start_datetime: '',
+  end_datetime: '',
+  reason: '',
+  reminder_days: '',
+  reminder_hours: '',
+  reminder_minutes: '',
+};
+
+function leaveReasonLabel(type?: string): string {
+  const found = LEAVE_REASONS.find(r => r.value === type);
+  if (found) return found.label;
+  if (!type) return '—';
+  return String(type).replace(/\s*leave\s*/gi, '').trim() || type;
+}
+
+function dateOnly(s?: string): string {
+  if (!s) return '';
+  return String(s).split('T')[0].split(' ')[0];
+}
+
+function toLeaveLocalInput(raw?: string): string {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  if (s.includes('T') && s.length >= 16) return s.slice(0, 16);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T09:00`;
+  try {
+    const d = new Date(s.includes('T') || s.includes('Z') || s.includes('+') ? s : s + 'Z');
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch {
+    return '';
+  }
+}
+
+function fmtLeaveDateTime(raw?: string): string {
+  if (!raw) return '—';
+  const local = toLeaveLocalInput(raw);
+  if (!local) return String(raw);
+  try {
+    const [d, t] = local.split('T');
+    const [y, m, day] = (d || '').split('-');
+    return `${day}/${m}/${y} ${t || ''}`.trim();
+  } catch {
+    return String(raw);
+  }
+}
+
+function getLeaveCountdownShort(deadline?: string): string {
+  if (!deadline) return '—';
+  let s = String(deadline).trim();
+  if (!s.includes('T')) s = `${s}T09:00:00+06:00`;
+  else if (!s.includes('Z') && !/[+-]\d{2}(:?\d{2})?$/.test(s)) s += '+06:00';
+  const diff = new Date(s).getTime() - Date.now();
+  if (isNaN(diff) || diff < 0) return '0M';
+  const days = Math.floor(diff / 86400000);
+  if (days >= 1) return `${days}D`;
+  const hours = Math.floor(diff / 3600000);
+  if (hours >= 1) return `${hours}H`;
+  const mins = Math.max(1, Math.floor(diff / 60000));
+  return `${mins}M`;
+}
+
+function leaveToForm(l: any): LeaveForm {
+  return {
+    member_id: String(l.member_id || ''),
+    leave_type: l.leave_type || 'SICK',
+    start_datetime: toLeaveLocalInput(l.start_date),
+    end_datetime: toLeaveLocalInput(l.end_date) || toLeaveLocalInput(l.start_date),
+    reason: l.reason || '',
+    reminder_days: l.reminder_days != null && Number(l.reminder_days) > 0 ? String(l.reminder_days) : '',
+    reminder_hours: l.reminder_hours != null && Number(l.reminder_hours) > 0 ? String(l.reminder_hours) : '',
+    reminder_minutes: l.reminder_minutes != null && Number(l.reminder_minutes) > 0 ? String(l.reminder_minutes) : '',
+  };
+}
+
+function buildLeavePayload(form: LeaveForm) {
+  const remDays = form.reminder_days.trim() === '' ? null : Number(form.reminder_days);
+  const remHours = form.reminder_hours.trim() === '' ? null : Number(form.reminder_hours);
+  const remMins = form.reminder_minutes.trim() === '' ? null : Number(form.reminder_minutes);
+  const hasReminder =
+    (remDays != null && remDays > 0) ||
+    (remHours != null && remHours > 0) ||
+    (remMins != null && remMins > 0);
+  return {
+    member_id: form.member_id,
+    leave_type: form.leave_type,
+    start_date: form.start_datetime,
+    end_date: form.end_datetime,
+    reason: form.reason || '',
+    reminder_days: remDays,
+    reminder_hours: remHours,
+    reminder_minutes: remMins,
+    notify_email: hasReminder ? 1 : 0,
+  };
+}
+
+function LeaveFieldLabel({ children, optional }: { children: React.ReactNode; optional?: boolean }) {
+  return (
+    <div style={leaveLabelSt}>
+      {children}
+      {optional ? ' (optional)' : ''}
+    </div>
+  );
+}
+
+function LeaveReminderBoxes({
+  form,
+  editMode,
+  onChange,
+}: {
+  form: LeaveForm;
+  editMode: boolean;
+  onChange: (field: keyof LeaveForm, val: string) => void;
+}) {
+  const box = (label: string, field: 'reminder_days' | 'reminder_hours' | 'reminder_minutes', ph: string) => (
+    <div style={{ flex: 1 }}>
+      <div style={{ ...leaveLabelSt, marginBottom: 2 }}>{label}</div>
+      {editMode ? (
+        <input
+          type="number"
+          min={0}
+          placeholder={ph}
+          value={form[field]}
+          onChange={e => onChange(field, e.target.value)}
+          style={{ ...leaveFieldEditSt, textAlign: 'center', padding: '5px 6px' }}
+        />
+      ) : (
+        <div
+          style={{
+            background: '#131722',
+            border: '1px solid #2a3050',
+            borderRadius: 7,
+            padding: '5px 6px',
+            textAlign: 'center',
+            color: WHITE,
+            fontWeight: 600,
+            fontSize: '0.8rem',
+          }}
+        >
+          {form[field] || '—'}
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <div>
+      <LeaveFieldLabel optional>Reminder</LeaveFieldLabel>
+      <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+        {box('Day', 'reminder_days', '2')}
+        {box('Hour', 'reminder_hours', '10')}
+        {box('Minute', 'reminder_minutes', '30')}
+      </div>
+    </div>
+  );
+}
+
+function CompactLeaveCard({ leave, onClick }: { leave: any; onClick: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        background: '#161926',
+        border: '1px solid #2a3050',
+        borderRadius: 12,
+        padding: '13px 16px',
+        marginBottom: 10,
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        userSelect: 'none',
+      }}
+      onMouseOver={e => {
+        e.currentTarget.style.borderColor = '#4f7eff';
+        e.currentTarget.style.background = 'rgba(79,126,255,0.04)';
+      }}
+      onMouseOut={e => {
+        e.currentTarget.style.borderColor = '#2a3050';
+        e.currentTarget.style.background = '#161926';
+      }}
+    >
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          fontSize: '0.92rem',
+          color: WHITE,
+          fontWeight: 600,
+        }}
+      >
+        {leave.member_name || 'Employee'}
+      </div>
+      <div
+        style={{
+          maxWidth: '34%',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          fontSize: '0.82rem',
+          color: WHITE,
+          flexShrink: 1,
+          marginLeft: 'auto',
+        }}
+      >
+        {leaveReasonLabel(leave.leave_type)}
+      </div>
+      <div style={{ fontSize: '0.82rem', color: WHITE, whiteSpace: 'nowrap', fontWeight: 600, flexShrink: 0, marginLeft: 40 }}>
+        {getLeaveCountdownShort(leave.start_date)}
+      </div>
+    </div>
+  );
+}
+
+function LeaveFields({
+  form,
+  editMode,
+  onChange,
+  viewSource,
+  members,
+  isAdmin,
+  currentUser,
+}: {
+  form: LeaveForm;
+  editMode: boolean;
+  onChange: (field: keyof LeaveForm, val: string) => void;
+  viewSource?: any;
+  members: any[];
+  isAdmin: boolean;
+  currentUser?: { id?: string | number; name?: string } | null;
+}) {
+  const empName =
+    viewSource?.member_name ||
+    members.find(m => String(m.id) === String(form.member_id))?.name ||
+    currentUser?.name ||
+    '—';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div>
+        <LeaveFieldLabel>Emp</LeaveFieldLabel>
+        {editMode && isAdmin ? (
+          <select
+            value={form.member_id || String(currentUser?.id || '')}
+            onChange={e => onChange('member_id', e.target.value)}
+            style={leaveFieldEditSt}
+          >
+            <option value={String(currentUser?.id || '')}>{currentUser?.name || 'You'} (You)</option>
+            {[...members]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map(m =>
+                String(m.id) !== String(currentUser?.id) ? (
+                  <option key={m.id} value={String(m.id)}>
+                    {m.name}
+                  </option>
+                ) : null
+              )}
+          </select>
+        ) : (
+          <div style={{ ...leaveValueSt, fontWeight: 600, fontSize: '0.95rem', paddingRight: 120 }}>{empName}</div>
+        )}
+      </div>
+
+      <div>
+        <LeaveFieldLabel>Reason</LeaveFieldLabel>
+        {editMode ? (
+          <select
+            value={form.leave_type}
+            onChange={e => onChange('leave_type', e.target.value)}
+            style={leaveFieldEditSt}
+          >
+            {LEAVE_REASONS.map(r => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div style={leaveValueSt}>{leaveReasonLabel(viewSource?.leave_type || form.leave_type)}</div>
+        )}
+      </div>
+
+      <div>
+        <LeaveFieldLabel>From</LeaveFieldLabel>
+        {editMode ? (
+          <input
+            type="datetime-local"
+            value={form.start_datetime}
+            onClick={e => {
+              try {
+                (e.target as HTMLInputElement).showPicker?.();
+              } catch {}
+            }}
+            onChange={e => onChange('start_datetime', e.target.value)}
+            style={{ ...leaveFieldEditSt, colorScheme: 'dark' }}
+          />
+        ) : (
+          <div style={leaveValueSt}>{fmtLeaveDateTime(viewSource?.start_date || form.start_datetime)}</div>
+        )}
+      </div>
+
+      <div>
+        <LeaveFieldLabel>To</LeaveFieldLabel>
+        {editMode ? (
+          <input
+            type="datetime-local"
+            value={form.end_datetime}
+            min={form.start_datetime}
+            onClick={e => {
+              try {
+                (e.target as HTMLInputElement).showPicker?.();
+              } catch {}
+            }}
+            onChange={e => onChange('end_datetime', e.target.value)}
+            style={{ ...leaveFieldEditSt, colorScheme: 'dark' }}
+          />
+        ) : (
+          <div style={leaveValueSt}>{fmtLeaveDateTime(viewSource?.end_date || form.end_datetime)}</div>
+        )}
+      </div>
+
+      <div>
+        <LeaveFieldLabel optional>Remarks</LeaveFieldLabel>
+        {editMode ? (
+          <textarea
+            rows={2}
+            value={form.reason}
+            onChange={e => onChange('reason', e.target.value)}
+            placeholder="Optional remarks..."
+            style={{ ...leaveFieldEditSt, resize: 'vertical' }}
+          />
+        ) : (
+          <div style={leaveValueSt}>{viewSource?.reason || form.reason || '—'}</div>
+        )}
+      </div>
+
+      {!editMode && viewSource?.status && (
+        <div>
+          <LeaveFieldLabel>Status</LeaveFieldLabel>
+          <div style={leaveValueSt}>
+            {viewSource.status === 'APPROVED'
+              ? 'Approved'
+              : viewSource.status === 'REJECTED' || viewSource.status === 'CANCELLED'
+                ? 'Declined'
+                : 'Pending'}
+          </div>
+        </div>
+      )}
+
+      <LeaveReminderBoxes form={form} editMode={editMode} onChange={onChange} />
+    </div>
+  );
+}
+
 // --- Helpers ---
 
 function todayDhaka(): string {
@@ -205,14 +624,21 @@ function MonthCalendar({ year, month, calDays }: MonthCalendarProps) {
           else tip = cell.isWeekend ? 'Weekend' : cell.isAbsent ? 'Absent' : '';
 
           const isApprovedLeave = cell.isLeave && cell.leaveStatus === 'APPROVED';
+          let mark: string | null = null;
+          let markClass = '';
+          if (!cell.isWeekend) {
+            if (cell.isPresent && !cell.isIncomplete) { mark = '✓'; markClass = 'present-mark'; }
+            else if (cell.isIncomplete) { mark = '○'; markClass = 'late-mark'; }
+            else if (cell.isAbsent) { mark = '✕'; markClass = 'absent-mark'; }
+            else if (isApprovedLeave && !cell.isPresent) { mark = 'L'; markClass = 'leave-mark'; }
+          }
 
           return (
             <div key={cell.date} className={cls} title={tip}>
-              <span className="cal-day-num">{dayNum}</span>
-              {cell.isPresent && !cell.isIncomplete && !cell.isWeekend && <span className="cal-dot green-dot" />}
-              {cell.isIncomplete && !cell.isWeekend && <span className="cal-dot" style={{ background: '#FF8C00', boxShadow: '0 0 5px rgba(255, 140, 0, 0.6)' }} />}
-              {isApprovedLeave && !cell.isWeekend && <span className="cal-dot" style={{ background: '#2979FF', boxShadow: '0 0 5px rgba(41, 121, 255, 0.5)', marginTop: 2 }} />}
-              {cell.isAbsent && !cell.isWeekend && <span className="cal-dot red-dot" />}
+              <span className="cal-day-wrap">
+                <span className={'cal-day-num' + (mark ? ' has-mark' : '')}>{dayNum}</span>
+                {mark && <span className={'cal-mark on-date ' + markClass} aria-hidden>{mark}</span>}
+              </span>
             </div>
           );
         })}
@@ -232,6 +658,7 @@ export default function HRPage() {
 
   const [members, setMembers] = useState<any[]>([]);
   const [att, setAtt] = useState<any[]>([]);
+  const [todayAtt, setTodayAtt] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
   const [monthSum, setMonthSum] = useState<any[]>([]);
 
@@ -239,9 +666,14 @@ export default function HRPage() {
   const [attLoading, setAttLoading] = useState(false);
 
   const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [leaveData, setLeaveData] = useState({ member_id: '', leave_type: 'SICK', start_datetime: '', end_datetime: '', reason: '', notify_email: 1 });
+  const [leaveData, setLeaveData] = useState<LeaveForm>({ ...BLANK_LEAVE });
+  const [selectedLeave, setSelectedLeave] = useState<any | null>(null);
+  const [leaveDraft, setLeaveDraft] = useState<LeaveForm>({ ...BLANK_LEAVE });
+  const [leaveEditMode, setLeaveEditMode] = useState(false);
+  const [leaveSaving, setLeaveSaving] = useState(false);
 
   const [reportMemberId, setReportMemberId] = useState('');
+
   const nowJS = new Date();
   const [calYear, setCalYear] = useState(nowJS.getFullYear());
   const [calMonth, setCalMonth] = useState(nowJS.getMonth());
@@ -252,7 +684,6 @@ export default function HRPage() {
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [setupOs, setSetupOs] = useState<'windows' | 'mac'>('windows');
   const [copiedCmd, setCopiedCmd] = useState(false);
-  const [editLeaveId, setEditLeaveId] = useState<string | null>(null);
 
   // Wi-Fi automated attendance state
   const [wifiInfo, setWifiInfo] = useState<{
@@ -287,11 +718,13 @@ export default function HRPage() {
     try {
       const leavesUrl = isAdmin ? '/api/leaves' : `/api/leaves?member_id=${user?.id}`;
       const curMonthStr = curDate.substring(0, 7);
-      const [mRes, aRes, lRes, sumRes] = await Promise.all([
+      const today = todayDhaka();
+      const [mRes, aRes, lRes, sumRes, todayAttRes] = await Promise.all([
         authFetch('/api/members').then(r => r.json()),
         authFetch('/api/attendance?date=' + curDate).then(r => r.json()),
         authFetch(leavesUrl).then(r => r.json()),
         authFetch('/api/attendance/summary?month=' + curMonthStr).then(r => r.json()),
+        authFetch('/api/attendance?date=' + today).then(r => r.json()),
       ]);
       setMembers(Array.isArray(mRes) ? mRes : []);
       if (Array.isArray(mRes) && mRes.length > 0) {
@@ -302,6 +735,7 @@ export default function HRPage() {
         });
       }
       setAtt(Array.isArray(aRes) ? aRes : []);
+      setTodayAtt(Array.isArray(todayAttRes) ? todayAttRes : (today === curDate && Array.isArray(aRes) ? aRes : []));
       setLeaves(Array.isArray(lRes) ? lRes : []);
       setMonthSum(Array.isArray(sumRes) ? sumRes : []);
     } catch (e) { console.error(e); }
@@ -397,8 +831,9 @@ export default function HRPage() {
 
       const leaveDateMap = new Map<string, { type: string; status: string }>();
       leaveRows.forEach((l: any) => {
-        const start = new Date(l.start_date + 'T00:00:00');
-        const end = new Date(l.end_date + 'T00:00:00');
+        const start = new Date(dateOnly(l.start_date) + 'T00:00:00');
+        const end = new Date(dateOnly(l.end_date) + 'T00:00:00');
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
         for (const cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
           const dow = cur.getDay();
           if (dow !== 5 && dow !== 6) { // Skip Fri & Sat — not counted as leave days
@@ -463,18 +898,56 @@ export default function HRPage() {
 
   useEffect(() => { loadCalendar(); }, [loadCalendar]);
 
-  const markAttendance = async (type: 'IN' | 'OUT') => {
-    if (!user?.id) { showToast('Not logged in.'); return; }
+  const markAttendance = async (type: 'IN' | 'OUT', targetMemberId?: string | number) => {
+    const mid = targetMemberId != null && String(targetMemberId) !== ''
+      ? Number(targetMemberId)
+      : Number(user?.id);
+    if (!mid) { showToast('Select an employee first.'); return; }
+
+    const todayRows = todayAtt.filter(a => String(a.member_id) === String(mid));
+    const hasIn = todayRows.some(a => a.action_type === 'IN');
+    const hasOut = todayRows.some(a => a.action_type === 'OUT');
+    if (type === 'IN' && hasIn) {
+      showToast('Already checked in today.');
+      return;
+    }
+    if (type === 'OUT' && hasOut) {
+      showToast('Already checked out today.');
+      return;
+    }
+    if (type === 'OUT' && !hasIn) {
+      showToast('Cannot check out before check-in.');
+      return;
+    }
+
     setAttLoading(true);
     try {
-      await authFetch('/api/attendance', {
+      const res = await authFetch('/api/attendance', {
         method: 'POST',
-        body: JSON.stringify({ member_id: user.id, action_type: type }),
+        body: JSON.stringify({ member_id: mid, action_type: type }),
       });
-      showToast(`${type === 'IN' ? 'Checked In' : 'Checked Out'} at ${nowDhaka()}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data?.error || (type === 'IN' ? 'Already checked in.' : 'Already checked out.'));
+        return;
+      }
+      const who = members.find(m => String(m.id) === String(mid))?.name || user?.name || 'Employee';
+      showToast(`${who}: ${type === 'IN' ? 'Checked In' : 'Checked Out'} at ${nowDhaka()}`);
       await loadAll();
+      if (activeTab === 'report') await loadCalendar();
     } catch { showToast('Cannot reach server.'); }
     finally { setAttLoading(false); }
+  };
+
+  const openLeaveDetail = (l: any) => {
+    setSelectedLeave(l);
+    setLeaveDraft(leaveToForm(l));
+    setLeaveEditMode(false);
+  };
+
+  const closeLeaveDetail = () => {
+    setSelectedLeave(null);
+    setLeaveEditMode(false);
   };
 
   const submitLeave = async (e?: React.FormEvent) => {
@@ -483,64 +956,58 @@ export default function HRPage() {
       showToast('Please select From and To date & time.');
       return;
     }
+    setLeaveSaving(true);
     try {
-      const shouldNotify = leaveData.notify_email ? 1 : 0;
-      if (editLeaveId) {
-        await authFetch('/api/leaves/' + editLeaveId, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            leave_type: leaveData.leave_type,
-            start_date: leaveData.start_datetime.split('T')[0] || leaveData.start_datetime,
-            end_date: leaveData.end_datetime.split('T')[0] || leaveData.end_datetime,
-            reason: leaveData.reason || '',
-            notify_email: shouldNotify
-          }),
-        });
-        showToast('Leave request updated.');
-        setEditLeaveId(null);
-      } else {
-        await authFetch('/api/leaves', {
-          method: 'POST',
-          body: JSON.stringify({
-            member_id: leaveData.member_id || user?.id,
-            leave_type: leaveData.leave_type,
-            start_date: leaveData.start_datetime,
-            end_date: leaveData.end_datetime,
-            reason: leaveData.reason || '',
-            notify_email: shouldNotify
-          }),
-        });
-        showToast('Leave request submitted. Email reminders scheduled.');
-      }
+      const payload = buildLeavePayload({
+        ...leaveData,
+        member_id: leaveData.member_id || String(user?.id || ''),
+      });
+      await authFetch('/api/leaves', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      showToast('Leave request submitted.');
       setShowLeaveModal(false);
-      setLeaveData({ member_id: '', leave_type: 'SICK', start_datetime: '', end_datetime: '', reason: '', notify_email: 1 });
+      setLeaveData({ ...BLANK_LEAVE });
       await loadAll();
     } catch { showToast('Cannot reach server.'); }
+    finally { setLeaveSaving(false); }
   };
 
-  const toggleLeaveNotification = async (l: any) => {
-    const nextVal = l.notify_email ? 0 : 1;
-    try {
-      const res = await authFetch('/api/leaves/' + l.id, {
-        method: 'PATCH',
-        body: JSON.stringify({ notify_email: nextVal }),
-      });
-      if (res.ok) {
-        showToast(nextVal ? '🔔 Leave notification enabled (24h & 15h alerts)' : '🔕 Leave notification disabled');
-        await loadAll();
-      }
-    } catch {
-      showToast('Failed to toggle notification');
+  const saveLeaveDraft = async () => {
+    if (!selectedLeave) return;
+    if (!leaveDraft.start_datetime || !leaveDraft.end_datetime) {
+      showToast('Please select From and To date & time.');
+      return;
     }
+    setLeaveSaving(true);
+    try {
+      const payload = buildLeavePayload(leaveDraft);
+      const res = await authFetch('/api/leaves/' + selectedLeave.id, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Failed');
+      const updated = await res.json();
+      showToast('Leave request updated.');
+      setLeaveEditMode(false);
+      await loadAll();
+      setSelectedLeave(updated);
+      setLeaveDraft(leaveToForm(updated));
+    } catch { showToast('Cannot reach server.'); }
+    finally { setLeaveSaving(false); }
   };
 
   const reviewLeave = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     try {
-      await authFetch('/api/leaves/' + id, {
+      const res = await authFetch('/api/leaves/' + id, {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       });
-      showToast(status === 'APPROVED' ? 'Leave approved' : 'Leave cancelled');
+      if (!res.ok) throw new Error('Failed');
+      showToast(status === 'APPROVED' ? 'Leave approved' : 'Leave declined');
+      setSelectedLeave(null);
+      setLeaveEditMode(false);
       await loadAll();
     } catch { showToast('Cannot reach server.'); }
   };
@@ -609,7 +1076,9 @@ export default function HRPage() {
 
   const presentCount = new Set(att.filter(a => a.action_type === 'IN').map((a: any) => a.member_id)).size;
   const pendingLeaves = leaves.filter(l => l.status === 'PENDING').length;
-  const myTodayAtt = att.filter(a => String(a.member_id) === String(user?.id));
+  // Approved / declined requests leave the Leave Requests list entirely
+  const openLeaveRequests = leaves.filter(l => l.status === 'PENDING');
+  const myTodayAtt = todayAtt.filter(a => String(a.member_id) === String(user?.id));
   const alreadyCheckedIn = myTodayAtt.some(a => a.action_type === 'IN');
   const alreadyCheckedOut = myTodayAtt.some(a => a.action_type === 'OUT');
 
@@ -620,7 +1089,7 @@ export default function HRPage() {
       <div className="scroll" style={{ overflowX: 'hidden', maxWidth: '100vw' }}>
 
         {/* Date navigator — centered */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px 8px 6px', gap: 8, maxWidth: '100%', boxSizing: 'border-box' }}>
+        <div className="no-print" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px 8px 6px', gap: 8, maxWidth: '100%', boxSizing: 'border-box' }}>
           <div className="dnav" style={{ position: 'relative', flexShrink: 0 }}>
             <button onClick={() => setCurDate(s => shiftDateStr(s, -1))} aria-label="Previous day" style={{ padding: '4px 6px' }}>
               <ChevronLeft size={15} />
@@ -1109,7 +1578,7 @@ export default function HRPage() {
         })()}
 
         {/* Tabs: Summary (all), Employee (all), Leave Apply (all) */}
-        <div className="tabs">
+        <div className="tabs no-print">
           <div className={'tab ' + (activeTab === 'att' ? 'on' : '')} onClick={() => setActiveTab('att')}>
             Summary
           </div>
@@ -1331,140 +1800,21 @@ export default function HRPage() {
           </div>
         )}
 
-        {/* Leave Apply tab — shown only when explicitly selected */}
+        {/* Leave Request tab — Emp | Reason | deadline cards (pending only) */}
         {activeTab === 'leave' && (
-          <div className="card">
-            <div className="card-head">
-              <h3>{isAdmin ? 'All Leave Requests' : 'My Leave Requests'}</h3>
+          <div style={{ paddingBottom: 24 }}>
+            <div style={{ fontSize: '0.72rem', color: MUTED_LABEL, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: 12 }}>
+              {isAdmin ? 'All Leave Requests' : 'My Leave Requests'}
             </div>
-            <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
-              <table style={{ width: '100%', minWidth: '0px', maxWidth: '100%', fontSize: '.74rem', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
-                <colgroup>
-                  {isAdmin && <col style={{ minWidth: '50px' }} />}
-                  <col style={{ minWidth: '90px' }} />
-                  <col style={{ minWidth: '120px' }} />
-                  <col style={{ minWidth: '60px' }} />
-                  {isAdmin && <col style={{ minWidth: '70px' }} />}
-                </colgroup>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {isAdmin && <th style={{ padding: '8px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Emp</th>}
-                    <th style={{ padding: '8px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Period</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'left', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Remarks</th>
-                    <th style={{ padding: '8px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Status</th>
-                    {isAdmin && <th style={{ padding: '8px 2px', textAlign: 'center', fontSize: '.68rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase' }}>Action</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaves.length === 0 ? (
-                    <tr className="empty-r"><td colSpan={isAdmin ? 5 : 3}>No leave requests found.</td></tr>
-                  ) : (
-                    leaves.map((l: any) => (
-                      <tr key={l.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                        {isAdmin && (
-                          <td style={{ padding: '6px 2px', textAlign: 'center' }}>
-                            <div
-                              style={{
-                                background: l.avatar_color || '#4f7eff',
-                                width: '26px',
-                                height: '26px',
-                                borderRadius: '6px',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '.68rem',
-                                fontWeight: 700,
-                                color: '#fff',
-                                letterSpacing: '0.5px',
-                                margin: '0 auto',
-                              }}
-                              title={l.member_name}
-                            >
-                              {getInitials(l.member_name)}
-                            </div>
-                          </td>
-                        )}
-                        <td style={{ padding: '6px 2px', textAlign: 'center', color: 'var(--muted)', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
-                          {fmtLeavePeriod(l.start_date, l.end_date)}
-                        </td>
-                        <td
-                          style={{
-                            padding: '6px 4px',
-                            color: 'var(--text)',
-                            fontSize: '.72rem',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            maxWidth: '100px'
-                          }}
-                          title={l.reason || l.leave_type || '-'}
-                        >
-                          {l.reason || l.leave_type || '-'}
-                        </td>
-                        <td style={{ padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                          <button
-                            type="button"
-                            onClick={() => toggleLeaveNotification(l)}
-                            style={{
-                              background: 'none', border: 'none', padding: '2px 4px',
-                              color: l.notify_email ? '#eab308' : 'var(--muted)',
-                              cursor: 'pointer', verticalAlign: 'middle'
-                            }}
-                            title={l.notify_email ? 'Email notification ON (click to turn off)' : 'Email notification OFF (click to turn on)'}
-                          >
-                            {l.notify_email ? <Bell size={13} /> : <BellOff size={13} />}
-                          </button>
-                          <span
-                            className={'badge ' + (l.status === 'APPROVED' ? 'APPROVED' : l.status === 'REJECTED' || l.status === 'CANCELLED' ? 'REJECTED' : 'PENDING')}
-                            style={{ fontSize: '.64rem', padding: '2px 4px', borderRadius: 4, display: 'inline-block' }}
-                          >
-                            {l.status === 'APPROVED' ? 'Appr' : l.status === 'REJECTED' ? 'Canc' : l.status === 'CANCELLED' ? 'Canc' : 'Pend'}
-                          </span>
-                        </td>
-                        {isAdmin && (
-                          <td style={{ padding: '6px 2px', textAlign: 'center' }}>
-                            <select
-                              defaultValue=""
-                              onChange={e => {
-                                const val = e.target.value;
-                                e.target.value = '';
-                                if (val === 'approve') reviewLeave(l.id, 'APPROVED');
-                                else if (val === 'decline') reviewLeave(l.id, 'REJECTED');
-                                else if (val === 'cancel') reviewLeave(l.id, 'REJECTED');
-                                else if (val === 'edit') {
-                                  const normDate = (d: string) => d ? (d.includes('T') ? d : d + 'T09:00') : '';
-                                  setEditLeaveId(String(l.id));
-                                  setLeaveData({
-                                    member_id: String(l.member_id),
-                                    leave_type: l.leave_type,
-                                    start_datetime: normDate(l.start_date),
-                                    end_datetime: normDate(l.end_date),
-                                    reason: l.reason || '',
-                                    notify_email: l.notify_email ? 1 : 0
-                                  });
-                                  setShowLeaveModal(true);
-                                }
-                              }}
-                              style={{
-                                background: 'var(--card)', border: '1px solid var(--border)',
-                                color: 'var(--text)', borderRadius: 6, padding: '3px 4px',
-                                fontSize: '.68rem', cursor: 'pointer', maxWidth: 74, width: '100%'
-                              }}
-                            >
-                              <option value="" disabled>Action</option>
-                              {l.status === 'PENDING' && <option value="approve">✓ Appr</option>}
-                              {l.status === 'PENDING' && <option value="decline">✗ Decl</option>}
-                              {l.status === 'APPROVED' && <option value="cancel">⊘ Canc</option>}
-                              <option value="edit">✎ Edit</option>
-                            </select>
-                          </td>
-                        )}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {openLeaveRequests.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 40, color: WHITE, opacity: 0.55, fontSize: '0.85rem' }}>
+                No leave requests yet. Tap + to apply.
+              </div>
+            ) : (
+              openLeaveRequests.map((l: any) => (
+                <CompactLeaveCard key={l.id} leave={l} onClick={() => openLeaveDetail(l)} />
+              ))
+            )}
           </div>
         )}
 
@@ -1473,8 +1823,8 @@ export default function HRPage() {
         {/* Individual Monthly Report & Check In/Out */}
         {activeTab === 'report' && (
           <div className="card">
-            {/* Controls row */}
-            <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'flex-end', gap: 14, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
+            {/* Controls row — hidden when printing */}
+            <div className="no-print" style={{ padding: '14px 18px', display: 'flex', alignItems: 'flex-end', gap: 14, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
               {isAdmin ? (
                 <div>
                   <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Employee</div>
@@ -1513,6 +1863,72 @@ export default function HRPage() {
                   </button>
                 </div>
               </div>
+
+              {isAdmin && (() => {
+                const punchId = reportMemberId || '';
+                const punchRows = todayAtt.filter(a => String(a.member_id) === String(punchId));
+                const hasIn = punchRows.some(a => a.action_type === 'IN');
+                const hasOut = punchRows.some(a => a.action_type === 'OUT');
+                return (
+                  <div style={{ flex: '1 1 100%', marginTop: 4 }}>
+                    <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Check In / Out</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        disabled={attLoading || !punchId || hasIn}
+                        onClick={() => markAttendance('IN', punchId)}
+                        title={hasIn ? 'Already checked in' : 'Check in'}
+                        style={{
+                          opacity: hasIn ? 0.55 : 1,
+                          gap: 6,
+                          flex: 1,
+                          minWidth: 120,
+                          justifyContent: 'center',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '10px 14px',
+                          borderRadius: 8,
+                          border: 'none',
+                          background: hasIn ? 'rgba(38,196,134,0.35)' : '#26c486',
+                          color: '#fff',
+                          fontWeight: 700,
+                          fontSize: '.84rem',
+                          cursor: hasIn || attLoading || !punchId ? 'not-allowed' : 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        <LogIn size={15} /> {hasIn ? 'Checked In' : 'Check In'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={attLoading || !punchId || hasOut || !hasIn}
+                        onClick={() => markAttendance('OUT', punchId)}
+                        title={hasOut ? 'Already checked out' : 'Check out'}
+                        style={{
+                          opacity: hasOut ? 0.55 : 1,
+                          gap: 6,
+                          flex: 1,
+                          minWidth: 120,
+                          justifyContent: 'center',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '10px 14px',
+                          borderRadius: 8,
+                          border: 'none',
+                          background: hasOut ? 'rgba(242,92,122,0.35)' : '#f25c7a',
+                          color: '#fff',
+                          fontWeight: 700,
+                          fontSize: '.84rem',
+                          cursor: hasOut || !hasIn || attLoading || !punchId ? 'not-allowed' : 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        <LogOut size={15} /> {hasOut ? 'Checked Out' : 'Check Out'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* The exportable area */}
@@ -1524,7 +1940,7 @@ export default function HRPage() {
                   <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)' }}>
                     {members.find(m => String(m.id) === String(reportMemberId))?.name || user?.name || 'Employee'}
                   </h2>
-                  <div style={{ fontSize: '.85rem', color: 'var(--muted)', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>
+                  <div style={{ fontSize: '.85rem', color: 'var(--muted)', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }} className="print-month">
                     {monthLabel(calYear, calMonth)}
                   </div>
                 </div>
@@ -1543,7 +1959,7 @@ export default function HRPage() {
                 )}
               </div>
 
-              {/* Month stats */}
+              {/* Month stats — screen only (not printed) */}
               {reportMemberId && calDays.length > 0 && (() => {
                 const totalPresent = calDays.filter(d => d.isPresent).length;
                 const totalAbsent = calDays.filter(d => d.isAbsent).length;
@@ -1551,12 +1967,11 @@ export default function HRPage() {
                 const totalApprLeave = calDays.filter(d => d.isLeave && d.leaveStatus === 'APPROVED').length;
                 const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
                 const calMonthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
-                // Elapsed working days up to today (or end of month if viewing past month)
                 let elapsedWorkingDays = 0;
                 const totalMonthDays = daysInMonth(calYear, calMonth);
                 const cutoffDay = calMonthStr < todayStr.substring(0, 7)
-                  ? totalMonthDays  // past month: all working days
-                  : parseInt(todayStr.split('-')[2] || '1', 10); // current month: up to today
+                  ? totalMonthDays
+                  : parseInt(todayStr.split('-')[2] || '1', 10);
                 for (let i = 1; i <= Math.min(cutoffDay, totalMonthDays); i++) {
                   const dow = new Date(calYear, calMonth, i).getDay();
                   if (dow !== 5 && dow !== 6) elapsedWorkingDays++;
@@ -1564,14 +1979,13 @@ export default function HRPage() {
                 const elapsedRequiredHours = elapsedWorkingDays * 5;
                 const totalHours = calDays.reduce((sum, d) => sum + (d.hoursWorked || 0), 0);
                 const stats = [
-                  { label: 'Present',      val: totalPresent,   color: 'var(--green)', dotBg: '#26C486', dotShadow: 'rgba(38,196,134,0.6)' },
-                  { label: 'Absent',       val: totalAbsent,    color: 'var(--red)',   dotBg: '#F25C7A', dotShadow: 'rgba(242,92,122,0.6)' },
-                  { label: 'Late',         val: totalLate,      color: '#FF8C00',      dotBg: '#FF8C00', dotShadow: 'rgba(255,140,0,0.7)' },
-                  { label: 'Appr. Leave', val: totalApprLeave, color: '#2979FF',      dotBg: '#2979FF', dotShadow: 'rgba(41,121,255,0.6)' },
+                  { label: 'Present', val: totalPresent,   color: 'var(--green)', dotBg: '#26C486', dotShadow: 'rgba(38,196,134,0.6)' },
+                  { label: 'Absent',  val: totalAbsent,    color: 'var(--red)',   dotBg: '#F25C7A', dotShadow: 'rgba(242,92,122,0.6)' },
+                  { label: 'Late',    val: totalLate,      color: '#FF8C00',      dotBg: '#FF8C00', dotShadow: 'rgba(255,140,0,0.7)' },
+                  { label: 'Leave',   val: totalApprLeave, color: '#2979FF',      dotBg: '#2979FF', dotShadow: 'rgba(41,121,255,0.6)' },
                 ];
                 return (
-                  <div style={{ padding: '0 18px 20px' }}>
-                    {/* Days / Hours row — cumulative x/elapsed */}
+                  <div className="no-print" style={{ padding: '0 18px 20px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 10 }}
                          className="cal-stats-grid">
                       <div className="s-card" style={{ textAlign: 'center' }}>
@@ -1587,7 +2001,6 @@ export default function HRPage() {
                         </div>
                       </div>
                     </div>
-                    {/* Breakdown row with colored dots */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}
                          className="cal-stats-grid">
                       {stats.map(({ label, val, color, dotBg, dotShadow }) => (
@@ -1610,7 +2023,7 @@ export default function HRPage() {
 
             {/* Print button at the bottom */}
             {reportMemberId && calDays.length > 0 && (
-              <div style={{ padding: '10px 18px 20px', display: 'flex', justifyContent: 'center' }}>
+              <div className="no-print" style={{ padding: '10px 18px 20px', display: 'flex', justifyContent: 'center' }}>
                 <button
                   className="btn btn-primary"
                   onClick={() => window.print()}
@@ -1625,19 +2038,17 @@ export default function HRPage() {
 
       </div>
 
-      {/* FAB for Leave Request — shown only on Leave Apply tab */}
+      {/* FAB for Leave Request */}
       {activeTab === 'leave' && (
         <button
           id="leave-fab"
           onClick={() => {
             const today = todayDhaka();
             setLeaveData({
+              ...BLANK_LEAVE,
               member_id: user?.id ? String(user.id) : '',
-              leave_type: 'SICK',
               start_datetime: `${today}T09:00`,
               end_datetime: `${today}T18:00`,
-              reason: '',
-              notify_email: 1
             });
             setShowLeaveModal(true);
           }}
@@ -1645,181 +2056,279 @@ export default function HRPage() {
           style={{
             position: 'fixed',
             bottom: 24,
-            right: 24,
-            zIndex: 800,
+            right: 20,
+            zIndex: 700,
             width: 56,
             height: 56,
             borderRadius: '50%',
-            background: 'var(--primary)',
-            color: '#fff',
+            background: BLUE_GRAD,
             border: 'none',
-            fontSize: '1.8rem',
+            color: WHITE,
             cursor: 'pointer',
-            boxShadow: '0 4px 20px rgba(79,126,255,0.5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            transition: 'all 0.2s'
+            boxShadow: '0 6px 22px rgba(79,126,255,0.45)',
           }}
         >
-          +
+          <Plus size={24} />
         </button>
       )}
 
-      {/* Leave Request Bottom Sheet / Modal */}
-      {showLeaveModal && (
-        <div
-          onClick={e => { if (e.target === e.currentTarget) { setShowLeaveModal(false); setEditLeaveId(null); } }}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 920,
-            background: 'rgba(0,0,0,.7)',
-            backdropFilter: 'blur(5px)',
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'center'
-          }}
-        >
-          <div
+      {/* Leave detail sheet — App / Dec / Rev / X (same for admin & employee; App/Dec admin-only) */}
+      {selectedLeave && (() => {
+        const active = leaves.find((l: any) => String(l.id) === String(selectedLeave.id)) || selectedLeave;
+        const canDecide = isAdmin && active.status === 'PENDING' && !leaveEditMode;
+        const actionBtn = (label: string, bg: string, color: string, onClick: () => void, title: string) => (
+          <button
+            type="button"
+            title={title}
+            onClick={onClick}
             style={{
-              background: 'var(--surface)',
-              borderRadius: '20px 20px 0 0',
-              width: '100%',
-              maxWidth: 520,
-              paddingBottom: 'env(safe-area-inset-bottom, 16px)',
-              maxHeight: '90dvh',
-              overflowY: 'auto',
-              boxShadow: '0 -8px 40px rgba(0,0,0,.5)',
-              animation: 'slideSheet .22s ease-out'
+              background: bg,
+              border: 'none',
+              color,
+              minWidth: 34,
+              height: 34,
+              borderRadius: 17,
+              padding: '0 10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '0.72rem',
+              fontWeight: 800,
+              letterSpacing: '0.02em',
             }}
           >
-            {/* Top Handle */}
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border)' }} />
-            </div>
-
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 14px' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>{editLeaveId ? 'Edit Leave Request' : 'New Leave Request'}</h3>
-              <button
-                onClick={() => { setShowLeaveModal(false); setEditLeaveId(null); }}
-                style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1, padding: 4 }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={submitLeave} style={{ padding: '0 20px 24px' }}>
-              {/* Employee selection (Admin) or current user display */}
-              <div className="fg">
-                <label>Employee</label>
-                {isAdmin ? (
-                  <select
-                    value={leaveData.member_id || user?.id || ''}
-                    onChange={e => setLeaveData({ ...leaveData, member_id: e.target.value })}
-                  >
-                    <option value={user?.id || ''}>{user?.name} (You)</option>
-                    {[...members].sort((a,b) => a.name.localeCompare(b.name)).map(m => (
-                      m.id !== user?.id && <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input type="text" value={user?.name || ''} disabled style={{ opacity: 0.8, cursor: 'not-allowed' }} />
-                )}
-              </div>
-
-              {/* Leave Type */}
-              <div className="fg">
-                <label>Leave Type</label>
-                <select
-                  value={leaveData.leave_type}
-                  onChange={e => setLeaveData({ ...leaveData, leave_type: e.target.value })}
-                  required
-                >
-                  <option value="SICK">Sick Leave</option>
-                  <option value="PERSONAL">Personal Leave</option>
-                  <option value="EXAM">Exam / Study Leave</option>
-                  <option value="CASUAL">Casual Leave</option>
-                  <option value="VACATION">Vacation Leave</option>
-                </select>
-              </div>
-
-              {/* From & To — stacked vertically to avoid horizontal scroll */}
-              <div className="fg">
-                <label>From (Date &amp; Time)</label>
-                <input
-                  type="datetime-local"
-                  value={leaveData.start_datetime}
-                  onChange={e => setLeaveData({ ...leaveData, start_datetime: e.target.value })}
-                  required
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                />
-              </div>
-              <div className="fg">
-                <label>To (Date &amp; Time)</label>
-                <input
-                  type="datetime-local"
-                  value={leaveData.end_datetime}
-                  min={leaveData.start_datetime}
-                  onChange={e => setLeaveData({ ...leaveData, end_datetime: e.target.value })}
-                  required
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              {/* Remarks */}
-              <div className="fg">
-                <label>Remarks <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></label>
-                <textarea
-                  rows={2}
-                  placeholder="Remarks or details for leave..."
-                  value={leaveData.reason}
-                  onChange={e => setLeaveData({ ...leaveData, reason: e.target.value })}
-                />
-              </div>
-
-              {/* Brevo Email Bell Notification Toggle */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: leaveData.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: leaveData.notify_email ? '#eab308' : 'var(--muted)' }}>
-                    {leaveData.notify_email ? <Bell size={16} /> : <BellOff size={16} />}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '.84rem', fontWeight: 600, color: 'var(--text)' }}>Brevo Email Reminders</div>
-                    <div style={{ fontSize: '.72rem', color: 'var(--muted)' }}>24h &amp; 15h alerts to admin &amp; employee</div>
-                  </div>
-                </div>
+            {label}
+          </button>
+        );
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 99999,
+              background: 'rgba(0,0,0,0.7)',
+              backdropFilter: 'blur(4px)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'flex-end',
+            }}
+            onClick={closeLeaveDetail}
+          >
+            <div
+              style={{
+                background: '#161926',
+                borderTop: '1px solid #2a3050',
+                borderTopLeftRadius: 18,
+                borderTopRightRadius: 18,
+                padding: '14px 16px 16px',
+                paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                maxHeight: '100dvh',
+                overflow: 'hidden',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ position: 'absolute', top: 10, right: 12, display: 'flex', gap: 8, zIndex: 2 }}>
+                {canDecide && actionBtn('App', GREEN_BG, GREEN, () => reviewLeave(active.id, 'APPROVED'), 'Approve')}
+                {canDecide && actionBtn('Dec', RED_BG, RED, () => reviewLeave(active.id, 'REJECTED'), 'Decline')}
+                {!leaveEditMode &&
+                  actionBtn('Rev', AMBER_BG, AMBER, () => {
+                    setLeaveDraft(leaveToForm(active));
+                    setLeaveEditMode(true);
+                  }, 'Revise')}
                 <button
                   type="button"
-                  onClick={() => setLeaveData(prev => ({ ...prev, notify_email: prev.notify_email ? 0 : 1 }))}
+                  onClick={closeLeaveDetail}
                   style={{
-                    background: leaveData.notify_email ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.06)',
-                    border: `1px solid ${leaveData.notify_email ? '#eab308' : 'var(--border)'}`,
-                    color: leaveData.notify_email ? '#eab308' : 'var(--muted)',
-                    borderRadius: 8, padding: '6px 12px', fontSize: '.78rem', fontWeight: 700, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 5
+                    background: 'rgba(255,255,255,0.08)',
+                    border: 'none',
+                    color: '#94a3b8',
+                    width: 34,
+                    height: 34,
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
                   }}
                 >
-                  {leaveData.notify_email ? <Check size={13} /> : null}
-                  {leaveData.notify_email ? 'ON' : 'OFF'}
+                  <X size={16} />
                 </button>
               </div>
 
-              {!editLeaveId && (
-                <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8, background: 'rgba(79,126,255,.08)', border: '1px solid rgba(79,126,255,.18)', fontSize: '.76rem', color: 'var(--muted)' }}>
-                  Your request will be submitted for Admin review.
+              <div
+                style={{
+                  fontSize: '0.68rem',
+                  color: WHITE,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: 10,
+                  fontWeight: 700,
+                  paddingRight: 150,
+                  opacity: 0.7,
+                }}
+              >
+                {leaveEditMode ? 'Revise Leave' : 'Leave Details'}
+              </div>
+
+              <div style={{ overflowY: 'auto', maxHeight: 'calc(100dvh - 120px)' }}>
+                <LeaveFields
+                  form={leaveDraft}
+                  editMode={leaveEditMode}
+                  onChange={(field, val) => setLeaveDraft(prev => ({ ...prev, [field]: val }))}
+                  viewSource={leaveEditMode ? undefined : active}
+                  members={members}
+                  isAdmin={!!isAdmin}
+                  currentUser={user}
+                />
+              </div>
+
+              {leaveEditMode && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLeaveDraft(leaveToForm(active));
+                      setLeaveEditMode(false);
+                    }}
+                    style={{
+                      padding: '10px',
+                      borderRadius: 9,
+                      border: '1px solid #2a3050',
+                      background: '#131722',
+                      color: WHITE,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={leaveSaving}
+                    onClick={saveLeaveDraft}
+                    style={{
+                      padding: '10px',
+                      borderRadius: 9,
+                      border: 'none',
+                      background: BLUE_GRAD,
+                      color: WHITE,
+                      fontWeight: 700,
+                      cursor: leaveSaving ? 'wait' : 'pointer',
+                      opacity: leaveSaving ? 0.7 : 1,
+                    }}
+                  >
+                    {leaveSaving ? 'Saving...' : 'Save'}
+                  </button>
                 </div>
               )}
+            </div>
+          </div>
+        );
+      })()}
 
+      {/* New Leave Request sheet — same fields for employee & admin */}
+      {showLeaveModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            background: 'rgba(0,0,0,0.7)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+          }}
+          onClick={() => setShowLeaveModal(false)}
+        >
+          <div
+            style={{
+              background: '#161926',
+              borderTop: '1px solid #2a3050',
+              borderTopLeftRadius: 18,
+              borderTopRightRadius: 18,
+              padding: '14px 16px 16px',
+              paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
+              position: 'relative',
+              maxHeight: '100dvh',
+              overflow: 'hidden',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ position: 'absolute', top: 10, right: 12, zIndex: 2 }}>
               <button
-                type="submit"
-                className="btn btn-primary"
-                style={{ width: '100%', justifyContent: 'center', padding: '13px', fontSize: '.95rem', fontWeight: 700, borderRadius: 10 }}
+                type="button"
+                onClick={() => setShowLeaveModal(false)}
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  border: 'none',
+                  color: '#94a3b8',
+                  width: 34,
+                  height: 34,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
               >
-                {editLeaveId ? 'Update Leave Request' : 'Submit Leave Request'}
+                <X size={16} />
               </button>
-            </form>
+            </div>
+
+            <div
+              style={{
+                fontSize: '0.68rem',
+                color: WHITE,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: 10,
+                fontWeight: 700,
+                paddingRight: 50,
+                opacity: 0.7,
+              }}
+            >
+              New Leave Request
+            </div>
+
+            <div style={{ overflowY: 'auto', maxHeight: 'calc(100dvh - 140px)' }}>
+              <LeaveFields
+                form={leaveData}
+                editMode
+                onChange={(field, val) => setLeaveData(prev => ({ ...prev, [field]: val }))}
+                members={members}
+                isAdmin={!!isAdmin}
+                currentUser={user}
+              />
+            </div>
+
+            <button
+              type="button"
+              disabled={leaveSaving}
+              onClick={() => submitLeave()}
+              style={{
+                width: '100%',
+                marginTop: 12,
+                padding: '12px',
+                borderRadius: 9,
+                border: 'none',
+                background: BLUE_GRAD,
+                color: WHITE,
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                cursor: leaveSaving ? 'wait' : 'pointer',
+                opacity: leaveSaving ? 0.7 : 1,
+              }}
+            >
+              {leaveSaving ? 'Submitting...' : 'Submit'}
+            </button>
           </div>
         </div>
       )}

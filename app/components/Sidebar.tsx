@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, LayoutDashboard, Users, Wallet, FileText, Phone, MessageCircle, Zap, Key, Shield, LogOut } from 'lucide-react';
+import { Home, LayoutDashboard, Users, Wallet, FileText, Phone, MessageCircle, Zap, Key, Shield, LogOut, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Sidebar() {
@@ -17,14 +17,26 @@ export default function Sidebar() {
   
   return (
     <aside className="side" id="sidebar">
-      <div className="side-logo">
-        <div className="logo-icon">
-          <Zap color="#fff" size={16} strokeWidth={2.5} />
+      <div className="side-logo" style={{ justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="logo-icon">
+            <Zap color="#fff" size={16} strokeWidth={2.5} />
+          </div>
+          <div>
+            <div className="logo-text">AlliedOne</div>
+            <div className="logo-sub">ERP System</div>
+          </div>
         </div>
-        <div>
-          <div className="logo-text">AlliedOne</div>
-          <div className="logo-sub">ERP System</div>
-        </div>
+        {/* Mobile drawer only — PC sidebar stays fixed with no close button */}
+        <button
+          type="button"
+          className="side-close-btn"
+          onClick={closeSide}
+          aria-label="Close menu"
+          title="Close"
+        >
+          <X size={18} />
+        </button>
       </div>
       
       {user && (
@@ -42,12 +54,10 @@ export default function Sidebar() {
       <nav className="nav" style={{ flex: 1, overflowY: 'auto' }}>
         <div className="nav-section">Workspace</div>
 
-        {/* Home — visible to all */}
         <Link href="/" className={pathname === '/' ? 'on' : ''} onClick={closeSide}>
           <Home size={18} /> Home
         </Link>
 
-        {/* Admin-only sections */}
         {user?.role === 'Admin' && (
           <>
             <Link href="/accounts" className={pathname === '/accounts' ? 'on' : ''} onClick={closeSide}>
@@ -60,7 +70,6 @@ export default function Sidebar() {
           </>
         )}
 
-        {/* Visible to all authenticated users */}
         <Link href="/dashboard" className={pathname === '/dashboard' ? 'on' : ''} onClick={closeSide}>
           <LayoutDashboard size={18} /> Daily Tasks
         </Link>
@@ -69,7 +78,6 @@ export default function Sidebar() {
           <Users size={18} /> HR & Attendance
         </Link>
 
-        {/* Admin-only sections */}
         {user?.role === 'Admin' && (
           <>
             <Link href="/meetings" className={pathname === '/meetings' ? 'on' : ''} onClick={closeSide}>
@@ -85,7 +93,6 @@ export default function Sidebar() {
             </Link>
           </>
         )}
-
 
         <div className="nav-section">Bot</div>
         <a href="/chat.html" onClick={closeSide}><MessageCircle size={18} /> ERP Chat</a>
