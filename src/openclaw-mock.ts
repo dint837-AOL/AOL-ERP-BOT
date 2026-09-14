@@ -1374,7 +1374,7 @@ echo "======================================================"
       const leaveMsg = `Leave Request: ${member?.name || 'An employee'} requested ${leave_type} leave (${start_date} to ${end_date}).${reason ? `\nReason: "${reason}"` : ''}`;
       await notifyAdmins(leaveMsg, '/hr?tab=leave');
 
-      if (shouldNotify) {
+      if (true) {
         const recipientEmails = await resolveMemberNotificationEmails(member_id);
         const emailRows = [
           { label: 'Name', value: member?.name || 'Employee' },
@@ -1439,7 +1439,7 @@ echo "======================================================"
           await notifyMember(leaveRow.member_id, `Your ${leaveRow.leave_type} leave request has been ${status}.`, '/hr?tab=leave');
           await notifyAdmins(`Leave Decision: ${member?.name || 'Employee'}'s ${leaveRow.leave_type} leave has been ${status}.`, '/hr?tab=leave');
 
-          if (leaveRow.notify_email) {
+          if (true) {
             const recipientEmails = await resolveMemberNotificationEmails(leaveRow.member_id);
             const emailRows = [
               { label: 'Name', value: member?.name || 'Employee' },
