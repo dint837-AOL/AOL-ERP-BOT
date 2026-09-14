@@ -11,3 +11,4 @@ session/
 public/sw.js
 public/sw.js.map
 public/workbox-*.js
+CREDENTIALS.md
