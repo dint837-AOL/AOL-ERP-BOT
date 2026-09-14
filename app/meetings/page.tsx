@@ -272,7 +272,7 @@ function MeetingFields({
   form: MeetingForm;
   editMode: boolean;
   onChange: (field: keyof MeetingForm, val: string) => void;
-  viewSource?: Meeting;
+  viewSource?: Meeting | undefined;
 }) {
   const v = viewSource;
   return (

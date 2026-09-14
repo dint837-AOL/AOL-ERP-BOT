@@ -331,7 +331,7 @@ function TenderFields({
   form: TenderForm;
   editMode: boolean;
   onChange: (field: keyof TenderForm, val: string) => void;
-  viewSource?: Tender;
+  viewSource?: Tender | undefined;
 }) {
   const v = viewSource;
 

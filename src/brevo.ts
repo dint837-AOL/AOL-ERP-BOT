@@ -293,9 +293,9 @@ export async function scheduleCustomReminders(params: {
   recipientEmails: string[];
   title: string;
   rows: Array<{ label: string; value: string }>;
-  reminderDays?: number | null;
-  reminderHours?: number | null;
-  reminderMinutes?: number | null;
+  reminderDays?: number | null | undefined;
+  reminderHours?: number | null | undefined;
+  reminderMinutes?: number | null | undefined;
 }) {
   const offsets: Array<{ jobType: string; ms: number; label: string }> = [];
   const days = Number(params.reminderDays);
@@ -328,9 +328,9 @@ export async function scheduleTenderReminders(params: {
   recipientEmails: string[];
   title: string;
   rows: Array<{ label: string; value: string }>;
-  reminderDays?: number | null;
-  reminderHours?: number | null;
-  reminderMinutes?: number | null;
+  reminderDays?: number | null | undefined;
+  reminderHours?: number | null | undefined;
+  reminderMinutes?: number | null | undefined;
 }) {
   return scheduleCustomReminders({
     entityType: 'tender',

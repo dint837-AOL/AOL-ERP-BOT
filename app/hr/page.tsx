@@ -95,7 +95,7 @@ function leaveReasonLabel(type?: string): string {
 
 function dateOnly(s?: string): string {
   if (!s) return '';
-  return String(s).split('T')[0].split(' ')[0];
+  return String(s).split('T')[0]?.split(' ')[0] || '';
 }
 
 function toLeaveLocalInput(raw?: string): string {

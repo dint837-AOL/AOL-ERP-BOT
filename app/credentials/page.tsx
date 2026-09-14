@@ -269,7 +269,7 @@ function CredFields({
   form: CredForm;
   editMode: boolean;
   onChange: (field: keyof CredForm, val: string) => void;
-  viewSource?: Cred;
+  viewSource?: Cred | undefined;
 }) {
   const v = viewSource;
   return (
