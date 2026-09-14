@@ -21,8 +21,9 @@ export const NOTIFICATION_EMAIL_MAP: Record<string, string> = {
   'admin': 'ahsankabir13@gmail.com',
   'orko': 'orko552@gmail.com',
   'tajimur': 'tajimurrafi@gmail.com',
-  'rafi': 'tajimurrafi@gmail.com',
-  'tajimurrafi': 'tajimurrafi@gmail.com'
+  'tajimurrafi': 'tajimurrafi@gmail.com',
+  'kamrul': 'kamrulmdislam19@gmail.com',
+  'islam': 'kamrulmdislam19@gmail.com'
 };
 
 export const ADMIN_NOTIFICATION_EMAIL = 'ahsankabir13@gmail.com';
