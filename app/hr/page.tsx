@@ -296,6 +296,67 @@ function CompactLeaveCard({ leave, onClick }: { leave: any; onClick: () => void 
   );
 }
 
+function PendingApprovalCard({ leave, onClick }: { leave: any; onClick: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        background: '#161926',
+        border: '1px solid #2a3050',
+        borderRadius: 12,
+        padding: '13px 16px',
+        marginBottom: 10,
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        userSelect: 'none',
+      }}
+      onMouseOver={e => {
+        e.currentTarget.style.borderColor = '#4f7eff';
+        e.currentTarget.style.background = 'rgba(79,126,255,0.04)';
+      }}
+      onMouseOut={e => {
+        e.currentTarget.style.borderColor = '#2a3050';
+        e.currentTarget.style.background = '#161926';
+      }}
+    >
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          fontSize: '0.92rem',
+          color: WHITE,
+          fontWeight: 600,
+        }}
+      >
+        {leave.member_name || 'Employee'}
+      </div>
+      <div
+        style={{
+          maxWidth: '34%',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          fontSize: '0.82rem',
+          color: WHITE,
+          flexShrink: 1,
+          marginLeft: 'auto',
+        }}
+      >
+        {leaveReasonLabel(leave.leave_type)}
+      </div>
+      <div style={{ fontSize: '0.82rem', color: '#4f7eff', whiteSpace: 'nowrap', fontWeight: 700, flexShrink: 0, marginLeft: 20 }}>
+        Review {'>'}
+      </div>
+    </div>
+  );
+}
+
 function LeaveFields({
   form,
   editMode,
@@ -321,29 +382,31 @@ function LeaveFields({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div>
-        <LeaveFieldLabel>Emp</LeaveFieldLabel>
-        {editMode && isAdmin ? (
-          <select
-            value={form.member_id || String(currentUser?.id || '')}
-            onChange={e => onChange('member_id', e.target.value)}
-            style={leaveFieldEditSt}
-          >
-            <option value={String(currentUser?.id || '')}>{currentUser?.name || 'You'} (You)</option>
-            {[...members]
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map(m =>
-                String(m.id) !== String(currentUser?.id) ? (
-                  <option key={m.id} value={String(m.id)}>
-                    {m.name}
-                  </option>
-                ) : null
-              )}
-          </select>
-        ) : (
-          <div style={{ ...leaveValueSt, fontWeight: 600, fontSize: '0.95rem', paddingRight: 120 }}>{empName}</div>
-        )}
-      </div>
+      {isAdmin && (
+        <div>
+          <LeaveFieldLabel>Emp</LeaveFieldLabel>
+          {editMode ? (
+            <select
+              value={form.member_id || String(currentUser?.id || '')}
+              onChange={e => onChange('member_id', e.target.value)}
+              style={leaveFieldEditSt}
+            >
+              <option value={String(currentUser?.id || '')}>{currentUser?.name || 'You'} (You)</option>
+              {[...members]
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(m =>
+                  String(m.id) !== String(currentUser?.id) ? (
+                    <option key={m.id} value={String(m.id)}>
+                      {m.name}
+                    </option>
+                  ) : null
+                )}
+            </select>
+          ) : (
+            <div style={{ ...leaveValueSt, fontWeight: 600, fontSize: '0.95rem', paddingRight: 120 }}>{empName}</div>
+          )}
+        </div>
+      )}
 
       <div>
         <LeaveFieldLabel>Reason</LeaveFieldLabel>
@@ -1580,7 +1643,7 @@ export default function HRPage() {
         {/* Tabs: Summary (all), Employee (all), Leave Apply (all) */}
         <div className="tabs no-print">
           <div className={'tab ' + (activeTab === 'att' ? 'on' : '')} onClick={() => setActiveTab('att')}>
-            Summary
+            {isAdmin ? 'Admin View' : 'Summary'}
           </div>
           <div className={'tab ' + (activeTab === 'report' ? 'on' : '')} onClick={() => setActiveTab('report')}>
             Employee
@@ -1595,9 +1658,9 @@ export default function HRPage() {
           </div>
         </div>
 
-        {/* Summary tab — cumulative attendance table */}
+        {/* Admin View / Summary tab — cumulative attendance table */}
         {activeTab === 'att' && (
-          <div className="card">
+          <div className="card" style={{ paddingBottom: 24 }}>
             <div className="card-head" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
               <h3>Team Attendance</h3>
 
@@ -1797,6 +1860,96 @@ export default function HRPage() {
                 );
               })()}
             </div>
+
+            {isAdmin && openLeaveRequests.length > 0 && (
+              <div style={{ padding: '20px 18px 0', width: '100%' }}>
+                <h3 style={{ marginBottom: 12, fontSize: '1.05rem', color: 'var(--text)' }}>Pending Approvals</h3>
+                {openLeaveRequests.map((l: any) => (
+                  <PendingApprovalCard key={l.id} leave={l} onClick={() => openLeaveDetail(l)} />
+                ))}
+              </div>
+            )}
+
+            {isAdmin && (
+              <div style={{ padding: '20px 18px 0', width: '100%' }}>
+                <h3 style={{ marginBottom: 12, fontSize: '1.05rem', color: 'var(--text)' }}>Manual Check In/Out</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', background: '#161926', padding: '16px', borderRadius: 12, border: '1px solid #2a3050' }}>
+                  <div style={{ flex: '1 1 200px' }}>
+                    <select
+                      className="cw-select"
+                      style={{ width: '100%' }}
+                      value={reportMemberId}
+                      onChange={e => setReportMemberId(e.target.value)}
+                    >
+                      <option value="">Select employee...</option>
+                      {members.sort((a,b) => a.name.localeCompare(b.name)).map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {(() => {
+                    const punchId = reportMemberId || '';
+                    const punchRows = todayAtt.filter(a => String(a.member_id) === String(punchId));
+                    const hasIn = punchRows.some(a => a.action_type === 'IN');
+                    const hasOut = punchRows.some(a => a.action_type === 'OUT');
+                    return (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flex: '1 1 auto' }}>
+                        <button
+                          type="button"
+                          disabled={attLoading || !punchId || hasIn}
+                          onClick={() => markAttendance('IN', punchId)}
+                          title={hasIn ? 'Already checked in' : 'Check in'}
+                          style={{
+                            opacity: hasIn ? 0.55 : 1,
+                            gap: 6,
+                            flex: 1,
+                            minWidth: 120,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '10px 14px',
+                            borderRadius: 8,
+                            border: 'none',
+                            background: hasIn ? 'rgba(38,196,134,0.35)' : '#26c486',
+                            color: '#fff',
+                            fontWeight: 700,
+                            fontSize: '.84rem',
+                            cursor: hasIn || attLoading || !punchId ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          <LogIn size={15} /> {hasIn ? 'Checked In' : 'Check In'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={attLoading || !punchId || hasOut || !hasIn}
+                          onClick={() => markAttendance('OUT', punchId)}
+                          title={hasOut ? 'Already checked out' : 'Check out'}
+                          style={{
+                            opacity: hasOut ? 0.55 : 1,
+                            gap: 6,
+                            flex: 1,
+                            minWidth: 120,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '10px 14px',
+                            borderRadius: 8,
+                            border: 'none',
+                            background: hasOut ? 'rgba(242,92,122,0.35)' : '#f25c7a',
+                            color: '#fff',
+                            fontWeight: 700,
+                            fontSize: '.84rem',
+                            cursor: hasOut || !hasIn || attLoading || !punchId ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          <LogOut size={15} /> {hasOut ? 'Checked Out' : 'Check Out'}
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1804,14 +1957,14 @@ export default function HRPage() {
         {activeTab === 'leave' && (
           <div style={{ paddingBottom: 24 }}>
             <div style={{ fontSize: '0.72rem', color: MUTED_LABEL, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: 12 }}>
-              {isAdmin ? 'All Leave Requests' : 'My Leave Requests'}
+              My Leave Requests
             </div>
-            {openLeaveRequests.length === 0 ? (
+            {openLeaveRequests.filter(l => !isAdmin || String(l.member_id) === String(user?.id)).length === 0 ? (
               <div style={{ textAlign: 'center', padding: 40, color: WHITE, opacity: 0.55, fontSize: '0.85rem' }}>
                 No leave requests yet. Tap + to apply.
               </div>
             ) : (
-              openLeaveRequests.map((l: any) => (
+              openLeaveRequests.filter(l => !isAdmin || String(l.member_id) === String(user?.id)).map((l: any) => (
                 <CompactLeaveCard key={l.id} leave={l} onClick={() => openLeaveDetail(l)} />
               ))
             )}
@@ -1863,72 +2016,6 @@ export default function HRPage() {
                   </button>
                 </div>
               </div>
-
-              {isAdmin && (() => {
-                const punchId = reportMemberId || '';
-                const punchRows = todayAtt.filter(a => String(a.member_id) === String(punchId));
-                const hasIn = punchRows.some(a => a.action_type === 'IN');
-                const hasOut = punchRows.some(a => a.action_type === 'OUT');
-                return (
-                  <div style={{ flex: '1 1 100%', marginTop: 4 }}>
-                    <div style={{ fontSize: '.72rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 5 }}>Check In / Out</div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        disabled={attLoading || !punchId || hasIn}
-                        onClick={() => markAttendance('IN', punchId)}
-                        title={hasIn ? 'Already checked in' : 'Check in'}
-                        style={{
-                          opacity: hasIn ? 0.55 : 1,
-                          gap: 6,
-                          flex: 1,
-                          minWidth: 120,
-                          justifyContent: 'center',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          padding: '10px 14px',
-                          borderRadius: 8,
-                          border: 'none',
-                          background: hasIn ? 'rgba(38,196,134,0.35)' : '#26c486',
-                          color: '#fff',
-                          fontWeight: 700,
-                          fontSize: '.84rem',
-                          cursor: hasIn || attLoading || !punchId ? 'not-allowed' : 'pointer',
-                          fontFamily: 'inherit',
-                        }}
-                      >
-                        <LogIn size={15} /> {hasIn ? 'Checked In' : 'Check In'}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={attLoading || !punchId || hasOut || !hasIn}
-                        onClick={() => markAttendance('OUT', punchId)}
-                        title={hasOut ? 'Already checked out' : 'Check out'}
-                        style={{
-                          opacity: hasOut ? 0.55 : 1,
-                          gap: 6,
-                          flex: 1,
-                          minWidth: 120,
-                          justifyContent: 'center',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          padding: '10px 14px',
-                          borderRadius: 8,
-                          border: 'none',
-                          background: hasOut ? 'rgba(242,92,122,0.35)' : '#f25c7a',
-                          color: '#fff',
-                          fontWeight: 700,
-                          fontSize: '.84rem',
-                          cursor: hasOut || !hasIn || attLoading || !punchId ? 'not-allowed' : 'pointer',
-                          fontFamily: 'inherit',
-                        }}
-                      >
-                        <LogOut size={15} /> {hasOut ? 'Checked Out' : 'Check Out'}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()}
             </div>
 
             {/* The exportable area */}
