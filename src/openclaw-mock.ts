@@ -569,6 +569,33 @@ export class OpenClaw {
       res.json(result);
     });
 
+    // ── TEST EMAIL (Brevo) ────────────────────────────────────
+    this.app.post('/api/test-email', requireRole('Admin'), async (req, res) => {
+      const { to } = req.body;
+      const recipient = to || 'kamrulmdislam19@gmail.com';
+      const apiKey = process.env.BREVO_API_KEY || '';
+      console.log(`[Test-Email] Attempting to send test email to ${recipient}. BREVO_API_KEY set: ${!!apiKey}`);
+      try {
+        const result = await sendBrevoEmail({
+          to: recipient,
+          subject: 'AOL_ERP: Test Email from Render',
+          htmlContent: `<h2>Test Email</h2><p>If you see this, Brevo is working from Render! Sent at ${new Date().toISOString()}</p>`
+        });
+        console.log(`[Test-Email] Result:`, JSON.stringify(result));
+        res.json({
+          success: result.success,
+          messageId: result.messageId,
+          error: result.error,
+          brevo_api_key_set: !!apiKey,
+          recipient,
+          timestamp: new Date().toISOString()
+        });
+      } catch (err: any) {
+        console.error('[Test-Email] Exception:', err.message);
+        res.status(500).json({ success: false, error: err.message, brevo_api_key_set: !!apiKey });
+      }
+    });
+
     this.app.post('/api/debug-env', requireRole('Admin'), async (req, res) => {
       const token = getBotToken();
       const hasToken = !!token;
