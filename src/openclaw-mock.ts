@@ -347,8 +347,8 @@ export class OpenClaw {
           await notifyAdmins(`New Task: "${title}" (Assigned to ${assignee?.name || 'employee'}).`, '/dashboard');
         }
 
-        // Brevo email notification if bell is on
-        if (shouldNotifyEmail && initialStatus !== 'DONE') {
+        // Brevo email notification if bell is on — always send regardless of task status
+        if (shouldNotifyEmail) {
           const emails = await resolveMemberNotificationEmails(assigned_to);
           const emailHtml = buildAolErpHtml('New Task Assigned', [
             { label: 'Name', value: assignee?.name || 'Assigned Member' },
