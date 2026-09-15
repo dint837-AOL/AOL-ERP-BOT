@@ -355,7 +355,12 @@ async function scheduleOffsetJobs(params: {
   rows: Array<{ label: string; value: string }>;
   offsets: Array<{ jobType: string; ms: number; label: string }>;
 }) {
-  const target = new Date(params.targetDateTime);
+  let dateStr = String(params.targetDateTime);
+  if (dateStr.length === 16 && dateStr.includes('T')) {
+    // Treat frontend datetime-local (YYYY-MM-DDTHH:mm) as Dhaka time (+06:00)
+    dateStr += ':00+06:00';
+  }
+  const target = new Date(dateStr);
   if (isNaN(target.getTime())) {
     console.warn(`[Brevo] Invalid date for ${params.entityType} reminder: ${params.targetDateTime}`);
     return;
