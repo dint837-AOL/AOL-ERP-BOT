@@ -177,6 +177,21 @@ export class OpenClaw {
       console.error('[Telegram] Settings load error:', e);
     }
 
+    // Load Brevo API key from database settings (same pattern as Telegram)
+    try {
+      const savedBrevoRow = await dbGet("SELECT value FROM settings WHERE key = 'brevo_api_key'") as any;
+      if (savedBrevoRow?.value && !process.env.BREVO_API_KEY) {
+        process.env.BREVO_API_KEY = savedBrevoRow.value;
+        console.log('[Brevo] Loaded BREVO_API_KEY from database settings.');
+      } else if (process.env.BREVO_API_KEY) {
+        console.log('[Brevo] BREVO_API_KEY loaded from environment variable.');
+      } else {
+        console.warn('[Brevo] BREVO_API_KEY not found in env or database. Emails will be simulated.');
+      }
+    } catch (e) {
+      console.error('[Brevo] Settings load error:', e);
+    }
+
     // ── AUTH MIDDLEWARES ─────────────────────────────────────
     const authenticateToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
       let token = '';
@@ -559,6 +574,26 @@ export class OpenClaw {
       }
       const botInfo = await getTelegramBotInfo();
       res.json({ success: true, botInfo, hasToken: !!getBotToken() });
+    });
+
+    // ── BREVO SETTINGS ───────────────────────────────────────
+    this.app.post('/api/settings/brevo', requireRole('Admin'), async (req, res) => {
+      const { api_key } = req.body;
+      if (!api_key || !api_key.trim()) return res.status(400).json({ error: 'api_key is required' });
+      const cleanKey = api_key.trim();
+      try {
+        if (isPostgres()) {
+          await dbRun("INSERT INTO settings(key, value) VALUES('brevo_api_key', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [cleanKey]);
+        } else {
+          await dbRun("INSERT OR REPLACE INTO settings(key, value) VALUES('brevo_api_key', ?)", [cleanKey]);
+        }
+      } catch (e) {
+        await dbRun("INSERT OR REPLACE INTO settings(key, value) VALUES('brevo_api_key', ?)", [cleanKey]).catch(console.error);
+      }
+      // Apply immediately without restart
+      process.env.BREVO_API_KEY = cleanKey;
+      console.log('[Brevo] API key updated via /api/settings/brevo');
+      res.json({ success: true, message: 'Brevo API key saved and applied. Emails will now send.' });
     });
 
     this.app.post('/api/test-telegram', requireRole('Admin'), async (req, res) => {
