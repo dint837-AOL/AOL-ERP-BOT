@@ -325,13 +325,13 @@ export class OpenClaw {
       const remHours = reminder_hours !== undefined && reminder_hours !== '' && reminder_hours !== null ? Number(reminder_hours) : null;
       const remMins = reminder_minutes !== undefined && reminder_minutes !== '' && reminder_minutes !== null ? Number(reminder_minutes) : null;
       const hasReminder = (remDays && remDays > 0) || (remHours && remHours > 0) || (remMins && remMins > 0);
-      const shouldNotifyTg = (notify_telegram || notify_email || hasReminder) ? 1 : 0;
-      const shouldNotifyEmail = (notify_email || hasReminder) ? 1 : (notify_telegram ? 1 : 0);
+      // Telegram still uses the bell toggle; email is now always-on for assigned tasks
+      const shouldNotifyTg = (notify_telegram || hasReminder) ? 1 : 0;
       const initialStatus = status || 'DONE';
       
       const { lastID } = await dbRun(
         `INSERT INTO tasks(title,description,deadline,priority,assigned_to,task_date,action_type,recipient,status,notify_telegram,notify_email,reminder_days,reminder_hours,reminder_minutes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'STUDY', recipient||'', initialStatus, shouldNotifyTg, shouldNotifyEmail, remDays, remHours, remMins]
+        [title, description||'', deadline||null, priority||'GREEN', assigned_to||null, date, action_type||'STUDY', recipient||'', initialStatus, shouldNotifyTg, 1, remDays, remHours, remMins]
       );
       
       const newTask = await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]) as any;
@@ -341,38 +341,37 @@ export class OpenClaw {
         const assignee = await dbGet('SELECT name FROM members WHERE id=?', [assigned_to]) as any;
         await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [assigned_to, `New Task Assigned: "${title}"`, '/dashboard']);
         
-        // Telegram notification: ONLY if bell is on AND status is NOT done!
+        // Telegram notification: only if bell is on AND status is NOT done
         if (shouldNotifyTg && initialStatus !== 'DONE') {
           await notifyMember(assigned_to, `New Task Assigned: "${title}"`, '/dashboard');
           await notifyAdmins(`New Task: "${title}" (Assigned to ${assignee?.name || 'employee'}).`, '/dashboard');
         }
 
-        // Brevo email notification if bell is on — always send regardless of task status
-        if (shouldNotifyEmail) {
-          const emails = await resolveMemberNotificationEmails(assigned_to);
-          const emailHtml = buildAolErpHtml('New Task Assigned', [
-            { label: 'Name', value: assignee?.name || 'Assigned Member' },
-            { label: 'Task', value: title },
-            { label: 'Status', value: initialStatus },
-            { label: 'Deadline', value: deadline ? new Date(deadline).toLocaleString('en-GB') : 'No Deadline' },
-            { label: 'Contact', value: recipient || '—' },
-          ]);
-          sendBrevoEmail({ to: emails, subject: `AOL_ERP: New Task - ${title}`, htmlContent: emailHtml }).catch(console.error);
+        // Brevo email: always send to assigned employee (no bell required)
+        const emails = await resolveMemberNotificationEmails(assigned_to);
+        const emailHtml = buildAolErpHtml('New Task Assigned', [
+          { label: 'Name', value: assignee?.name || 'Assigned Member' },
+          { label: 'Task', value: title },
+          { label: 'Status', value: initialStatus },
+          { label: 'Deadline', value: deadline ? new Date(deadline).toLocaleString('en-GB') : 'No Deadline' },
+          { label: 'Contact', value: recipient || '—' },
+        ]);
+        sendBrevoEmail({ to: emails, subject: `AOL_ERP: New Task - ${title}`, htmlContent: emailHtml }).catch(console.error);
 
-          if (deadline && !hasReminder) {
-            schedule24And15HourReminders({
-              entityType: 'task',
-              entityId: lastID,
-              targetDateTime: deadline,
-              recipientEmails: emails,
-              title: `Task Deadline: ${title}`,
-              rows: [
-                { label: 'Name', value: assignee?.name || 'Assigned Member' },
-                { label: 'Task', value: title },
-                { label: 'Deadline', value: new Date(deadline).toLocaleString('en-GB') },
-              ]
-            }).catch(console.error);
-          }
+        // Schedule 24h/15h auto-reminders only if deadline set and no custom reminder
+        if (deadline && !hasReminder) {
+          schedule24And15HourReminders({
+            entityType: 'task',
+            entityId: lastID,
+            targetDateTime: deadline,
+            recipientEmails: emails,
+            title: `Task Deadline: ${title}`,
+            rows: [
+              { label: 'Name', value: assignee?.name || 'Assigned Member' },
+              { label: 'Task', value: title },
+              { label: 'Deadline', value: new Date(deadline).toLocaleString('en-GB') },
+            ]
+          }).catch(console.error);
         }
       } else if (shouldNotifyTg && initialStatus !== 'DONE') {
         await notifyAdmins(`New Task Created: "${title}" (Unassigned).`, '/dashboard');

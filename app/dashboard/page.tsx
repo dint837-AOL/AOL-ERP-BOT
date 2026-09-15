@@ -546,7 +546,7 @@ export default function DashboardPage() {
           reminder_hours: remHours === '' ? null : Number(remHours),
           reminder_minutes: remMins === '' ? null : Number(remMins),
           notify_telegram: hasReminder ? 1 : ((newRow as any).notify_telegram || 0),
-          notify_email: hasReminder ? 1 : ((newRow as any).notify_email || 0),
+          notify_email: 1, // always on — email fires whenever a task is assigned
         }),
       });
       setNewRow({ ...BLANK_ROW });
@@ -916,19 +916,6 @@ export default function DashboardPage() {
                             <td style={{ padding: '12px 16px' }}>{renderCell(task, 'deadline')}</td>
                             <td style={{ padding: '12px 16px' }}>{renderCell(task, 'status')}</td>
                             <td style={{ padding: '12px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <button
-                                onClick={() => toggleTelegramNotification(task)}
-                                style={{
-                                  background: 'none', border: 'none',
-                                  color: task.notify_telegram ? '#eab308' : '#64748b',
-                                  cursor: 'pointer', padding: '6px', borderRadius: '6px',
-                                  display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s',
-                                  marginRight: '6px'
-                                }}
-                                title={task.notify_telegram ? 'Telegram notification ON (click to turn off)' : 'Telegram notification OFF (click to turn on)'}
-                              >
-                                {task.notify_telegram ? <Bell size={16} /> : <BellOff size={16} />}
-                              </button>
                               <button onClick={() => setTaskToDelete(task)}
                                 style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s' }}
                                 onMouseOver={e => (e.currentTarget.style.color = '#ef4444')}
@@ -1003,20 +990,6 @@ export default function DashboardPage() {
                             </select>
                           </td>
                           <td style={{ padding: '12px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <button
-                              type="button"
-                              onClick={() => setNewRow({ ...newRow, notify_telegram: (newRow as any).notify_telegram ? 0 : 1 })}
-                              style={{
-                                background: 'none', border: 'none',
-                                color: (newRow as any).notify_telegram ? '#eab308' : '#64748b',
-                                cursor: 'pointer', padding: '6px', borderRadius: '6px',
-                                display: 'inline-flex', alignItems: 'center',
-                                marginRight: '6px'
-                              }}
-                              title={(newRow as any).notify_telegram ? 'Telegram notification will be sent (click to disable)' : 'Telegram notification OFF (click to enable)'}
-                            >
-                              {(newRow as any).notify_telegram ? <Bell size={16} /> : <BellOff size={16} />}
-                            </button>
                             <button onClick={submitNewRow} disabled={savingNew}
                               style={{
                                 background: '#4f7eff',
