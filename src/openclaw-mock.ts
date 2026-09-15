@@ -337,6 +337,7 @@ export class OpenClaw {
       const newTask = await dbGet(`SELECT t.*,m.name as assignee_name,m.avatar_color as assignee_color FROM tasks t LEFT JOIN members m ON t.assigned_to=m.id WHERE t.id=?`, [lastID]) as any;
       
       // In-app notifications & Telegram/Brevo alerts
+      console.log(`[Task] Created task "${title}" assigned_to=${assigned_to} (type: ${typeof assigned_to})`);
       if (assigned_to) {
         const assignee = await dbGet('SELECT name FROM members WHERE id=?', [assigned_to]) as any;
         await dbRun(`INSERT INTO notifications(member_id,message,link) VALUES(?,?,?)`, [assigned_to, `New Task Assigned: "${title}"`, '/dashboard']);
@@ -348,7 +349,9 @@ export class OpenClaw {
         }
 
         // Brevo email: always send to assigned employee (no bell required)
+        console.log(`[Task] Resolving emails for member id=${assigned_to}...`);
         const emails = await resolveMemberNotificationEmails(assigned_to);
+        console.log(`[Task] Resolved emails: [${emails.join(', ')}]`);
         const emailHtml = buildAolErpHtml('New Task Assigned', [
           { label: 'Name', value: assignee?.name || 'Assigned Member' },
           { label: 'Task', value: title },
@@ -356,6 +359,7 @@ export class OpenClaw {
           { label: 'Deadline', value: deadline ? new Date(deadline).toLocaleString('en-GB') : 'No Deadline' },
           { label: 'Contact', value: recipient || '—' },
         ]);
+        console.log(`[Task] Calling sendBrevoEmail to [${emails.join(', ')}]...`);
         sendBrevoEmail({ to: emails, subject: `AOL_ERP: New Task - ${title}`, htmlContent: emailHtml }).catch(console.error);
 
         // Schedule 24h/15h auto-reminders only if deadline set and no custom reminder
