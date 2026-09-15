@@ -246,6 +246,14 @@ export class OpenClaw {
       }
     });
 
+    // ── RAW REQUEST LOGGER (debug) ──────────────────────────
+    this.app.use((req, _res, next) => {
+      if (req.method === 'POST' && req.path.includes('/tasks')) {
+        console.log(`[RAW] POST /api/tasks hit — body keys: ${Object.keys(req.body || {}).join(', ')}`);
+      }
+      next();
+    });
+
     // ── AUTH MIDDLEWARE FILTER ──────────────────────────────
     // Protected by authenticateToken, bypassing login, public network probes and settings query
     this.app.use('/api', (req, res, next) => {
